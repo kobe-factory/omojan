@@ -110,7 +110,8 @@ export default function UserSelection({ tournament, allUsers, participants, curr
             <p className="text-xs text-gray-400 mb-1">参加済み</p>
             <div className="flex flex-wrap gap-2">
               {participants.map((p) => (
-                <span key={p.id} className="bg-white text-emerald-600 text-sm px-3 py-1 rounded-full font-medium border border-emerald-200">
+                <span key={p.id} className="flex items-center gap-1.5 bg-white text-emerald-600 text-sm px-3 py-1 rounded-full font-medium border border-emerald-200">
+                  <UserIcon name={p.name} size="xs" />
                   {p.name}
                 </span>
               ))}
@@ -124,7 +125,8 @@ export default function UserSelection({ tournament, allUsers, participants, curr
             <p className="text-xs text-gray-400 mb-1">未参加</p>
             <div className="flex flex-wrap gap-2">
               {notJoined.map((u) => (
-                <span key={u.id} className="bg-white text-gray-300 text-sm px-3 py-1 rounded-full border border-gray-100">
+                <span key={u.id} className="flex items-center gap-1.5 bg-white text-gray-300 text-sm px-3 py-1 rounded-full border border-gray-100">
+                  <UserIcon name={u.name} size="xs" />
                   {u.name}
                 </span>
               ))}
