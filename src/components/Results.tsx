@@ -28,7 +28,9 @@ interface ResultItem {
   position: 'before' | 'after'
   preamble: string | null
   voteCount: number
+  voteTimeSum: number
   isWinner: boolean
+  isTied: boolean
 }
 
 interface Props {
@@ -57,14 +59,16 @@ export default function Results({ tournament, game, participants, onNext }: Prop
       const [{ data: topicCard }, { data: subs }, { data: votes }] = await Promise.all([
         supabase.from('cards').select('text').eq('id', game.topic_card_id).single(),
         supabase.from('submissions').select('id, user_id, hand_card_id, position, preamble').eq('game_id', game.id),
-        supabase.from('votes').select('submission_id').eq('game_id', game.id),
+        supabase.from('votes').select('submission_id, created_at').eq('game_id', game.id),
       ])
 
       const topicText = topicCard?.text ?? ''
 
       const voteCount: Record<string, number> = {}
+      const voteTimeSum: Record<string, number> = {}
       for (const v of votes ?? []) {
         voteCount[v.submission_id] = (voteCount[v.submission_id] ?? 0) + 1
+        voteTimeSum[v.submission_id] = (voteTimeSum[v.submission_id] ?? 0) + new Date(v.created_at).getTime()
       }
 
       const maxVotes = Math.max(...Object.values(voteCount), 0)
@@ -83,12 +87,31 @@ export default function Results({ tournament, game, participants, onNext }: Prop
             position: s.position as 'before' | 'after',
             preamble: s.preamble,
             voteCount: count,
-            isWinner: count === maxVotes && maxVotes > 0,
+            voteTimeSum: voteTimeSum[s.id] ?? 0,
+            isWinner: false,
+            isTied: false,
           }
         })
       )
 
-      setResults(items.sort((a, b) => b.voteCount - a.voteCount))
+      const sorted = items.sort((a, b) => {
+        if (b.voteCount !== a.voteCount) return b.voteCount - a.voteCount
+        return a.voteTimeSum - b.voteTimeSum
+      })
+
+      // 同点グループ検出（0票は対象外）
+      const countFreq: Record<number, number> = {}
+      for (const item of sorted) {
+        if (item.voteCount > 0) countFreq[item.voteCount] = (countFreq[item.voteCount] ?? 0) + 1
+      }
+      const tiedCounts = new Set(Object.entries(countFreq).filter(([, n]) => n > 1).map(([c]) => Number(c)))
+
+      sorted.forEach((item, i) => {
+        item.isWinner = i === 0 && maxVotes > 0
+        item.isTied = tiedCounts.has(item.voteCount)
+      })
+
+      setResults(sorted)
       setLoading(false)
     }
 
@@ -138,11 +161,19 @@ export default function Results({ tournament, game, participants, onNext }: Prop
                 <div className="flex items-center gap-1 mb-2">
                   <span className="text-yellow-500 text-lg">👑</span>
                   <span className="text-yellow-600 text-xs font-bold">WINNER</span>
+                  {r.isTied && (
+                    <span className="text-yellow-500 text-xs ml-1">（同点・投票時間で決定）</span>
+                  )}
                 </div>
               )}
 
               <div className="flex items-start justify-between gap-2 mb-3">
-                <span className="text-gray-400 text-xs">{i + 1}位</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-gray-400 text-xs">{i + 1}位</span>
+                  {r.isTied && !r.isWinner && (
+                    <span className="text-xs text-gray-400">（同点）</span>
+                  )}
+                </div>
                 <span className="text-emerald-500 text-sm font-bold">{r.voteCount}票</span>
               </div>
 
@@ -157,7 +188,7 @@ export default function Results({ tournament, game, participants, onNext }: Prop
                 >
                   {before}
                 </span>
-<span
+                <span
                   className={`px-2 py-1 rounded-lg text-base font-bold ${
                     beforeIsHand
                       ? 'bg-yellow-100 text-yellow-700'

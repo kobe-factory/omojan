@@ -12,7 +12,9 @@ interface PlayerScore {
   userId: string
   userName: string
   totalVotes: number
+  totalVoteTimeSum: number
   wins: number
+  isTied: boolean
 }
 
 interface RoundSummary {
@@ -21,6 +23,7 @@ interface RoundSummary {
   winnerName: string
   winnerText: string
   votes: number
+  isTied: boolean
 }
 
 interface Props {
@@ -35,7 +38,6 @@ export default function TournamentFinished({ tournamentId, participants }: Props
 
   useEffect(() => {
     async function fetchData() {
-      // 全ゲーム取得
       const { data: games } = await supabase
         .from('games')
         .select('id, round_number, topic_card_id, status')
@@ -49,20 +51,17 @@ export default function TournamentFinished({ tournamentId, participants }: Props
 
       const gameIds = games.map((g) => g.id)
 
-      // 全投票・投稿を並列取得
       const [{ data: allVotes }, { data: allSubs }] = await Promise.all([
-        supabase.from('votes').select('game_id, submission_id').in('game_id', gameIds),
+        supabase.from('votes').select('game_id, submission_id, created_at').in('game_id', gameIds),
         supabase.from('submissions').select('id, game_id, user_id, hand_card_id, position').in('game_id', gameIds),
       ])
 
-      // お題テキスト取得
       const topicIds = games.map((g) => g.topic_card_id)
       const { data: topicCards } = await supabase
         .from('cards')
         .select('id, text')
         .in('id', topicIds)
 
-      // 手札テキスト取得
       const handIds = (allSubs ?? []).map((s) => s.hand_card_id)
       const { data: handCards } = await supabase
         .from('cards')
@@ -72,34 +71,46 @@ export default function TournamentFinished({ tournamentId, participants }: Props
       const topicMap = Object.fromEntries((topicCards ?? []).map((c) => [c.id, c.text]))
       const handMap = Object.fromEntries((handCards ?? []).map((c) => [c.id, c.text]))
 
-      // 投票数集計（submission_id → count）
+      // submission_id → 票数・投票時間合計
       const voteCount: Record<string, number> = {}
+      const voteTimeSum: Record<string, number> = {}
       for (const v of allVotes ?? []) {
         voteCount[v.submission_id] = (voteCount[v.submission_id] ?? 0) + 1
+        voteTimeSum[v.submission_id] = (voteTimeSum[v.submission_id] ?? 0) + new Date(v.created_at).getTime()
       }
 
-      // ユーザーごとの総得票数・勝利数を集計
-      const scoreMap: Record<string, { totalVotes: number; wins: number }> = {}
+      const scoreMap: Record<string, { totalVotes: number; totalVoteTimeSum: number; wins: number }> = {}
       for (const p of participants) {
-        scoreMap[p.id] = { totalVotes: 0, wins: 0 }
+        scoreMap[p.id] = { totalVotes: 0, totalVoteTimeSum: 0, wins: 0 }
       }
 
-      // 回戦別サマリー作成
       const roundSummaries: RoundSummary[] = []
 
       for (const game of games) {
         const gameSubs = (allSubs ?? []).filter((s) => s.game_id === game.id)
         let maxVotes = 0
+        let winnerTimeSum = Infinity
         let winnerSub: typeof gameSubs[0] | null = null
+        let hasTie = false
 
         for (const sub of gameSubs) {
           const count = voteCount[sub.id] ?? 0
+          const timeSum = voteTimeSum[sub.id] ?? 0
           if (scoreMap[sub.user_id]) {
             scoreMap[sub.user_id].totalVotes += count
+            scoreMap[sub.user_id].totalVoteTimeSum += timeSum
           }
           if (count > maxVotes) {
             maxVotes = count
             winnerSub = sub
+            winnerTimeSum = timeSum
+            hasTie = false
+          } else if (count === maxVotes && count > 0) {
+            hasTie = true
+            if (timeSum < winnerTimeSum) {
+              winnerSub = sub
+              winnerTimeSum = timeSum
+            }
           }
         }
 
@@ -122,17 +133,34 @@ export default function TournamentFinished({ tournamentId, participants }: Props
           winnerName: winnerUser?.name ?? '???',
           winnerText,
           votes: maxVotes,
+          isTied: hasTie,
         })
       }
 
-      const sorted = participants
-        .map((p) => ({
-          userId: p.id,
-          userName: p.name,
-          totalVotes: scoreMap[p.id]?.totalVotes ?? 0,
-          wins: scoreMap[p.id]?.wins ?? 0,
-        }))
-        .sort((a, b) => b.totalVotes - a.totalVotes || b.wins - a.wins)
+      const unsorted = participants.map((p) => ({
+        userId: p.id,
+        userName: p.name,
+        totalVotes: scoreMap[p.id]?.totalVotes ?? 0,
+        totalVoteTimeSum: scoreMap[p.id]?.totalVoteTimeSum ?? 0,
+        wins: scoreMap[p.id]?.wins ?? 0,
+        isTied: false,
+      }))
+
+      const sorted = unsorted.sort((a, b) => {
+        if (b.totalVotes !== a.totalVotes) return b.totalVotes - a.totalVotes
+        if (a.totalVoteTimeSum !== b.totalVoteTimeSum) return a.totalVoteTimeSum - b.totalVoteTimeSum
+        return b.wins - a.wins
+      })
+
+      // 総合順位の同点検出
+      const totalVoteFreq: Record<number, number> = {}
+      for (const s of sorted) {
+        if (s.totalVotes > 0) totalVoteFreq[s.totalVotes] = (totalVoteFreq[s.totalVotes] ?? 0) + 1
+      }
+      const tiedTotalCounts = new Set(
+        Object.entries(totalVoteFreq).filter(([, n]) => n > 1).map(([c]) => Number(c))
+      )
+      sorted.forEach((s) => { s.isTied = tiedTotalCounts.has(s.totalVotes) })
 
       setScores(sorted)
       setRounds(roundSummaries)
@@ -170,6 +198,9 @@ export default function TournamentFinished({ tournamentId, participants }: Props
             総獲得票数 <span className="text-xl font-bold text-yellow-500">{mvp.totalVotes}</span>票
             　{mvp.wins}回戦優勝
           </p>
+          {mvp.isTied && (
+            <p className="text-xs text-yellow-500 mt-1">（同点・投票時間で決定）</p>
+          )}
         </div>
       )}
 
@@ -187,11 +218,17 @@ export default function TournamentFinished({ tournamentId, participants }: Props
                 {i + 1}位
               </span>
               <span className="flex-1 text-sm font-medium text-gray-800">{s.userName}</span>
+              {s.isTied && (
+                <span className="text-xs text-gray-400">同点</span>
+              )}
               <span className="text-xs text-gray-400">{s.wins}勝</span>
               <span className="text-sm font-bold text-emerald-600">{s.totalVotes}票</span>
             </div>
           ))}
         </div>
+        {scores.some((s) => s.isTied) && (
+          <p className="text-xs text-gray-400 mt-3 text-center">※同点は投票時間の早い順で順位を決定</p>
+        )}
       </div>
 
       {/* 回戦別結果 */}
@@ -202,7 +239,12 @@ export default function TournamentFinished({ tournamentId, participants }: Props
             <div key={r.roundNumber} className="border border-gray-100 rounded-xl p-3">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-bold text-emerald-600">第{r.roundNumber}回戦</span>
-                <span className="text-xs text-gray-400">{r.votes}票</span>
+                <div className="flex items-center gap-2">
+                  {r.isTied && (
+                    <span className="text-xs text-gray-400">（同点・投票時間で決定）</span>
+                  )}
+                  <span className="text-xs text-gray-400">{r.votes}票</span>
+                </div>
               </div>
               <p className="text-xs text-gray-400 mb-1">お題：{r.topicText}</p>
               <p className="text-sm font-bold text-gray-800">{r.winnerText}</p>

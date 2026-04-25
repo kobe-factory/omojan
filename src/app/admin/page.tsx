@@ -1,7 +1,29 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { GAME_PRESETS, DEFAULT_PRESET, type GamePreset } from '@/config/game'
+import { supabase } from '@/lib/supabase'
+
+interface TournamentRow {
+  id: string
+  token: string
+  mode: string
+  status: string
+  created_at: string
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  waiting_users: 'ユーザー選択中',
+  creating_cards: '札作成中',
+  playing: 'ゲーム中',
+  finished: '終了',
+}
+
+const MODE_LABEL: Record<string, string> = {
+  solo: 'ソロ',
+  test: '2名テスト',
+  production: '本番',
+}
 
 export default function AdminPage() {
   const [selectedPreset, setSelectedPreset] = useState<GamePreset>(DEFAULT_PRESET)
@@ -10,6 +32,20 @@ export default function AdminPage() {
   const [copied, setCopied] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [resetDone, setResetDone] = useState(false)
+  const [tournaments, setTournaments] = useState<TournamentRow[]>([])
+  const [copiedToken, setCopiedToken] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchTournaments()
+  }, [])
+
+  async function fetchTournaments() {
+    const { data } = await supabase
+      .from('tournaments')
+      .select('id, token, mode, status, created_at')
+      .order('created_at', { ascending: false })
+    setTournaments(data ?? [])
+  }
 
   async function handleCreate() {
     setLoading(true)
@@ -29,6 +65,7 @@ export default function AdminPage() {
       const data = await res.json()
       if (data.token) {
         setGeneratedUrl(`${window.location.origin}/${data.token}`)
+        await fetchTournaments()
       }
     } finally {
       setLoading(false)
@@ -40,6 +77,12 @@ export default function AdminPage() {
     await navigator.clipboard.writeText(generatedUrl)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function copyTournamentUrl(token: string) {
+    await navigator.clipboard.writeText(`${window.location.origin}/${token}`)
+    setCopiedToken(token)
+    setTimeout(() => setCopiedToken(null), 2000)
   }
 
   async function handleReset() {
@@ -54,6 +97,7 @@ export default function AdminPage() {
       if (data.success) {
         setResetDone(true)
         setGeneratedUrl(null)
+        await fetchTournaments()
         setTimeout(() => setResetDone(false), 3000)
       } else {
         alert(`リセット失敗: ${data.error}`)
@@ -141,6 +185,64 @@ export default function AdminPage() {
           <p className="text-xs text-gray-400 mt-2 text-center">
             ソロ・2名テストのみ削除。本番・ユーザーデータは保持されます
           </p>
+        </div>
+
+        {/* 大会一覧 */}
+        <div className="mt-10 pt-6 border-t border-gray-100">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium text-gray-700">大会一覧</p>
+            <button
+              onClick={fetchTournaments}
+              className="text-xs text-emerald-500 hover:text-emerald-600"
+            >
+              更新
+            </button>
+          </div>
+          {tournaments.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-4">大会がありません</p>
+          ) : (
+            <div className="space-y-2">
+              {tournaments.map((t) => (
+                <div key={t.id} className="border border-gray-100 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        t.status === 'finished'
+                          ? 'bg-gray-100 text-gray-400'
+                          : t.status === 'playing'
+                          ? 'bg-emerald-100 text-emerald-600'
+                          : 'bg-yellow-100 text-yellow-600'
+                      }`}>
+                        {STATUS_LABEL[t.status] ?? t.status}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {MODE_LABEL[t.mode] ?? t.mode}
+                      </span>
+                    </div>
+                    <span className="text-xs text-gray-300">
+                      {new Date(t.created_at).toLocaleDateString('ja-JP', {
+                        month: 'numeric',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-mono text-gray-400 truncate flex-1">
+                      /{t.token}
+                    </p>
+                    <button
+                      onClick={() => copyTournamentUrl(t.token)}
+                      className="text-xs px-3 py-1 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors shrink-0"
+                    >
+                      {copiedToken === t.token ? 'コピー済' : 'URLコピー'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -13,6 +13,7 @@ interface WinnerInfo {
   winnerName: string
   workText: string
   votes: number
+  isTied: boolean
 }
 
 export default function PrevRoundBanner({ tournamentId, prevRoundNumber }: Props) {
@@ -31,21 +32,38 @@ export default function PrevRoundBanner({ tournamentId, prevRoundNumber }: Props
 
       const [{ data: subs }, { data: votes }, { data: topicCard }] = await Promise.all([
         supabase.from('submissions').select('id, user_id, hand_card_id, position').eq('game_id', game.id),
-        supabase.from('votes').select('submission_id').eq('game_id', game.id),
+        supabase.from('votes').select('submission_id, created_at').eq('game_id', game.id),
         supabase.from('cards').select('text').eq('id', game.topic_card_id).single(),
       ])
 
       const topicText = topicCard?.text ?? ''
       const voteCount: Record<string, number> = {}
+      const voteTimeSum: Record<string, number> = {}
       for (const v of votes ?? []) {
         voteCount[v.submission_id] = (voteCount[v.submission_id] ?? 0) + 1
+        voteTimeSum[v.submission_id] = (voteTimeSum[v.submission_id] ?? 0) + new Date(v.created_at).getTime()
       }
 
       let maxVotes = 0
+      let winnerTimeSum = Infinity
       let winnerSub = null
+      let hasTie = false
+
       for (const s of subs ?? []) {
         const count = voteCount[s.id] ?? 0
-        if (count > maxVotes) { maxVotes = count; winnerSub = s }
+        const timeSum = voteTimeSum[s.id] ?? 0
+        if (count > maxVotes) {
+          maxVotes = count
+          winnerSub = s
+          winnerTimeSum = timeSum
+          hasTie = false
+        } else if (count === maxVotes && count > 0) {
+          hasTie = true
+          if (timeSum < winnerTimeSum) {
+            winnerSub = s
+            winnerTimeSum = timeSum
+          }
+        }
       }
 
       if (!winnerSub) return
@@ -65,6 +83,7 @@ export default function PrevRoundBanner({ tournamentId, prevRoundNumber }: Props
         winnerName: winnerUser?.name ?? '???',
         workText,
         votes: maxVotes,
+        isTied: hasTie,
       })
     }
 
@@ -78,6 +97,9 @@ export default function PrevRoundBanner({ tournamentId, prevRoundNumber }: Props
       <div className="flex items-center gap-1 mb-2">
         <span className="text-sm">👑</span>
         <span className="text-xs font-bold text-yellow-600">第{winner.roundNumber}回戦 Winner</span>
+        {winner.isTied && (
+          <span className="text-xs text-yellow-500 ml-1">（同点・投票時間で決定）</span>
+        )}
       </div>
       <p className="text-base font-bold text-gray-800 mb-1">{winner.workText}</p>
       <p className="text-xs text-gray-400">{winner.winnerName} ・ {winner.votes}票</p>
