@@ -159,8 +159,14 @@ export default function TournamentPage() {
             </span>
           )}
           {tournament.status === 'playing' && currentGame && (
-            <span className="absolute right-0 bottom-0 text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-              {currentGame.round_number} / {tournament.game_count}回戦
+            <span className={`absolute right-0 bottom-0 text-xs font-bold px-2 py-0.5 rounded-full border ${
+              currentGame.round_number === tournament.game_count
+                ? 'text-red-600 bg-red-50 border-red-300'
+                : 'text-emerald-600 bg-emerald-50 border-emerald-200'
+            }`}>
+              {currentGame.round_number === tournament.game_count
+                ? '最終戦'
+                : `${currentGame.round_number} / ${tournament.game_count}回戦`}
             </span>
           )}
         </div>
