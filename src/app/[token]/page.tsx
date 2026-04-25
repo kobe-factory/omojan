@@ -154,7 +154,9 @@ export default function TournamentPage() {
         <div className="relative flex justify-center items-center">
           <img src="/omojan_logo.png" alt="おもじゃん for 男根祭" className="h-10 w-auto" />
           {tournamentNumber && (
-            <span className="absolute left-0 text-xs text-gray-400 bottom-0">第{tournamentNumber}回大会</span>
+            <span className="absolute left-0 bottom-0 text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+              第{tournamentNumber}回大会
+            </span>
           )}
           <span className="absolute right-0 text-xs text-gray-300 bottom-0">バージョン1.0</span>
         </div>
