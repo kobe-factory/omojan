@@ -69,6 +69,7 @@ export default function CardCreation({ tournament, token, currentUserId, partici
     })
     setSubmitted(true)
     setSubmitting(false)
+    setCardCounts(prev => ({ ...prev, [currentUserId]: tournament.cards_per_user }))
     await onSubmitted()
   }
 

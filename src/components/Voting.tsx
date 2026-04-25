@@ -116,15 +116,16 @@ export default function Voting({ tournament, token, game, currentUserId, partici
     })
     setVoted(true)
     setVoting(false)
+    setVotedUserIds(prev => [...prev, currentUserId])
     await onVoted()
   }
 
   return (
     <div className="p-4 space-y-4">
-      <div className="bg-purple-500 rounded-2xl p-4 text-center">
-        <p className="text-purple-100 text-xs mb-1">第{game.round_number}回戦</p>
+      <div className="bg-emerald-500 rounded-2xl p-4 text-center">
+        <p className="text-emerald-100 text-xs mb-1">第{game.round_number}回戦</p>
         <h2 className="text-white text-lg font-bold">投票</h2>
-        <p className="text-white text-xl font-bold mt-2 bg-purple-600 rounded-xl px-4 py-3">
+        <p className="text-white text-xl font-bold mt-2 bg-emerald-600 rounded-xl px-4 py-3">
           お題：{topicText}
         </p>
       </div>
@@ -149,8 +150,8 @@ export default function Voting({ tournament, token, game, currentUserId, partici
               }}
               className={`w-full text-left rounded-2xl p-4 transition-all border-2 ${
                 isSelected
-                  ? 'border-purple-500 bg-purple-50'
-                  : 'border-gray-200 bg-white hover:border-purple-200'
+                  ? 'border-emerald-500 bg-emerald-50'
+                  : 'border-gray-200 bg-white hover:border-emerald-200'
               }`}
             >
               <p className="text-lg font-bold text-gray-800 mb-2">{fullText}</p>
@@ -160,7 +161,7 @@ export default function Voting({ tournament, token, game, currentUserId, partici
               <p className="text-xs text-gray-400">{sub.userName}</p>
               {isSelected && (
                 <div className="mt-2 flex items-center gap-1">
-                  <span className="text-purple-500 text-xs font-medium">✓ 選択中</span>
+                  <span className="text-emerald-500 text-xs font-medium">✓ 選択中</span>
                 </div>
               )}
             </button>
@@ -174,7 +175,7 @@ export default function Voting({ tournament, token, game, currentUserId, partici
         className={`w-full py-4 rounded-xl font-bold transition-all ${
           voted
             ? 'bg-green-500 text-white'
-            : 'bg-purple-500 text-white hover:bg-purple-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed'
+            : 'bg-emerald-500 text-white hover:bg-emerald-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed'
         }`}
       >
         {voting ? '投票中...' : voted ? '✓ 投票済み' : '投票する'}

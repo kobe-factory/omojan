@@ -104,6 +104,7 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
     })
     setSubmitted(true)
     setSubmitting(false)
+    setSubmittedUserIds(prev => [...prev, currentUserId])
     await onSubmitted()
   }
 
