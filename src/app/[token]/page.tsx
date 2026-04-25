@@ -137,8 +137,9 @@ export default function TournamentPage() {
     <div className="min-h-screen bg-gray-50">
       {/* ヘッダー */}
       <header className="bg-white border-b border-gray-100 px-4 py-2 sticky top-0 z-10">
-        <div className="flex justify-center">
+        <div className="relative flex justify-center items-center">
           <img src="/omojan_logo.png" alt="おもじゃん for 男根祭" className="h-10 w-auto" />
+          <span className="absolute right-0 text-xs text-gray-300 bottom-0">バージョン1.0</span>
         </div>
       </header>
 
