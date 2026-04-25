@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { GAME_PRESETS, DEFAULT_PRESET, type GamePreset } from '@/config/game'
 import { supabase } from '@/lib/supabase'
 
@@ -10,6 +10,7 @@ interface TournamentRow {
   mode: string
   status: string
   created_at: string
+  productionNumber?: number
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -33,19 +34,38 @@ export default function AdminPage() {
   const [resetting, setResetting] = useState(false)
   const [resetDone, setResetDone] = useState(false)
   const [tournaments, setTournaments] = useState<TournamentRow[]>([])
+  const [listLoading, setListLoading] = useState(false)
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchTournaments()
-  }, [])
-
-  async function fetchTournaments() {
+  const fetchTournaments = useCallback(async () => {
+    setListLoading(true)
     const { data } = await supabase
       .from('tournaments')
       .select('id, token, mode, status, created_at')
       .order('created_at', { ascending: false })
-    setTournaments(data ?? [])
-  }
+
+    // 本番大会に作成日時昇順で連番を付与
+    const rows = data ?? []
+    const productionSorted = rows
+      .filter((t) => t.mode === 'production')
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    const productionNumberMap: Record<string, number> = {}
+    productionSorted.forEach((t, i) => {
+      productionNumberMap[t.id] = i + 1
+    })
+
+    setTournaments(
+      rows.map((t) => ({
+        ...t,
+        productionNumber: productionNumberMap[t.id],
+      }))
+    )
+    setListLoading(false)
+  }, [])
+
+  useEffect(() => {
+    fetchTournaments()
+  }, [fetchTournaments])
 
   async function handleCreate() {
     setLoading(true)
@@ -95,9 +115,9 @@ export default function AdminPage() {
       const res = await fetch('/api/admin/reset', { method: 'DELETE' })
       const data = await res.json()
       if (data.success) {
-        setResetDone(true)
         setGeneratedUrl(null)
         await fetchTournaments()
+        setResetDone(true)
         setTimeout(() => setResetDone(false), 3000)
       } else {
         alert(`リセット失敗: ${data.error}`)
@@ -180,7 +200,7 @@ export default function AdminPage() {
             {resetting ? 'リセット中...' : 'テストデータをリセット（本番は保持）'}
           </button>
           {resetDone && (
-            <p className="text-center text-xs text-green-600 mt-2">リセット完了しました</p>
+            <p className="text-center text-xs text-green-600 mt-2">✓ リセット完了・一覧を更新しました</p>
           )}
           <p className="text-xs text-gray-400 mt-2 text-center">
             ソロ・2名テストのみ削除。本番・ユーザーデータは保持されます
@@ -193,19 +213,34 @@ export default function AdminPage() {
             <p className="text-sm font-medium text-gray-700">大会一覧</p>
             <button
               onClick={fetchTournaments}
-              className="text-xs text-emerald-500 hover:text-emerald-600"
+              disabled={listLoading}
+              className="text-xs text-emerald-500 hover:text-emerald-600 disabled:opacity-40"
             >
-              更新
+              {listLoading ? '更新中...' : '更新'}
             </button>
           </div>
-          {tournaments.length === 0 ? (
+
+          {listLoading && tournaments.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-4">読み込み中...</p>
+          ) : tournaments.length === 0 ? (
             <p className="text-xs text-gray-400 text-center py-4">大会がありません</p>
           ) : (
-            <div className="space-y-2">
+            <div className={`space-y-2 transition-opacity ${listLoading ? 'opacity-50' : 'opacity-100'}`}>
               {tournaments.map((t) => (
                 <div key={t.id} className="border border-gray-100 rounded-xl p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* モードと大会番号 */}
+                      {t.mode === 'production' && t.productionNumber ? (
+                        <span className="text-xs font-bold text-gray-700">
+                          本番 第{t.productionNumber}回大会
+                        </span>
+                      ) : (
+                        <span className="text-xs font-medium text-gray-500">
+                          {MODE_LABEL[t.mode] ?? t.mode}
+                        </span>
+                      )}
+                      {/* ステータス */}
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                         t.status === 'finished'
                           ? 'bg-gray-100 text-gray-400'
@@ -215,11 +250,8 @@ export default function AdminPage() {
                       }`}>
                         {STATUS_LABEL[t.status] ?? t.status}
                       </span>
-                      <span className="text-xs text-gray-400">
-                        {MODE_LABEL[t.mode] ?? t.mode}
-                      </span>
                     </div>
-                    <span className="text-xs text-gray-300">
+                    <span className="text-xs text-gray-300 shrink-0">
                       {new Date(t.created_at).toLocaleDateString('ja-JP', {
                         month: 'numeric',
                         day: 'numeric',
