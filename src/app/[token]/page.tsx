@@ -158,7 +158,11 @@ export default function TournamentPage() {
               第{tournamentNumber}回大会
             </span>
           )}
-          <span className="absolute right-0 text-xs text-gray-300 bottom-0">バージョン1.0</span>
+          {tournament.status === 'playing' && currentGame && (
+            <span className="absolute right-0 bottom-0 text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+              {currentGame.round_number} / {tournament.game_count}回戦
+            </span>
+          )}
         </div>
       </header>
 
@@ -298,6 +302,11 @@ export default function TournamentPage() {
           />
         )}
       </div>
+
+      {/* フッター */}
+      <footer className="text-center py-4 mt-4">
+        <p className="text-xs text-gray-300">v1.1.0</p>
+      </footer>
     </div>
   )
 }
