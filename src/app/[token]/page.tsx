@@ -10,6 +10,7 @@ import GamePlay from '@/components/GamePlay'
 import Voting from '@/components/Voting'
 import Results from '@/components/Results'
 import Archive from '@/components/Archive'
+import TournamentFinished from '@/components/TournamentFinished'
 import type { TournamentStatus, GameStatus } from '@/types/database'
 
 interface Tournament {
@@ -192,7 +193,7 @@ export default function TournamentPage() {
         )}
 
         {/* ゲームプレイフェーズ */}
-        {(tournament.status === 'playing' || tournament.status === 'finished') && currentGame && userId && (
+        {tournament.status === 'playing' && currentGame && userId && (
           <>
             {/* タブ（2回戦以降） */}
             {currentGame.round_number > 1 && (
@@ -263,13 +264,12 @@ export default function TournamentPage() {
           </>
         )}
 
-        {/* 大会終了 */}
-        {tournament.status === 'finished' && !currentGame && (
-          <div className="p-8 text-center">
-            <p className="text-4xl mb-4">🎊</p>
-            <p className="text-xl font-bold text-gray-800 mb-2">大会終了！</p>
-            <p className="text-gray-500">お疲れ様でした</p>
-          </div>
+        {/* 大会終了画面 */}
+        {tournament.status === 'finished' && (
+          <TournamentFinished
+            tournamentId={tournament.id}
+            participants={participants}
+          />
         )}
       </div>
     </div>
