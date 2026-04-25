@@ -1,0 +1,237 @@
+export type TournamentStatus = 'waiting_users' | 'creating_cards' | 'playing' | 'finished'
+export type TournamentMode = 'solo' | 'test' | 'production'
+export type GameStatus = 'waiting_submission' | 'waiting_vote' | 'showing_result' | 'finished'
+export type CardPosition = 'before' | 'after'
+
+export type Database = {
+  public: {
+    Tables: {
+      tournaments: {
+        Row: {
+          id: string
+          token: string
+          mode: TournamentMode
+          required_players: number
+          game_count: number
+          cards_per_user: number
+          hand_cards_per_player: number
+          status: TournamentStatus
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          token: string
+          mode?: TournamentMode
+          required_players?: number
+          game_count?: number
+          cards_per_user?: number
+          hand_cards_per_player?: number
+          status?: TournamentStatus
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          token?: string
+          mode?: TournamentMode
+          required_players?: number
+          game_count?: number
+          cards_per_user?: number
+          hand_cards_per_player?: number
+          status?: TournamentStatus
+          created_at?: string
+        }
+        Relationships: []
+      }
+      users: {
+        Row: {
+          id: string
+          name: string
+        }
+        Insert: {
+          id?: string
+          name: string
+        }
+        Update: {
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      tournament_participants: {
+        Row: {
+          id: string
+          tournament_id: string
+          user_id: string
+          joined_at: string
+        }
+        Insert: {
+          id?: string
+          tournament_id: string
+          user_id: string
+          joined_at?: string
+        }
+        Update: {
+          id?: string
+          tournament_id?: string
+          user_id?: string
+          joined_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'tournament_participants_tournament_id_fkey'
+            columns: ['tournament_id']
+            referencedRelation: 'tournaments'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'tournament_participants_user_id_fkey'
+            columns: ['user_id']
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      cards: {
+        Row: {
+          id: string
+          tournament_id: string
+          creator_user_id: string
+          text: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          tournament_id: string
+          creator_user_id: string
+          text: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          tournament_id?: string
+          creator_user_id?: string
+          text?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      player_hands: {
+        Row: {
+          id: string
+          tournament_id: string
+          user_id: string
+          card_id: string
+          is_used: boolean
+        }
+        Insert: {
+          id?: string
+          tournament_id: string
+          user_id: string
+          card_id: string
+          is_used?: boolean
+        }
+        Update: {
+          id?: string
+          tournament_id?: string
+          user_id?: string
+          card_id?: string
+          is_used?: boolean
+        }
+        Relationships: []
+      }
+      games: {
+        Row: {
+          id: string
+          tournament_id: string
+          round_number: number
+          status: GameStatus
+          topic_card_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          tournament_id: string
+          round_number: number
+          status?: GameStatus
+          topic_card_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          tournament_id?: string
+          round_number?: number
+          status?: GameStatus
+          topic_card_id?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      submissions: {
+        Row: {
+          id: string
+          game_id: string
+          user_id: string
+          hand_card_id: string
+          position: CardPosition
+          preamble: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          game_id: string
+          user_id: string
+          hand_card_id: string
+          position: CardPosition
+          preamble?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          game_id?: string
+          user_id?: string
+          hand_card_id?: string
+          position?: CardPosition
+          preamble?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      votes: {
+        Row: {
+          id: string
+          game_id: string
+          voter_user_id: string
+          submission_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          game_id: string
+          voter_user_id: string
+          submission_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          game_id?: string
+          voter_user_id?: string
+          submission_id?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+}
