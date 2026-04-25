@@ -14,6 +14,7 @@ interface ArchiveGame {
   topic_card_id: string
   topicText: string
   submissions: ArchiveSubmission[]
+  isTied: boolean
 }
 
 interface ArchiveSubmission {
@@ -23,7 +24,9 @@ interface ArchiveSubmission {
   fullText: string
   preamble: string | null
   voteCount: number
+  voteTimeSum: number
   isWinner: boolean
+  isTied: boolean
 }
 
 interface Props {
@@ -55,14 +58,15 @@ export default function Archive({ tournamentId, participants }: Props) {
           const [{ data: topicCard }, { data: subs }, { data: votes }] = await Promise.all([
             supabase.from('cards').select('text').eq('id', g.topic_card_id).single(),
             supabase.from('submissions').select('id, user_id, hand_card_id, position, preamble').eq('game_id', g.id),
-            supabase.from('votes').select('submission_id').eq('game_id', g.id),
+            supabase.from('votes').select('submission_id, created_at').eq('game_id', g.id),
           ])
 
           const voteCount: Record<string, number> = {}
+          const voteTimeSum: Record<string, number> = {}
           for (const v of votes ?? []) {
             voteCount[v.submission_id] = (voteCount[v.submission_id] ?? 0) + 1
+            voteTimeSum[v.submission_id] = (voteTimeSum[v.submission_id] ?? 0) + new Date(v.created_at).getTime()
           }
-          const maxVotes = Math.max(...Object.values(voteCount), 0)
 
           const submissions: ArchiveSubmission[] = await Promise.all(
             (subs ?? []).map(async (s) => {
@@ -86,17 +90,43 @@ export default function Archive({ tournamentId, participants }: Props) {
                 fullText,
                 preamble: s.preamble,
                 voteCount: count,
-                isWinner: count === maxVotes && maxVotes > 0,
+                voteTimeSum: voteTimeSum[s.id] ?? 0,
+                isWinner: false,
+                isTied: false,
               }
             })
           )
+
+          // 同点タイブレーク：票数→投票時間合計の順でソート
+          const sorted = submissions.sort((a, b) => {
+            if (b.voteCount !== a.voteCount) return b.voteCount - a.voteCount
+            return a.voteTimeSum - b.voteTimeSum
+          })
+
+          // 同点検出
+          const countFreq: Record<number, number> = {}
+          for (const s of sorted) {
+            if (s.voteCount > 0) countFreq[s.voteCount] = (countFreq[s.voteCount] ?? 0) + 1
+          }
+          const tiedCounts = new Set(
+            Object.entries(countFreq).filter(([, n]) => n > 1).map(([c]) => Number(c))
+          )
+
+          const maxVotes = sorted.length > 0 ? sorted[0].voteCount : 0
+          let gameTied = false
+          sorted.forEach((s, i) => {
+            s.isWinner = i === 0 && maxVotes > 0
+            s.isTied = tiedCounts.has(s.voteCount)
+            if (s.isTied) gameTied = true
+          })
 
           return {
             id: g.id,
             round_number: g.round_number,
             topic_card_id: g.topic_card_id,
             topicText: topicCard?.text ?? '',
-            submissions: submissions.sort((a, b) => b.voteCount - a.voteCount),
+            submissions: sorted,
+            isTied: gameTied,
           }
         })
       )
@@ -144,6 +174,7 @@ export default function Archive({ tournamentId, participants }: Props) {
                 {winner && (
                   <p className="text-xs text-yellow-600 mt-1">
                     👑 {winner.userName}「{winner.fullText}」
+                    {g.isTied && <span className="text-gray-400 ml-1">（同点）</span>}
                   </p>
                 )}
               </div>
@@ -160,10 +191,20 @@ export default function Archive({ tournamentId, participants }: Props) {
                     }`}
                   >
                     {s.isWinner && (
-                      <span className="text-yellow-500 text-xs font-bold">👑 WINNER</span>
+                      <div className="flex items-center gap-1 mb-1">
+                        <span className="text-yellow-500 text-xs font-bold">👑 WINNER</span>
+                        {s.isTied && (
+                          <span className="text-yellow-500 text-xs">（同点・投票時間で決定）</span>
+                        )}
+                      </div>
                     )}
                     <div className="flex items-start justify-between gap-2">
-                      <span className="text-gray-400 text-xs">{i + 1}位</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-400 text-xs">{i + 1}位</span>
+                        {s.isTied && !s.isWinner && (
+                          <span className="text-xs text-gray-400">（同点）</span>
+                        )}
+                      </div>
                       <span className="text-emerald-500 text-xs font-bold">{s.voteCount}票</span>
                     </div>
                     <p className="text-base font-bold text-gray-800 mt-1">{s.fullText}</p>
@@ -173,6 +214,9 @@ export default function Archive({ tournamentId, participants }: Props) {
                     <p className="text-xs text-gray-400 mt-1">{s.userName}</p>
                   </div>
                 ))}
+                {g.isTied && (
+                  <p className="text-xs text-gray-400 text-center">※同点は投票時間の早い順で順位を決定</p>
+                )}
               </div>
             )}
           </div>
