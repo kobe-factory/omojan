@@ -22,6 +22,7 @@ interface Tournament {
   game_count: number
   cards_per_user: number
   hand_cards_per_player: number
+  mode: string
 }
 
 interface Game {
@@ -48,6 +49,7 @@ export default function TournamentPage() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'game' | 'archive'>('game')
   const [notFound, setNotFound] = useState(false)
+  const [tournamentNumber, setTournamentNumber] = useState<number | null>(null)
 
   // 初回ロード時に一度だけadvanceを試みるためのフラグ
   const hasTriedAdvance = useRef(false)
@@ -66,6 +68,16 @@ export default function TournamentPage() {
     }
 
     setTournament(t)
+
+    if (t.mode === 'production') {
+      const { data: prodTourneys } = await supabase
+        .from('tournaments')
+        .select('id')
+        .eq('mode', 'production')
+        .order('created_at', { ascending: true })
+      const idx = (prodTourneys ?? []).findIndex((pt) => pt.id === t.id)
+      setTournamentNumber(idx >= 0 ? idx + 1 : null)
+    }
 
     const { data: partRows } = await supabase
       .from('tournament_participants')
@@ -141,6 +153,9 @@ export default function TournamentPage() {
       <header className="bg-white border-b border-gray-100 px-4 py-2 sticky top-0 z-10">
         <div className="relative flex justify-center items-center">
           <img src="/omojan_logo.png" alt="おもじゃん for 男根祭" className="h-10 w-auto" />
+          {tournamentNumber && (
+            <span className="absolute left-0 text-xs text-gray-400 bottom-0">第{tournamentNumber}回大会</span>
+          )}
           <span className="absolute right-0 text-xs text-gray-300 bottom-0">バージョン1.0</span>
         </div>
       </header>
