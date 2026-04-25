@@ -151,7 +151,6 @@ export default function TournamentFinished({ tournamentId, participants }: Props
   }
 
   const mvp = scores[0]
-  const runnerUp = scores[1]
 
   return (
     <div className="p-4 space-y-4 pb-10">
@@ -170,18 +169,6 @@ export default function TournamentFinished({ tournamentId, participants }: Props
           <p className="text-sm text-gray-500">
             総獲得票数 <span className="text-xl font-bold text-yellow-500">{mvp.totalVotes}</span>票
             　{mvp.wins}回戦優勝
-          </p>
-        </div>
-      )}
-
-      {/* 健闘賞 */}
-      {runnerUp && (
-        <div className="bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-center">
-          <p className="text-xs font-bold text-gray-400 mb-1">🥈 健闘賞</p>
-          <p className="text-xl font-black text-gray-700 mb-1">{runnerUp.userName}</p>
-          <p className="text-sm text-gray-400">
-            総獲得票数 <span className="text-lg font-bold text-gray-600">{runnerUp.totalVotes}</span>票
-            　{runnerUp.wins}回戦優勝
           </p>
         </div>
       )}
