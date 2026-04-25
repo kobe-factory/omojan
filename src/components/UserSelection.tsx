@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import UserIcon from './UserIcon'
 
 interface User {
   id: string
@@ -84,7 +85,10 @@ export default function UserSelection({ tournament, allUsers, participants, curr
                     : 'bg-gray-50 text-gray-700 active:bg-emerald-50 active:text-emerald-600 border border-gray-200'
                 }`}
               >
-                <span className="font-medium text-base">{user.name}</span>
+                <div className="flex items-center gap-3">
+                  <UserIcon name={user.name} size="md" />
+                  <span className="font-medium text-base">{user.name}</span>
+                </div>
                 <span className="text-sm">
                   {isMe ? '✓ 選択中' : isTaken ? '参加済み' : ''}
                 </span>

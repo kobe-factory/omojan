@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import UserIcon from './UserIcon'
 
 interface User {
   id: string
@@ -208,7 +209,10 @@ export default function Results({ tournament, game, participants, onNext }: Prop
               {r.preamble && (
                 <p className="text-sm text-gray-500 italic mb-2">「{r.preamble}」</p>
               )}
-              <p className="text-xs text-gray-400">{r.userName}</p>
+              <div className="flex items-center gap-1.5">
+                <UserIcon name={r.userName} size="xs" />
+                <p className="text-xs text-gray-400">{r.userName}</p>
+              </div>
             </div>
           )
         })}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import UserIcon from './UserIcon'
 
 interface User {
   id: string
@@ -211,7 +212,10 @@ export default function Archive({ tournamentId, participants }: Props) {
                     {s.preamble && (
                       <p className="text-xs text-gray-500 italic mt-1">「{s.preamble}」</p>
                     )}
-                    <p className="text-xs text-gray-400 mt-1">{s.userName}</p>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <UserIcon name={s.userName} size="xs" />
+                      <p className="text-xs text-gray-400">{s.userName}</p>
+                    </div>
                   </div>
                 ))}
                 {g.isTied && (

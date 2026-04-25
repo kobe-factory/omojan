@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import WaitingStatus from './WaitingStatus'
+import UserIcon from './UserIcon'
 
 interface User {
   id: string
@@ -158,7 +159,10 @@ export default function Voting({ tournament, token, game, currentUserId, partici
               {sub.preamble && (
                 <p className="text-sm text-gray-500 italic mb-2">「{sub.preamble}」</p>
               )}
-              <p className="text-xs text-gray-400">{sub.userName}</p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <UserIcon name={sub.userName} size="xs" />
+                <p className="text-xs text-gray-400">{sub.userName}</p>
+              </div>
               {isSelected && (
                 <div className="mt-2 flex items-center gap-1">
                   <span className="text-emerald-500 text-xs font-medium">✓ 選択中</span>

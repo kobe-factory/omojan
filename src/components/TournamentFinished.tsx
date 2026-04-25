@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import UserIcon from './UserIcon'
 
 interface User {
   id: string
@@ -193,7 +194,10 @@ export default function TournamentFinished({ tournamentId, participants }: Props
       {mvp && (
         <div className="bg-yellow-50 border-2 border-yellow-400 rounded-2xl p-5 text-center">
           <p className="text-xs font-bold text-yellow-500 mb-1">👑 MVP</p>
-          <p className="text-2xl font-black text-gray-800 mb-1">{mvp.userName}</p>
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <UserIcon name={mvp.userName} size="lg" />
+            <p className="text-2xl font-black text-gray-800">{mvp.userName}</p>
+          </div>
           <p className="text-sm text-gray-500">
             総獲得票数 <span className="text-xl font-bold text-yellow-500">{mvp.totalVotes}</span>票
             　{mvp.wins}回戦優勝
@@ -217,7 +221,10 @@ export default function TournamentFinished({ tournamentId, participants }: Props
               }`}>
                 {i + 1}位
               </span>
-              <span className="flex-1 text-sm font-medium text-gray-800">{s.userName}</span>
+              <div className="flex items-center gap-2 flex-1">
+                <UserIcon name={s.userName} size="xs" />
+                <span className="text-sm font-medium text-gray-800">{s.userName}</span>
+              </div>
               {s.isTied && (
                 <span className="text-xs text-gray-400">同点</span>
               )}
@@ -248,7 +255,10 @@ export default function TournamentFinished({ tournamentId, participants }: Props
               </div>
               <p className="text-xs text-gray-400 mb-1">お題：{r.topicText}</p>
               <p className="text-sm font-bold text-gray-800">{r.winnerText}</p>
-              <p className="text-xs text-gray-400 mt-1">{r.winnerName}</p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <UserIcon name={r.winnerName} size="xs" />
+                <p className="text-xs text-gray-400">{r.winnerName}</p>
+              </div>
             </div>
           ))}
         </div>

@@ -1,3 +1,5 @@
+import UserIcon from './UserIcon'
+
 interface User {
   id: string
   name: string
@@ -19,7 +21,8 @@ export default function WaitingStatus({ waitingUserIds, participants, message }:
       <p className="text-sm font-medium text-amber-700 mb-2">{message}</p>
       <div className="flex flex-wrap gap-2">
         {waitingUsers.map((u) => (
-          <span key={u.id} className="bg-amber-100 text-amber-700 text-xs px-3 py-1 rounded-full">
+          <span key={u.id} className="flex items-center gap-1.5 bg-amber-100 text-amber-700 text-xs px-3 py-1 rounded-full">
+            <UserIcon name={u.name} size="xs" />
             {u.name}
           </span>
         ))}

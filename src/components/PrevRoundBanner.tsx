@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import UserIcon from './UserIcon'
 
 interface Props {
   tournamentId: string
@@ -102,7 +103,10 @@ export default function PrevRoundBanner({ tournamentId, prevRoundNumber }: Props
         )}
       </div>
       <p className="text-base font-bold text-gray-800 mb-1">{winner.workText}</p>
-      <p className="text-xs text-gray-400">{winner.winnerName} ・ {winner.votes}票</p>
+      <div className="flex items-center gap-1.5">
+        <UserIcon name={winner.winnerName} size="xs" />
+        <p className="text-xs text-gray-400">{winner.winnerName} ・ {winner.votes}票</p>
+      </div>
     </div>
   )
 }
