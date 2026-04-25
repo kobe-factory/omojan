@@ -11,6 +11,7 @@ import Voting from '@/components/Voting'
 import Results from '@/components/Results'
 import Archive from '@/components/Archive'
 import TournamentFinished from '@/components/TournamentFinished'
+import PrevRoundBanner from '@/components/PrevRoundBanner'
 import type { TournamentStatus, GameStatus } from '@/types/database'
 
 interface Tournament {
@@ -212,7 +213,7 @@ export default function TournamentPage() {
                     activeTab === 'archive' ? 'text-emerald-500 border-b-2 border-emerald-500' : 'text-gray-400'
                   }`}
                 >
-                  アーカイブ
+                  過去結果
                 </button>
               </div>
             )}
@@ -220,19 +221,27 @@ export default function TournamentPage() {
             {activeTab === 'archive' ? (
               <Archive tournamentId={tournament.id} participants={participants} />
             ) : currentGame.status === 'waiting_submission' ? (
-              <GamePlay
-                tournament={tournament}
-                token={token}
-                game={currentGame}
-                currentUserId={userId}
-                participants={participants}
-                onSubmitted={async () => {
-                  const res = await fetch(`/api/tournaments/${token}/advance`, { method: 'POST' })
-                  const data = await res.json()
-                  if (data.advanced) await fetchState()
-                  else await fetchState()
-                }}
-              />
+              <>
+                {currentGame.round_number > 1 && (
+                  <PrevRoundBanner
+                    tournamentId={tournament.id}
+                    prevRoundNumber={currentGame.round_number - 1}
+                  />
+                )}
+                <GamePlay
+                  tournament={tournament}
+                  token={token}
+                  game={currentGame}
+                  currentUserId={userId}
+                  participants={participants}
+                  onSubmitted={async () => {
+                    const res = await fetch(`/api/tournaments/${token}/advance`, { method: 'POST' })
+                    const data = await res.json()
+                    if (data.advanced) await fetchState()
+                    else await fetchState()
+                  }}
+                />
+              </>
             ) : currentGame.status === 'waiting_vote' ? (
               <Voting
                 tournament={tournament}

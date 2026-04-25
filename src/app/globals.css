@@ -5,9 +5,18 @@
   --foreground: #111827;
 }
 
+html {
+  touch-action: pan-x pan-y;
+  overflow: hidden;
+  height: 100%;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
+  touch-action: pan-x pan-y;
+  overflow-y: auto;
+  height: 100%;
 }
 
 * {
