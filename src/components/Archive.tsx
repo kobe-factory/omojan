@@ -175,7 +175,6 @@ export default function Archive({ tournamentId, participants }: Props) {
                 {winner && (
                   <p className="text-xs text-yellow-600 mt-1">
                     👑 {winner.userName}「{winner.fullText}」
-                    {g.isTied && <span className="text-gray-400 ml-1">（同点）</span>}
                   </p>
                 )}
               </div>
@@ -212,9 +211,6 @@ export default function Archive({ tournamentId, participants }: Props) {
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-1">
                         <span className="text-gray-400 text-xs">{i + 1}位</span>
-                        {s.isTied && !s.isWinner && (
-                          <span className="text-xs text-gray-400">（同点）</span>
-                        )}
                       </div>
                       <span className="text-emerald-500 text-xs font-bold">{s.voteCount}票</span>
                     </div>

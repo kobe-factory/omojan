@@ -157,12 +157,7 @@ export default function Results({ tournament, game, participants, onNext, nextLa
               )}
 
               <div className="flex items-start justify-between gap-2 mb-3">
-                <div className="flex items-center gap-1">
-                  <span className="text-gray-400 text-xs">{i + 1}位</span>
-                  {r.isTied && !r.isWinner && (
-                    <span className="text-xs text-gray-400">（同点）</span>
-                  )}
-                </div>
+                <span className="text-gray-400 text-xs">{i + 1}位</span>
                 <span className="text-emerald-500 text-sm font-bold">{r.voteCount}票</span>
               </div>
 
