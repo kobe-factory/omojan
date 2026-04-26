@@ -11,7 +11,6 @@ import Voting from '@/components/Voting'
 import Results from '@/components/Results'
 import Archive from '@/components/Archive'
 import TournamentFinished from '@/components/TournamentFinished'
-import PrevRoundBanner from '@/components/PrevRoundBanner'
 import type { TournamentStatus, GameStatus } from '@/types/database'
 
 interface Tournament {
@@ -290,12 +289,6 @@ export default function TournamentPage() {
               <Archive tournamentId={tournament.id} participants={participants} />
             ) : currentGame.status === 'waiting_submission' ? (
               <>
-                {currentGame.round_number > 1 && (
-                  <PrevRoundBanner
-                    tournamentId={tournament.id}
-                    prevRoundNumber={currentGame.round_number - 1}
-                  />
-                )}
                 <GamePlay
                   tournament={tournament}
                   token={token}
@@ -360,7 +353,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.4.2</p>
+        <p className="text-xs text-gray-300">v1.4.3</p>
       </footer>
 
       {/* 前戦結果モーダル（まだ結果を確認していないユーザー向け） */}
