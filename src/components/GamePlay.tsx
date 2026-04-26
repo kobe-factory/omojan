@@ -47,38 +47,37 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
   const [submittedUserIds, setSubmittedUserIds] = useState<string[]>([])
 
   useEffect(() => {
-    supabase
-      .from('cards')
-      .select('text')
-      .eq('id', game.topic_card_id)
-      .single()
-      .then(({ data }) => {
-        if (data) setTopicText(data.text)
-      })
+    async function init() {
+      const [topicRes, handsRes, subsRes] = await Promise.all([
+        supabase.from('cards').select('text').eq('id', game.topic_card_id).single(),
+        supabase.from('player_hands').select('card_id, is_used, cards(id, text)').eq('tournament_id', tournament.id).eq('user_id', currentUserId),
+        supabase.from('submissions').select('user_id, hand_card_id, position, preamble').eq('game_id', game.id),
+      ])
 
-    supabase
-      .from('player_hands')
-      .select('card_id, is_used, cards(id, text)')
-      .eq('tournament_id', tournament.id)
-      .eq('user_id', currentUserId)
-      .then(({ data }) => {
-        const cards = (data ?? []).map((h) => {
-          const card = h.cards as unknown as { id: string; text: string }
-          if (!card) return null
-          return { ...card, is_used: h.is_used }
-        }).filter(Boolean) as HandCard[]
-        setHandCards(cards)
-      })
+      if (topicRes.data) setTopicText(topicRes.data.text)
 
-    supabase
-      .from('submissions')
-      .select('user_id')
-      .eq('game_id', game.id)
-      .then(({ data }) => {
-        const ids = (data ?? []).map((s) => s.user_id)
-        setSubmittedUserIds(ids)
-        if (ids.includes(currentUserId)) setSubmitted(true)
-      })
+      const cards = (handsRes.data ?? []).map((h) => {
+        const card = h.cards as unknown as { id: string; text: string }
+        if (!card) return null
+        return { ...card, is_used: h.is_used }
+      }).filter(Boolean) as HandCard[]
+      setHandCards(cards)
+
+      const ids = (subsRes.data ?? []).map((s) => s.user_id)
+      setSubmittedUserIds(ids)
+
+      // 自分の投稿済みデータを復元
+      const mySub = (subsRes.data ?? []).find((s) => s.user_id === currentUserId)
+      if (mySub) {
+        setSubmitted(true)
+        setPosition(mySub.position as CardPosition)
+        setPreamble(mySub.preamble ?? '')
+        const myCard = cards.find((c) => c.id === mySub.hand_card_id)
+        if (myCard) setSelectedCard(myCard)
+      }
+    }
+
+    init()
   }, [game.id, game.topic_card_id, tournament.id, currentUserId])
 
   const completedUserIds = submittedUserIds
