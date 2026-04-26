@@ -311,7 +311,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.3.4</p>
+        <p className="text-xs text-gray-300">v1.3.5</p>
       </footer>
     </div>
   )

@@ -10,6 +10,8 @@ interface Props {
   participants: User[]
   completedLabel?: string
   pendingLabel?: string
+  nextPhaseText?: string
+  allDoneText?: string
 }
 
 export default function CompletionStatus({
@@ -17,6 +19,8 @@ export default function CompletionStatus({
   participants,
   completedLabel = '完了',
   pendingLabel = '未完了',
+  nextPhaseText = '全員完了すると次のフェーズへ進みます',
+  allDoneText = '全員が完了しました！次のフェーズへ進みます',
 }: Props) {
   const completed = participants.filter((p) => completedUserIds.includes(p.id))
   const pending = participants.filter((p) => !completedUserIds.includes(p.id))
@@ -52,9 +56,9 @@ export default function CompletionStatus({
       )}
 
       {pending.length > 0 ? (
-        <p className="text-xs text-gray-400">あと{pending.length}名の完了を待っています。全員完了すると次のフェーズへ進みます</p>
+        <p className="text-xs text-gray-400">あと{pending.length}名の完了を待っています。{nextPhaseText}</p>
       ) : (
-        <p className="text-xs text-emerald-600 font-medium">全員完了しました！次のフェーズへ進みます</p>
+        <p className="text-xs text-emerald-600 font-medium">{allDoneText}</p>
       )}
     </div>
   )

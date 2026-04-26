@@ -127,6 +127,8 @@ export default function CardCreation({ tournament, token, currentUserId, partici
         participants={participants}
         completedLabel="作成完了"
         pendingLabel="作成中"
+        nextPhaseText="全員が作成すると、ゲームが始まります"
+        allDoneText="全員が完了しました！ゲームが始まります"
       />
     </div>
   )

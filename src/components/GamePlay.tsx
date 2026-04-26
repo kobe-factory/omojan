@@ -237,6 +237,8 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
         participants={participants}
         completedLabel="投稿完了"
         pendingLabel="投稿中"
+        nextPhaseText="全員が投稿すると、投票へ進みます"
+        allDoneText="全員が投稿しました！投票へ進みます"
       />
     </div>
   )

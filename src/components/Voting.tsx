@@ -194,6 +194,8 @@ export default function Voting({ tournament, token, game, currentUserId, partici
         participants={participants}
         completedLabel="投票完了"
         pendingLabel="投票中"
+        nextPhaseText="全員が投票すると、結果発表へ進みます"
+        allDoneText="全員が投票しました！結果発表へ進みます"
       />
     </div>
   )

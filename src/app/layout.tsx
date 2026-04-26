@@ -9,7 +9,7 @@ const notoSansJP = Noto_Sans_JP({
 
 export const metadata: Metadata = {
   title: 'おもじゃん for 男根祭',
-  description: 'ご神体ワードバトル v1.3.4',
+  description: 'ご神体ワードバトル v1.3.5',
 }
 
 export const viewport: Viewport = {
