@@ -137,6 +137,13 @@ export async function POST(
         return NextResponse.json({ waiting: true, waitingUserIds: waiting })
       }
 
+      // 最終戦は showing_result を経由せず直接大会終了へ
+      if (currentGame.round_number >= tournament.game_count) {
+        await supabase.from('games').update({ status: 'finished' }).eq('id', currentGame.id)
+        await supabase.from('tournaments').update({ status: 'finished' }).eq('id', tournament.id)
+        return NextResponse.json({ advanced: true, newStatus: 'finished' })
+      }
+
       await supabase
         .from('games')
         .update({ status: 'showing_result' })
