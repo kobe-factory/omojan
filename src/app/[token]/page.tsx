@@ -183,7 +183,7 @@ export default function TournamentPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* ヘッダー */}
-      <header className="bg-white sticky top-0 z-10">
+      <header className="bg-white sticky top-0 z-10 border-b border-gray-200">
         <div className="px-4 py-2">
           <div className="relative flex justify-center items-center">
             <img src="/omojan_logo.png" alt="おもじゃん for 男根祭" className="h-10 w-auto" />
@@ -205,7 +205,7 @@ export default function TournamentPage() {
             )}
           </div>
         </div>
-        <div className={`h-5 flex items-center justify-center border-b ${stepInfo.bg} ${stepInfo.border}`}>
+        <div className={`h-5 flex items-center justify-center ${stepInfo.bg}`}>
           <span className={`text-[10px] font-semibold tracking-wide ${stepInfo.text}`}>
             {stepInfo.label}
           </span>
