@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import WaitingStatus from './WaitingStatus'
+import CompletionStatus from './CompletionStatus'
 
 interface User {
   id: string
@@ -51,8 +51,8 @@ export default function CardCreation({ tournament, token, currentUserId, partici
       })
   }, [tournament.id, tournament.cards_per_user, currentUserId])
 
-  const waitingUserIds = participants
-    .filter((p) => (cardCounts[p.id] ?? 0) < tournament.cards_per_user)
+  const completedUserIds = participants
+    .filter((p) => (cardCounts[p.id] ?? 0) >= tournament.cards_per_user)
     .map((p) => p.id)
 
   async function handleSubmit() {
@@ -122,20 +122,12 @@ export default function CardCreation({ tournament, token, currentUserId, partici
         </div>
       </div>
 
-      {submitted && waitingUserIds.length > 0 && (
-        <WaitingStatus
-          waitingUserIds={waitingUserIds}
-          participants={participants}
-          message="札作成待ち"
-        />
-      )}
-
-      {submitted && waitingUserIds.length === 0 && (
-        <div className="bg-green-50 rounded-xl p-4 border border-green-200 text-center">
-          <p className="text-green-700 font-medium">全員が完了しました！</p>
-          <p className="text-sm text-gray-400 mt-1">ゲームが始まります</p>
-        </div>
-      )}
+      <CompletionStatus
+        completedUserIds={completedUserIds}
+        participants={participants}
+        completedLabel="作成完了"
+        pendingLabel="作成中"
+      />
     </div>
   )
 }

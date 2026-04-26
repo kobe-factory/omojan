@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import WaitingStatus from './WaitingStatus'
+import CompletionStatus from './CompletionStatus'
 import type { CardPosition } from '@/types/database'
 
 interface User {
@@ -81,9 +81,7 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
       })
   }, [game.id, game.topic_card_id, tournament.id, currentUserId])
 
-  const waitingUserIds = participants
-    .filter((p) => !submittedUserIds.includes(p.id))
-    .map((p) => p.id)
+  const completedUserIds = submittedUserIds
 
   async function handleSubmit() {
     if (!selectedCard) {
@@ -221,20 +219,12 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
         {submitting ? '投稿中...' : submitted ? '✓ 投稿済み（修正できます）' : '作品を投稿する'}
       </button>
 
-      {/* 待ち状態 */}
-      {submitted && waitingUserIds.length > 0 && (
-        <WaitingStatus
-          waitingUserIds={waitingUserIds}
-          participants={participants}
-          message="作品投稿待ち"
-        />
-      )}
-
-      {submitted && waitingUserIds.length === 0 && (
-        <div className="bg-green-50 rounded-xl p-4 border border-green-200 text-center">
-          <p className="text-green-700 font-medium">全員投稿完了！投票へ進みます</p>
-        </div>
-      )}
+      <CompletionStatus
+        completedUserIds={completedUserIds}
+        participants={participants}
+        completedLabel="投稿完了"
+        pendingLabel="投稿中"
+      />
     </div>
   )
 }

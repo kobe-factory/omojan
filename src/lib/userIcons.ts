@@ -2,7 +2,7 @@ const USER_ICONS: Record<string, string> = {
   'はじむ': '/icon/hazimu.jpeg',
   'スラパン': '/icon/slapan.jpeg',
   'こんべ': '/icon/konbe.jpeg',
-  'かねおか': '/icon/kaneoka.jpeg',
+  'かっぴー': '/icon/kaneoka.jpeg',
   'カズさん': '/icon/kazsan.jpeg',
 }
 

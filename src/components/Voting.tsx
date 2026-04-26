@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import WaitingStatus from './WaitingStatus'
+import CompletionStatus from './CompletionStatus'
 import UserIcon from './UserIcon'
 
 interface User {
@@ -96,9 +96,7 @@ export default function Voting({ tournament, token, game, currentUserId, partici
     })
   }, [game.id, game.topic_card_id, currentUserId, participants])
 
-  const waitingUserIds = participants
-    .filter((p) => !votedUserIds.includes(p.id))
-    .map((p) => p.id)
+  const completedUserIds = votedUserIds
 
   async function handleVote() {
     if (!selectedSubmissionId) {
@@ -185,19 +183,12 @@ export default function Voting({ tournament, token, game, currentUserId, partici
         {voting ? '投票中...' : voted ? '✓ 投票済み' : '投票する'}
       </button>
 
-      {voted && waitingUserIds.length > 0 && (
-        <WaitingStatus
-          waitingUserIds={waitingUserIds}
-          participants={participants}
-          message="投票待ち"
-        />
-      )}
-
-      {voted && waitingUserIds.length === 0 && (
-        <div className="bg-green-50 rounded-xl p-4 border border-green-200 text-center">
-          <p className="text-green-700 font-medium">全員投票完了！結果発表へ</p>
-        </div>
-      )}
+      <CompletionStatus
+        completedUserIds={completedUserIds}
+        participants={participants}
+        completedLabel="投票完了"
+        pendingLabel="投票中"
+      />
     </div>
   )
 }
