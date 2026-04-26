@@ -90,7 +90,7 @@ READMEも適宜更新してください。
 - `src/app/[token]/page.tsx` のフッター `v1.x.x`
 - `src/app/layout.tsx` の metadata description `v1.x.x`
 
-**現在のバージョン：v1.3.6**
+**現在のバージョン：v1.4.0**
 
 ## システム概要
 

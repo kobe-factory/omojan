@@ -147,28 +147,47 @@ export default function TournamentPage() {
 
   if (!tournament) return null
 
+  const stepInfo = (() => {
+    if (tournament.status === 'waiting_users') return { label: '参加者募集中', bg: 'bg-sky-50', text: 'text-sky-600', border: 'border-sky-100' }
+    if (tournament.status === 'creating_cards') return { label: '札作成中', bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-200' }
+    if (tournament.status === 'finished') return { label: '大会終了', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' }
+    if (tournament.status === 'playing' && currentGame) {
+      if (currentGame.status === 'waiting_submission') return { label: '作品投稿中', bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-200' }
+      if (currentGame.status === 'waiting_vote') return { label: '投票中', bg: 'bg-violet-50', text: 'text-violet-600', border: 'border-violet-100' }
+      return { label: '結果発表', bg: 'bg-yellow-50', text: 'text-yellow-600', border: 'border-yellow-200' }
+    }
+    return { label: '', bg: 'bg-gray-50', text: 'text-gray-400', border: 'border-gray-100' }
+  })()
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* ヘッダー */}
-      <header className="bg-white border-b border-gray-100 px-4 py-2 sticky top-0 z-10">
-        <div className="relative flex justify-center items-center">
-          <img src="/omojan_logo.png" alt="おもじゃん for 男根祭" className="h-10 w-auto" />
-          {tournamentNumber && (
-            <span className="absolute left-0 bottom-0 text-xs font-bold text-yellow-700 bg-yellow-50 border border-yellow-300 px-2 py-0.5 rounded-full">
-              第{tournamentNumber}回大会
-            </span>
-          )}
-          {tournament.status === 'playing' && currentGame && (
-            <span className={`absolute right-0 bottom-0 text-xs font-bold px-2 py-0.5 rounded-full border ${
-              currentGame.round_number === tournament.game_count
-                ? 'text-red-600 bg-red-50 border-red-300'
-                : 'text-emerald-600 bg-emerald-50 border-emerald-200'
-            }`}>
-              {currentGame.round_number === tournament.game_count
-                ? '最終戦'
-                : `${currentGame.round_number} / ${tournament.game_count}回戦`}
-            </span>
-          )}
+      <header className="bg-white sticky top-0 z-10">
+        <div className="px-4 py-2">
+          <div className="relative flex justify-center items-center">
+            <img src="/omojan_logo.png" alt="おもじゃん for 男根祭" className="h-10 w-auto" />
+            {tournamentNumber && (
+              <span className="absolute left-0 bottom-0 text-xs font-bold text-yellow-700 bg-yellow-50 border border-yellow-300 px-2 py-0.5 rounded-full">
+                第{tournamentNumber}回大会
+              </span>
+            )}
+            {tournament.status === 'playing' && currentGame && (
+              <span className={`absolute right-0 bottom-0 text-xs font-bold px-2 py-0.5 rounded-full border ${
+                currentGame.round_number === tournament.game_count
+                  ? 'text-red-600 bg-red-50 border-red-300'
+                  : 'text-emerald-600 bg-emerald-50 border-emerald-200'
+              }`}>
+                {currentGame.round_number === tournament.game_count
+                  ? '最終戦'
+                  : `${currentGame.round_number} / ${tournament.game_count}回戦`}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className={`h-5 flex items-center justify-center border-b ${stepInfo.bg} ${stepInfo.border}`}>
+          <span className={`text-[10px] font-semibold tracking-wide ${stepInfo.text}`}>
+            {stepInfo.label}
+          </span>
         </div>
       </header>
 
@@ -225,7 +244,7 @@ export default function TournamentPage() {
           <>
             {/* タブ（2回戦以降） */}
             {currentGame.round_number > 1 && (
-              <div className="flex border-b border-gray-200 bg-white sticky top-[57px] z-10">
+              <div className="flex border-b border-gray-200 bg-white sticky top-[77px] z-10">
                 <button
                   onClick={() => setActiveTab('game')}
                   className={`flex-1 py-3 text-sm font-medium transition-colors ${
@@ -291,7 +310,11 @@ export default function TournamentPage() {
                 currentUserId={userId}
                 participants={participants}
                 onNext={async () => {
-                  const res = await fetch(`/api/tournaments/${token}/advance`, { method: 'POST' })
+                  const res = await fetch(`/api/tournaments/${token}/advance`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ confirm_result: true }),
+                  })
                   const data = await res.json()
                   if (data.advanced) await fetchState()
                 }}
@@ -311,7 +334,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.3.6</p>
+        <p className="text-xs text-gray-300">v1.4.0</p>
       </footer>
     </div>
   )

@@ -48,14 +48,7 @@ export default function Results({ tournament, game, participants, onNext }: Prop
   const [loading, setLoading] = useState(true)
   const [advancing, setAdvancing] = useState(false)
 
-  const cookieKey = `omojan:result:${game.id}`
-  const isFirstView = typeof document !== 'undefined' && !document.cookie.includes(cookieKey)
-
   useEffect(() => {
-    if (isFirstView) {
-      document.cookie = `${cookieKey}=1; path=/; max-age=86400`
-    }
-
     async function fetchResults() {
       const [{ data: topicCard }, { data: subs }, { data: votes }] = await Promise.all([
         supabase.from('cards').select('text').eq('id', game.topic_card_id).single(),
@@ -138,12 +131,10 @@ export default function Results({ tournament, game, participants, onNext }: Prop
 
   return (
     <div className="p-4 space-y-4">
-      {isFirstView && (
-        <div className="text-center py-6">
-          <p className="text-5xl mb-2">🎊</p>
-          <p className="text-xl font-bold text-gray-800">第{game.round_number}回戦 結果発表！</p>
-        </div>
-      )}
+      <div className="text-center py-6">
+        <p className="text-5xl mb-2">🎊</p>
+        <p className="text-xl font-bold text-gray-800">第{game.round_number}回戦 結果発表！</p>
+      </div>
 
       <div className="space-y-3">
         {results.map((r, i) => {

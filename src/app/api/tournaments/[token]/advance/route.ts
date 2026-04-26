@@ -7,6 +7,12 @@ export async function POST(
 ) {
   const { token } = await params
 
+  let confirmResult = false
+  try {
+    const body = await request.json()
+    confirmResult = !!body.confirm_result
+  } catch { /* body なし */ }
+
   const { data: tournament } = await supabase
     .from('tournaments')
     .select('id, status, game_count, cards_per_user, hand_cards_per_player, required_players')
@@ -139,8 +145,12 @@ export async function POST(
       return NextResponse.json({ advanced: true, newGameStatus: 'showing_result' })
     }
 
-    // showing_result → finished → 次ラウンドまたは大会終了
+    // showing_result → 結果確認ボタン押下時のみ遷移（自動advance非対象）
     if (currentGame.status === 'showing_result') {
+      if (!confirmResult) {
+        return NextResponse.json({ noChange: true })
+      }
+
       await supabase
         .from('games')
         .update({ status: 'finished' })
