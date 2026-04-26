@@ -18,8 +18,25 @@ export async function POST(
     return NextResponse.json({ error: '作品投稿フェーズではありません' }, { status: 400 })
   }
 
+  // 既存の投稿を取得（カード変更時に前の札のis_usedを戻すため）
+  const { data: existingSub } = await supabase
+    .from('submissions')
+    .select('hand_card_id')
+    .eq('game_id', game_id)
+    .eq('user_id', user_id)
+    .single()
+
   // 既存の投稿を削除して作り直し（修正対応）
   await supabase.from('submissions').delete().eq('game_id', game_id).eq('user_id', user_id)
+
+  // 前と別のカードに変えた場合、前の札のis_usedをfalseに戻す
+  if (existingSub && existingSub.hand_card_id !== hand_card_id) {
+    await supabase
+      .from('player_hands')
+      .update({ is_used: false })
+      .eq('card_id', existingSub.hand_card_id)
+      .eq('user_id', user_id)
+  }
 
   const { error } = await supabase.from('submissions').insert({
     game_id,
@@ -33,7 +50,7 @@ export async function POST(
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  // 手札を使用済みにする
+  // 新しい手札を使用済みにする
   await supabase
     .from('player_hands')
     .update({ is_used: true })

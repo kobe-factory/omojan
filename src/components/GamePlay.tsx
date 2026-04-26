@@ -45,6 +45,8 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [submittedUserIds, setSubmittedUserIds] = useState<string[]>([])
+  // 現在このゲームでDBに保存されている投稿カードID
+  const [submittedCardId, setSubmittedCardId] = useState<string | null>(null)
 
   useEffect(() => {
     async function init() {
@@ -72,6 +74,7 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
         setSubmitted(true)
         setPosition(mySub.position as CardPosition)
         setPreamble(mySub.preamble ?? '')
+        setSubmittedCardId(mySub.hand_card_id)
         const myCard = cards.find((c) => c.id === mySub.hand_card_id)
         if (myCard) setSelectedCard(myCard)
       }
@@ -99,6 +102,13 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
         preamble: preamble.trim() || null,
       }),
     })
+    // 前回と別のカードに変えた場合、ローカルのis_usedを戻す
+    if (submittedCardId && submittedCardId !== selectedCard.id) {
+      setHandCards(prev => prev.map(c =>
+        c.id === submittedCardId ? { ...c, is_used: false } : c
+      ))
+    }
+    setSubmittedCardId(selectedCard.id)
     setSubmitted(true)
     setSubmitting(false)
     setSubmittedUserIds(prev => [...prev, currentUserId])
@@ -125,28 +135,32 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
           <p className="text-sm text-gray-400 text-center py-4">手札がありません</p>
         ) : (
           <div className="grid grid-cols-2 gap-2">
-            {handCards.map((card) => (
-              <button
-                key={card.id}
-                disabled={card.is_used}
-                onClick={() => {
-                  setSelectedCard(card)
-                  if (submitted) setSubmitted(false)
-                }}
-                className={`py-3 px-3 rounded-xl text-sm font-medium transition-all text-left border relative ${
-                  card.is_used
-                    ? 'bg-gray-100 text-gray-300 border-gray-100 cursor-not-allowed'
-                    : selectedCard?.id === card.id
-                      ? 'bg-emerald-500 text-white border-emerald-500 shadow-md'
-                      : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-emerald-300'
-                }`}
-              >
-                {card.text}
-                {card.is_used && (
-                  <span className="absolute top-1 right-1 text-xs text-gray-300">使用済</span>
-                )}
-              </button>
-            ))}
+            {handCards.map((card) => {
+              // 過去ラウンドで使用済み（今ゲームの投稿カードは除く）
+              const isTrulyUsed = card.is_used && card.id !== submittedCardId
+              return (
+                <button
+                  key={card.id}
+                  disabled={isTrulyUsed}
+                  onClick={() => {
+                    setSelectedCard(card)
+                    if (submitted) setSubmitted(false)
+                  }}
+                  className={`py-3 px-3 rounded-xl text-sm font-medium transition-all text-left border relative ${
+                    isTrulyUsed
+                      ? 'bg-gray-100 text-gray-300 border-gray-100 cursor-not-allowed'
+                      : selectedCard?.id === card.id
+                        ? 'bg-emerald-500 text-white border-emerald-500 shadow-md'
+                        : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-emerald-300'
+                  }`}
+                >
+                  {card.text}
+                  {isTrulyUsed && (
+                    <span className="absolute top-1 right-1 text-xs text-gray-300">使用済</span>
+                  )}
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
