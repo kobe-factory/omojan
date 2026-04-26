@@ -51,7 +51,9 @@ export default function CompletionStatus({
         </div>
       )}
 
-      {pending.length === 0 && (
+      {pending.length > 0 ? (
+        <p className="text-xs text-gray-400">あと{pending.length}名の完了を待っています。全員完了すると次のフェーズへ進みます</p>
+      ) : (
         <p className="text-xs text-emerald-600 font-medium">全員完了しました！次のフェーズへ進みます</p>
       )}
     </div>
