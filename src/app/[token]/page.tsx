@@ -50,6 +50,7 @@ export default function TournamentPage() {
   const [activeTab, setActiveTab] = useState<'game' | 'archive'>('game')
   const [notFound, setNotFound] = useState(false)
   const [tournamentNumber, setTournamentNumber] = useState<number | null>(null)
+  const [prevResultGame, setPrevResultGame] = useState<Game | null>(null)
 
   // 初回ロード時に一度だけadvanceを試みるためのフラグ
   const hasTriedAdvance = useRef(false)
@@ -125,6 +126,27 @@ export default function TournamentPage() {
 
     init()
   }, [fetchState, token])
+
+  // 前戦の結果モーダル表示チェック（作品投稿中フェーズに入ったとき、未確認なら前戦結果を表示）
+  useEffect(() => {
+    if (!tournament || !currentGame) return
+    if (currentGame.status !== 'waiting_submission') return
+    if (currentGame.round_number <= 1) return
+
+    const prevRound = currentGame.round_number - 1
+    const key = `omojan:result_seen:${tournament.id}:${prevRound}`
+    if (typeof window !== 'undefined' && localStorage.getItem(key)) return
+
+    supabase
+      .from('games')
+      .select('*')
+      .eq('tournament_id', tournament.id)
+      .eq('round_number', prevRound)
+      .single()
+      .then(({ data }) => {
+        if (data) setPrevResultGame(data as Game)
+      })
+  }, [tournament?.id, currentGame?.id, currentGame?.status])
 
   if (loading) {
     return (
@@ -310,6 +332,10 @@ export default function TournamentPage() {
                 currentUserId={userId}
                 participants={participants}
                 onNext={async () => {
+                  localStorage.setItem(
+                    `omojan:result_seen:${tournament.id}:${currentGame.round_number}`,
+                    '1'
+                  )
                   const res = await fetch(`/api/tournaments/${token}/advance`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -334,8 +360,33 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.4.0</p>
+        <p className="text-xs text-gray-300">v1.4.1</p>
       </footer>
+
+      {/* 前戦結果モーダル（まだ結果を確認していないユーザー向け） */}
+      {prevResultGame && userId && (
+        <div className="fixed inset-0 bg-black/60 z-50 overflow-y-auto">
+          <div className="min-h-full flex items-start justify-center p-4 pt-8">
+            <div className="bg-gray-50 rounded-2xl w-full max-w-md overflow-hidden">
+              <Results
+                tournament={tournament}
+                token={token}
+                game={prevResultGame}
+                currentUserId={userId}
+                participants={participants}
+                nextLabel="確認して次へ進む"
+                onNext={async () => {
+                  localStorage.setItem(
+                    `omojan:result_seen:${tournament.id}:${prevResultGame.round_number}`,
+                    '1'
+                  )
+                  setPrevResultGame(null)
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
