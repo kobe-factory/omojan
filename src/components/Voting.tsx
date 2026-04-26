@@ -64,14 +64,20 @@ export default function Voting({ tournament, token, game, currentUserId, partici
         .eq('game_id', game.id),
       supabase
         .from('votes')
-        .select('voter_user_id')
+        .select('voter_user_id, submission_id')
         .eq('game_id', game.id),
     ]).then(async ([subRes, voteRes]) => {
       const subs = subRes.data ?? []
       const votes = voteRes.data ?? []
 
       setVotedUserIds(votes.map((v) => v.voter_user_id))
-      if (votes.some((v) => v.voter_user_id === currentUserId)) setVoted(true)
+
+      // 自分の投票済み作品を復元
+      const myVote = votes.find((v) => v.voter_user_id === currentUserId)
+      if (myVote) {
+        setVoted(true)
+        setSelectedSubmissionId(myVote.submission_id)
+      }
 
       // 手札テキストとユーザー名を取得
       const enriched: Submission[] = await Promise.all(
