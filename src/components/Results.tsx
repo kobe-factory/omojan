@@ -139,10 +139,6 @@ export default function Results({ tournament, game, participants, onNext, nextLa
 
       <div className="space-y-3">
         {results.map((r, i) => {
-          const before = r.position === 'before' ? r.handText : r.topicText
-          const after = r.position === 'before' ? r.topicText : r.handText
-          const beforeIsHand = r.position === 'before'
-
           return (
             <div
               key={r.submissionId}
@@ -171,32 +167,9 @@ export default function Results({ tournament, game, participants, onNext, nextLa
               </div>
 
               {/* 作品（お題＋手札の組み合わせ） */}
-              <div className="flex items-center flex-wrap gap-1 mb-3">
-                <span
-                  className={`px-2 py-1 rounded-lg text-base font-bold ${
-                    beforeIsHand
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : 'bg-yellow-100 text-yellow-700'
-                  }`}
-                >
-                  {before}
-                </span>
-                <span
-                  className={`px-2 py-1 rounded-lg text-base font-bold ${
-                    beforeIsHand
-                      ? 'bg-yellow-100 text-yellow-700'
-                      : 'bg-emerald-100 text-emerald-700'
-                  }`}
-                >
-                  {after}
-                </span>
-              </div>
-
-              {/* 凡例 */}
-              <div className="flex gap-3 text-xs text-gray-400 mb-2">
-                <span><span className="inline-block w-2 h-2 rounded-sm bg-emerald-200 mr-1" />手札</span>
-                <span><span className="inline-block w-2 h-2 rounded-sm bg-yellow-200 mr-1" />お題</span>
-              </div>
+              <p className="text-lg font-bold text-gray-800 mb-3">
+                {r.position === 'before' ? `${r.handText}${r.topicText}` : `${r.topicText}${r.handText}`}
+              </p>
 
               {r.preamble && (
                 <p className="text-sm text-gray-500 italic mb-2">「{r.preamble}」</p>

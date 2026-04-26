@@ -146,17 +146,21 @@ export default function Voting({ tournament, token, game, currentUserId, partici
               ? `${sub.handCardText}${topicText}`
               : `${topicText}${sub.handCardText}`
           const isSelected = selectedSubmissionId === sub.id
+          const isOwnSubmission = sub.user_id === currentUserId
 
           return (
             <button
               key={sub.id}
+              disabled={isOwnSubmission}
               onClick={() => {
-                if (!voted) {
+                if (!voted && !isOwnSubmission) {
                   setSelectedSubmissionId(sub.id)
                 }
               }}
               className={`w-full text-left rounded-2xl p-4 transition-all border-2 ${
-                isSelected
+                isOwnSubmission
+                  ? 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed'
+                  : isSelected
                   ? 'border-emerald-500 bg-emerald-50'
                   : 'border-gray-200 bg-white hover:border-emerald-200'
               }`}
@@ -169,11 +173,15 @@ export default function Voting({ tournament, token, game, currentUserId, partici
                 <UserIcon name={sub.userName} size="xs" />
                 <p className="text-xs text-gray-400">{sub.userName}</p>
               </div>
-              {isSelected && (
+              {isOwnSubmission ? (
+                <div className="mt-2 flex items-center gap-1">
+                  <span className="text-gray-400 text-xs">投票できません</span>
+                </div>
+              ) : isSelected ? (
                 <div className="mt-2 flex items-center gap-1">
                   <span className="text-emerald-500 text-xs font-medium">✓ 選択中</span>
                 </div>
-              )}
+              ) : null}
             </button>
           )
         })}
@@ -188,7 +196,7 @@ export default function Voting({ tournament, token, game, currentUserId, partici
             : 'bg-emerald-500 text-white hover:bg-emerald-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed'
         }`}
       >
-        {voting ? '投票中...' : voted ? '✓ 投票済み' : '投票する'}
+        {voting ? '投票中...' : voted ? '✓ 投票済み（変更できます）' : '投票する'}
       </button>
 
       <CompletionStatus
