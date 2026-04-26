@@ -25,6 +25,7 @@ interface HandCard {
   id: string
   text: string
   is_used: boolean
+  created_at: string
 }
 
 interface Props {
@@ -52,18 +53,18 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
     async function init() {
       const [topicRes, handsRes, subsRes] = await Promise.all([
         supabase.from('cards').select('text').eq('id', game.topic_card_id).single(),
-        supabase.from('player_hands').select('card_id, is_used, cards(id, text)').eq('tournament_id', tournament.id).eq('user_id', currentUserId),
+        supabase.from('player_hands').select('card_id, is_used, cards(id, text, created_at)').eq('tournament_id', tournament.id).eq('user_id', currentUserId),
         supabase.from('submissions').select('user_id, hand_card_id, position, preamble').eq('game_id', game.id),
       ])
 
       if (topicRes.data) setTopicText(topicRes.data.text)
 
       const cards = (handsRes.data ?? []).map((h) => {
-        const card = h.cards as unknown as { id: string; text: string }
+        const card = h.cards as unknown as { id: string; text: string; created_at: string }
         if (!card) return null
         return { ...card, is_used: h.is_used }
       }).filter(Boolean) as HandCard[]
-      setHandCards(cards)
+      setHandCards(cards.sort((a, b) => a.created_at.localeCompare(b.created_at)))
 
       const ids = (subsRes.data ?? []).map((s) => s.user_id)
       setSubmittedUserIds(ids)
