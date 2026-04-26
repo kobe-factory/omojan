@@ -26,6 +26,7 @@ interface Submission {
   hand_card_id: string
   position: 'before' | 'after'
   preamble: string | null
+  created_at: string
   userName: string
   handCardText: string
 }
@@ -60,8 +61,9 @@ export default function Voting({ tournament, token, game, currentUserId, partici
     Promise.all([
       supabase
         .from('submissions')
-        .select('id, user_id, hand_card_id, position, preamble')
-        .eq('game_id', game.id),
+        .select('id, user_id, hand_card_id, position, preamble, created_at')
+        .eq('game_id', game.id)
+        .order('created_at', { ascending: true }),
       supabase
         .from('votes')
         .select('voter_user_id, submission_id')
@@ -98,7 +100,7 @@ export default function Voting({ tournament, token, game, currentUserId, partici
         })
       )
 
-      setSubmissions(enriched.sort(() => Math.random() - 0.5))
+      setSubmissions(enriched)
     })
   }, [game.id, game.topic_card_id, currentUserId, participants])
 
