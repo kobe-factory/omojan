@@ -244,6 +244,15 @@ export default function TournamentPage() {
           />
         )}
 
+        {/* 非参加者メッセージ（大会進行中に userId がない場合） */}
+        {(tournament.status === 'creating_cards' || tournament.status === 'playing') && !userId && (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
+            <p className="text-4xl mb-4">🎴</p>
+            <p className="text-gray-700 font-medium mb-2">この大会はすでに参加者が確定しています</p>
+            <p className="text-sm text-gray-400">観戦はできますが、ゲームへの参加はできません</p>
+          </div>
+        )}
+
         {/* 札作成フェーズ */}
         {tournament.status === 'creating_cards' && userId && (
           <CardCreation
