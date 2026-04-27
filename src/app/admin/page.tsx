@@ -37,6 +37,7 @@ export default function AdminPage() {
   const [tournaments, setTournaments] = useState<TournamentRow[]>([])
   const [listLoading, setListLoading] = useState(false)
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
+  const [activeProductionTournament, setActiveProductionTournament] = useState<TournamentRow | null>(null)
 
   const fetchTournaments = useCallback(async () => {
     setListLoading(true)
@@ -55,12 +56,17 @@ export default function AdminPage() {
       productionNumberMap[t.id] = i + 1
     })
 
-    setTournaments(
-      rows.map((t) => ({
-        ...t,
-        productionNumber: productionNumberMap[t.id],
-      }))
-    )
+    const mapped = rows.map((t) => ({
+      ...t,
+      productionNumber: productionNumberMap[t.id],
+    }))
+    setTournaments(mapped)
+
+    const active = mapped.find(
+      (t) => t.mode === 'production' && ['waiting_users', 'creating_cards', 'playing'].includes(t.status)
+    ) ?? null
+    setActiveProductionTournament(active)
+
     setListLoading(false)
   }, [])
 
@@ -163,24 +169,29 @@ export default function AdminPage() {
         <div className="space-y-3 mb-8">
           {GAME_PRESETS.map((preset) => {
             const isSelected = selectedPreset.label === preset.label
+            const isProductionBlocked = preset.mode === 'production' && !!activeProductionTournament
             return (
               <button
                 key={preset.label}
+                disabled={isProductionBlocked}
                 onClick={() => {
+                  if (isProductionBlocked) return
                   setSelectedPreset(preset)
                   setGeneratedUrl(null)
                 }}
                 className={`w-full text-left rounded-xl p-4 border-2 transition-all ${
-                  isSelected
-                    ? 'border-emerald-500 bg-emerald-50'
-                    : 'border-gray-200 bg-white hover:border-emerald-200'
+                  isProductionBlocked
+                    ? 'border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed'
+                    : isSelected
+                      ? 'border-emerald-500 bg-emerald-50'
+                      : 'border-gray-200 bg-white hover:border-emerald-200'
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className={`font-bold text-base ${isSelected ? 'text-emerald-600' : 'text-gray-700'}`}>
+                  <span className={`font-bold text-base ${isProductionBlocked ? 'text-gray-400' : isSelected ? 'text-emerald-600' : 'text-gray-700'}`}>
                     {preset.label}
                   </span>
-                  {isSelected && <span className="text-emerald-500 text-sm">✓</span>}
+                  {isSelected && !isProductionBlocked && <span className="text-emerald-500 text-sm">✓</span>}
                 </div>
                 <p className="text-sm text-gray-500 mb-2">{preset.description}</p>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-400">
@@ -189,14 +200,22 @@ export default function AdminPage() {
                   <span>札作成枚数：{preset.cards_per_user}枚/人</span>
                   <span>配布手札：{preset.hand_cards_per_player}枚/人</span>
                 </div>
+                {isProductionBlocked && (
+                  <p className="text-xs text-red-400 mt-2">進行中の本番大会があります</p>
+                )}
               </button>
             )
           })}
         </div>
 
+        {activeProductionTournament && selectedPreset.mode === 'production' && (
+          <p className="text-xs text-red-400 text-center mb-3">
+            本番大会が進行中のため、新たに発行できません
+          </p>
+        )}
         <button
           onClick={handleCreate}
-          disabled={loading}
+          disabled={loading || (selectedPreset.mode === 'production' && !!activeProductionTournament)}
           className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-600 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? '発行中...' : '大会URLを発行する'}
