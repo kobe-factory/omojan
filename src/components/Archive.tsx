@@ -26,6 +26,7 @@ interface ArchiveSubmission {
   preamble: string | null
   voteCount: number
   voteTimeSum: number
+  voterNames: string[]
   isWinner: boolean
   isTied: boolean
 }
@@ -59,14 +60,18 @@ export default function Archive({ tournamentId, participants }: Props) {
           const [{ data: topicCard }, { data: subs }, { data: votes }] = await Promise.all([
             supabase.from('cards').select('text').eq('id', g.topic_card_id).single(),
             supabase.from('submissions').select('id, user_id, hand_card_id, position, preamble').eq('game_id', g.id),
-            supabase.from('votes').select('submission_id, created_at').eq('game_id', g.id),
+            supabase.from('votes').select('submission_id, created_at, voter_user_id').eq('game_id', g.id),
           ])
 
           const voteCount: Record<string, number> = {}
           const voteTimeSum: Record<string, number> = {}
+          const voterNamesMap: Record<string, string[]> = {}
           for (const v of votes ?? []) {
             voteCount[v.submission_id] = (voteCount[v.submission_id] ?? 0) + 1
             voteTimeSum[v.submission_id] = (voteTimeSum[v.submission_id] ?? 0) + new Date(v.created_at).getTime()
+            const voter = participants.find((p) => p.id === v.voter_user_id)
+            if (!voterNamesMap[v.submission_id]) voterNamesMap[v.submission_id] = []
+            voterNamesMap[v.submission_id].push(voter?.name ?? '???')
           }
 
           const submissions: ArchiveSubmission[] = await Promise.all(
@@ -92,6 +97,7 @@ export default function Archive({ tournamentId, participants }: Props) {
                 preamble: s.preamble,
                 voteCount: count,
                 voteTimeSum: voteTimeSum[s.id] ?? 0,
+                voterNames: voterNamesMap[s.id] ?? [],
                 isWinner: false,
                 isTied: false,
               }
@@ -218,9 +224,21 @@ export default function Archive({ tournamentId, participants }: Props) {
                     {s.preamble && (
                       <p className="text-xs text-gray-500 italic mt-1">「{s.preamble}」</p>
                     )}
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <UserIcon name={s.userName} size="xs" />
-                      <p className="text-xs text-gray-400">{s.userName}</p>
+                    <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <UserIcon name={s.userName} size="xs" />
+                        <p className="text-xs text-gray-400">{s.userName}</p>
+                      </div>
+                      {s.voterNames.length > 0 && (
+                        <div className="flex items-center gap-1 flex-wrap justify-end">
+                          {s.voterNames.map((name) => (
+                            <div key={name} className="flex items-center gap-0.5">
+                              <UserIcon name={name} size="xs" />
+                              <span className="text-[10px] text-gray-300">{name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

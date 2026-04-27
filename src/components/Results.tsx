@@ -175,21 +175,22 @@ export default function Results({ tournament, game, participants, onNext, nextLa
               {r.preamble && (
                 <p className="text-sm text-gray-500 italic mb-2">「{r.preamble}」</p>
               )}
-              <div className="flex items-center gap-1.5">
-                <UserIcon name={r.userName} size="xs" />
-                <p className="text-xs text-gray-400">{r.userName}</p>
-              </div>
-              {r.voterNames.length > 0 && (
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-2">
-                  <span className="text-xs text-gray-400">投票：</span>
-                  {r.voterNames.map((name) => (
-                    <div key={name} className="flex items-center gap-1">
-                      <UserIcon name={name} size="xs" />
-                      <span className="text-xs text-gray-400">{name}</span>
-                    </div>
-                  ))}
+              <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <UserIcon name={r.userName} size="xs" />
+                  <p className="text-xs text-gray-400">{r.userName}</p>
                 </div>
-              )}
+                {r.voterNames.length > 0 && (
+                  <div className="flex items-center gap-1 flex-wrap justify-end">
+                    {r.voterNames.map((name) => (
+                      <div key={name} className="flex items-center gap-0.5">
+                        <UserIcon name={name} size="xs" />
+                        <span className="text-[10px] text-gray-300">{name}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )
         })}
