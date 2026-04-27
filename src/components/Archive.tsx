@@ -224,13 +224,13 @@ export default function Archive({ tournamentId, participants }: Props) {
                     {s.preamble && (
                       <p className="text-xs text-gray-500 italic mt-1">「{s.preamble}」</p>
                     )}
-                    <div className="mt-2 pt-2 border-t border-gray-100">
+                    <div className="mt-2">
                       <div className="flex items-center gap-1.5">
                         <UserIcon name={s.userName} size="xs" />
                         <p className="text-xs text-gray-400">{s.userName}</p>
                       </div>
                       {s.voterNames.length > 0 && (
-                        <div className="flex items-center justify-end gap-1.5 mt-1.5 flex-wrap">
+                        <div className="flex items-center justify-end gap-1.5 mt-1.5 pt-1.5 border-t border-gray-100 flex-wrap">
                           <span className="text-[9px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">投票</span>
                           {s.voterNames.map((name) => (
                             <div key={name} className="flex items-center gap-0.5">
