@@ -178,7 +178,7 @@ export default function Results({ tournament, game, participants, onNext, nextLa
               <div className="mt-2">
                 <div className="flex items-center gap-1.5">
                   <UserIcon name={r.userName} size="xs" />
-                  <p className="text-xs text-gray-400">{r.userName}</p>
+                  <p className="text-xs text-gray-600">{r.userName}</p>
                 </div>
                 {r.voterNames.length > 0 && (
                   <div className="flex items-center justify-end gap-1.5 mt-1.5 pt-1.5 border-t border-gray-100 flex-wrap">

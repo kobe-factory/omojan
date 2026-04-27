@@ -227,7 +227,7 @@ export default function Archive({ tournamentId, participants }: Props) {
                     <div className="mt-2">
                       <div className="flex items-center gap-1.5">
                         <UserIcon name={s.userName} size="xs" />
-                        <p className="text-xs text-gray-400">{s.userName}</p>
+                        <p className="text-xs text-gray-600">{s.userName}</p>
                       </div>
                       {s.voterNames.length > 0 && (
                         <div className="flex items-center justify-end gap-1.5 mt-1.5 pt-1.5 border-t border-gray-100 flex-wrap">
