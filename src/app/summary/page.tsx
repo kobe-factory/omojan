@@ -30,6 +30,7 @@ interface TournamentSummary {
   tournamentId: string
   tournamentNumber: number
   createdAt: string
+  token: string
   participants: User[]
   scores: TournamentScore[]
   rounds: RoundSummary[]
@@ -47,7 +48,6 @@ export default function SummaryPage() {
   const [tournaments, setTournaments] = useState<TournamentSummary[]>([])
   const [overallStandings, setOverallStandings] = useState<OverallStanding[]>([])
   const [loading, setLoading] = useState(true)
-  const [copied, setCopied] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -57,7 +57,7 @@ export default function SummaryPage() {
   async function fetchAll() {
     const { data: finishedTournaments } = await supabase
       .from('tournaments')
-      .select('id, created_at')
+      .select('id, created_at, token')
       .eq('mode', 'production')
       .eq('status', 'finished')
       .order('created_at', { ascending: true })
@@ -185,6 +185,7 @@ export default function SummaryPage() {
         tournamentId: t.id,
         tournamentNumber: idx + 1,
         createdAt: t.created_at,
+        token: t.token,
         participants,
         scores: sortedScores,
         rounds,
@@ -206,12 +207,6 @@ export default function SummaryPage() {
     setLoading(false)
   }
 
-  async function handleCopy() {
-    await navigator.clipboard.writeText(window.location.href)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -225,17 +220,9 @@ export default function SummaryPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white sticky top-0 z-10 border-b border-gray-200">
-        <div className="px-4 py-3 max-w-md mx-auto flex items-center justify-between">
-          <div>
-            <p className="text-[10px] text-gray-400">おもじゃん for 男根祭</p>
-            <p className="text-base font-bold text-gray-800">全大会サマリ</p>
-          </div>
-          <button
-            onClick={handleCopy}
-            className="text-xs px-3 py-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 active:scale-95 transition-all"
-          >
-            {copied ? 'コピー済み！' : 'URLをコピー'}
-          </button>
+        <div className="px-4 py-3 max-w-md mx-auto">
+          <p className="text-[10px] text-gray-400">おもじゃん for 男根祭</p>
+          <p className="text-base font-bold text-gray-800">全大会サマリ</p>
         </div>
       </header>
 
@@ -250,7 +237,7 @@ export default function SummaryPage() {
             {/* 全大会MVP */}
             {mvp && mvp.totalVotes > 0 && (
               <div className="bg-yellow-50 border-2 border-yellow-400 rounded-2xl p-5 text-center">
-                <p className="text-xs font-bold text-yellow-500 mb-2">👑 全大会MVP</p>
+                <p className="text-xs font-bold text-yellow-500 mb-2">👑 総合MVP</p>
                 <div className="flex items-center justify-center gap-2 mb-2">
                   <UserIcon name={mvp.userName} size="lg" />
                   <p className="text-2xl font-black text-gray-800">{mvp.userName}</p>
@@ -332,6 +319,16 @@ export default function SummaryPage() {
                           </div>
                         </div>
 
+                        {/* 大会結果詳細リンク */}
+                        <a
+                          href={`/${t.token}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full py-2 text-center text-sm font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100 transition-colors block"
+                        >
+                          大会結果詳細を見る →
+                        </a>
+
                         {/* 回戦別MVP */}
                         <div>
                           <p className="text-xs font-bold text-gray-500 mb-2">回戦別MVP</p>
@@ -366,7 +363,7 @@ export default function SummaryPage() {
       </div>
 
       <footer className="text-center py-4">
-        <p className="text-xs text-gray-300">v1.9.0</p>
+        <p className="text-xs text-gray-300">v1.10.1</p>
       </footer>
     </div>
   )

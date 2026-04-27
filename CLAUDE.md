@@ -91,7 +91,7 @@ READMEも適宜更新してください。
 - `src/app/layout.tsx` の metadata description `v1.x.x`
 - `CLAUDE.md` の「現在のバージョン」
 
-**現在のバージョン：v1.9.0**
+**現在のバージョン：v1.10.1**
 
 ## システム概要
 
