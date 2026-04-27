@@ -175,17 +175,18 @@ export default function Results({ tournament, game, participants, onNext, nextLa
               {r.preamble && (
                 <p className="text-sm text-gray-500 italic mb-2">「{r.preamble}」</p>
               )}
-              <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 shrink-0">
+              <div className="mt-2 pt-2 border-t border-gray-100">
+                <div className="flex items-center gap-1.5">
                   <UserIcon name={r.userName} size="xs" />
                   <p className="text-xs text-gray-400">{r.userName}</p>
                 </div>
                 {r.voterNames.length > 0 && (
-                  <div className="flex items-center gap-1 flex-wrap justify-end">
+                  <div className="flex items-center justify-end gap-1.5 mt-1.5 flex-wrap">
+                    <span className="text-[9px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">投票</span>
                     {r.voterNames.map((name) => (
                       <div key={name} className="flex items-center gap-0.5">
                         <UserIcon name={name} size="xs" />
-                        <span className="text-[10px] text-gray-300">{name}</span>
+                        <span className="text-[10px] text-gray-400">{name}</span>
                       </div>
                     ))}
                   </div>
