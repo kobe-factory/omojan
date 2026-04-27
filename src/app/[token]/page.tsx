@@ -126,6 +126,27 @@ export default function TournamentPage() {
     init()
   }, [fetchState, token])
 
+  // Supabase Realtime: 関連テーブルの変更を購読して自動的に画面を更新
+  useEffect(() => {
+    if (!tournament) return
+
+    const channel = supabase
+      .channel(`tournament-${tournament.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tournaments', filter: `id=eq.${tournament.id}` },
+        () => fetchState())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'games', filter: `tournament_id=eq.${tournament.id}` },
+        () => fetchState())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tournament_participants', filter: `tournament_id=eq.${tournament.id}` },
+        () => fetchState())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'submissions' },
+        () => fetchState())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'votes' },
+        () => fetchState())
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [tournament, fetchState])
+
   // 前戦の結果モーダル表示チェック（作品投稿中フェーズに入ったとき、未確認なら前戦結果を表示）
   useEffect(() => {
     if (!tournament || !currentGame) return
@@ -362,7 +383,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.4.5</p>
+        <p className="text-xs text-gray-300">v1.5.0</p>
       </footer>
 
       {/* 前戦結果モーダル（まだ結果を確認していないユーザー向け） */}
