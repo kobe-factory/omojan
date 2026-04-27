@@ -30,6 +30,7 @@ interface ResultItem {
   preamble: string | null
   voteCount: number
   voteTimeSum: number
+  voterNames: string[]
   isWinner: boolean
   isTied: boolean
 }
@@ -54,16 +55,20 @@ export default function Results({ tournament, game, participants, onNext, nextLa
       const [{ data: topicCard }, { data: subs }, { data: votes }] = await Promise.all([
         supabase.from('cards').select('text').eq('id', game.topic_card_id).single(),
         supabase.from('submissions').select('id, user_id, hand_card_id, position, preamble').eq('game_id', game.id),
-        supabase.from('votes').select('submission_id, created_at').eq('game_id', game.id),
+        supabase.from('votes').select('submission_id, created_at, voter_user_id').eq('game_id', game.id),
       ])
 
       const topicText = topicCard?.text ?? ''
 
       const voteCount: Record<string, number> = {}
       const voteTimeSum: Record<string, number> = {}
+      const voterNamesMap: Record<string, string[]> = {}
       for (const v of votes ?? []) {
         voteCount[v.submission_id] = (voteCount[v.submission_id] ?? 0) + 1
         voteTimeSum[v.submission_id] = (voteTimeSum[v.submission_id] ?? 0) + new Date(v.created_at).getTime()
+        const voter = participants.find((p) => p.id === v.voter_user_id)
+        if (!voterNamesMap[v.submission_id]) voterNamesMap[v.submission_id] = []
+        voterNamesMap[v.submission_id].push(voter?.name ?? '???')
       }
 
       const maxVotes = Math.max(...Object.values(voteCount), 0)
@@ -83,6 +88,7 @@ export default function Results({ tournament, game, participants, onNext, nextLa
             preamble: s.preamble,
             voteCount: count,
             voteTimeSum: voteTimeSum[s.id] ?? 0,
+            voterNames: voterNamesMap[s.id] ?? [],
             isWinner: false,
             isTied: false,
           }
@@ -173,6 +179,11 @@ export default function Results({ tournament, game, participants, onNext, nextLa
                 <UserIcon name={r.userName} size="xs" />
                 <p className="text-xs text-gray-400">{r.userName}</p>
               </div>
+              {r.voterNames.length > 0 && (
+                <p className="text-xs text-gray-400 mt-2">
+                  投票：{r.voterNames.join('・')}
+                </p>
+              )}
             </div>
           )
         })}
