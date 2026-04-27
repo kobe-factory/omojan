@@ -112,6 +112,25 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
     init()
   }, [game.id, game.topic_card_id, tournament.id, currentUserId, draftKey])
 
+  // 他ユーザーの投稿をリアルタイムで反映（submittedUserIds のみ更新）
+  useEffect(() => {
+    const channel = supabase
+      .channel(`submissions-${game.id}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'submissions', filter: `game_id=eq.${game.id}` },
+        () => {
+          supabase
+            .from('submissions')
+            .select('user_id')
+            .eq('game_id', game.id)
+            .then(({ data }) => {
+              if (data) setSubmittedUserIds(data.map((s) => s.user_id))
+            })
+        })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [game.id])
+
   const completedUserIds = submittedUserIds
 
   async function handleSubmit() {
