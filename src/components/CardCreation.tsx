@@ -70,6 +70,30 @@ export default function CardCreation({ tournament, token, currentUserId, partici
       })
   }, [tournament.id, tournament.cards_per_user, currentUserId, draftKey])
 
+  // 他ユーザーのカード作成をリアルタイムで反映（cardCounts のみ更新）
+  useEffect(() => {
+    const channel = supabase
+      .channel(`cards-${tournament.id}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'cards', filter: `tournament_id=eq.${tournament.id}` },
+        () => {
+          supabase
+            .from('cards')
+            .select('creator_user_id')
+            .eq('tournament_id', tournament.id)
+            .then(({ data }) => {
+              if (!data) return
+              const counts: Record<string, number> = {}
+              for (const c of data) {
+                counts[c.creator_user_id] = (counts[c.creator_user_id] ?? 0) + 1
+              }
+              setCardCounts(counts)
+            })
+        })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [tournament.id])
+
   const completedUserIds = participants
     .filter((p) => (cardCounts[p.id] ?? 0) >= tournament.cards_per_user)
     .map((p) => p.id)
