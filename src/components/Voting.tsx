@@ -153,7 +153,7 @@ export default function Voting({ tournament, token, game, currentUserId, partici
               key={sub.id}
               disabled={isOwnSubmission}
               onClick={() => {
-                if (!voted && !isOwnSubmission) {
+                if (!isOwnSubmission) {
                   setSelectedSubmissionId(sub.id)
                 }
               }}
