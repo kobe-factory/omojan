@@ -1,0 +1,373 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
+import UserIcon from '@/components/UserIcon'
+
+interface User {
+  id: string
+  name: string
+}
+
+interface RoundSummary {
+  roundNumber: number
+  topicText: string
+  winnerName: string
+  winnerText: string
+  votes: number
+  isTied: boolean
+}
+
+interface TournamentScore {
+  userId: string
+  userName: string
+  totalVotes: number
+  wins: number
+  isTied: boolean
+}
+
+interface TournamentSummary {
+  tournamentId: string
+  tournamentNumber: number
+  createdAt: string
+  participants: User[]
+  scores: TournamentScore[]
+  rounds: RoundSummary[]
+}
+
+interface OverallStanding {
+  userId: string
+  userName: string
+  totalVotes: number
+  totalWins: number
+  isTied: boolean
+}
+
+export default function SummaryPage() {
+  const [tournaments, setTournaments] = useState<TournamentSummary[]>([])
+  const [overallStandings, setOverallStandings] = useState<OverallStanding[]>([])
+  const [loading, setLoading] = useState(true)
+  const [copied, setCopied] = useState(false)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchAll()
+  }, [])
+
+  async function fetchAll() {
+    const { data: finishedTournaments } = await supabase
+      .from('tournaments')
+      .select('id, created_at')
+      .eq('mode', 'production')
+      .eq('status', 'finished')
+      .order('created_at', { ascending: true })
+
+    if (!finishedTournaments || finishedTournaments.length === 0) {
+      setLoading(false)
+      return
+    }
+
+    const tournamentIds = finishedTournaments.map((t) => t.id)
+
+    const [{ data: allParticipants }, { data: allGames }] = await Promise.all([
+      supabase
+        .from('tournament_participants')
+        .select('tournament_id, users(id, name)')
+        .in('tournament_id', tournamentIds),
+      supabase
+        .from('games')
+        .select('id, tournament_id, round_number, topic_card_id')
+        .in('tournament_id', tournamentIds)
+        .order('round_number', { ascending: true }),
+    ])
+
+    const gameIds = (allGames ?? []).map((g) => g.id)
+
+    const [{ data: allSubs }, { data: allVotes }] = await Promise.all([
+      supabase.from('submissions').select('id, game_id, user_id, hand_card_id, position').in('game_id', gameIds),
+      supabase.from('votes').select('game_id, submission_id, created_at').in('game_id', gameIds),
+    ])
+
+    const topicIds = (allGames ?? []).map((g) => g.topic_card_id)
+    const handIds = (allSubs ?? []).map((s) => s.hand_card_id)
+    const { data: allCards } = await supabase
+      .from('cards')
+      .select('id, text')
+      .in('id', [...new Set([...topicIds, ...handIds])])
+
+    const cardMap = Object.fromEntries((allCards ?? []).map((c) => [c.id, c.text]))
+
+    const voteCount: Record<string, number> = {}
+    const voteTimeSum: Record<string, number> = {}
+    for (const v of allVotes ?? []) {
+      voteCount[v.submission_id] = (voteCount[v.submission_id] ?? 0) + 1
+      voteTimeSum[v.submission_id] = (voteTimeSum[v.submission_id] ?? 0) + new Date(v.created_at).getTime()
+    }
+
+    const overallMap: Record<string, { name: string; totalVotes: number; totalWins: number }> = {}
+
+    const tournamentSummaries: TournamentSummary[] = finishedTournaments.map((t, idx) => {
+      const participants = (allParticipants ?? [])
+        .filter((p) => p.tournament_id === t.id)
+        .map((p) => p.users as unknown as User)
+        .filter(Boolean)
+
+      const games = (allGames ?? []).filter((g) => g.tournament_id === t.id)
+
+      const scoreMap: Record<string, { totalVotes: number; totalVoteTimeSum: number; wins: number }> = {}
+      for (const p of participants) {
+        scoreMap[p.id] = { totalVotes: 0, totalVoteTimeSum: 0, wins: 0 }
+        if (!overallMap[p.id]) overallMap[p.id] = { name: p.name, totalVotes: 0, totalWins: 0 }
+      }
+
+      const rounds: RoundSummary[] = []
+      for (const game of games) {
+        const gameSubs = (allSubs ?? []).filter((s) => s.game_id === game.id)
+        let maxVotes = 0
+        let winnerTimeSum = Infinity
+        let winnerSub: typeof gameSubs[0] | null = null
+        let hasTie = false
+
+        for (const sub of gameSubs) {
+          const count = voteCount[sub.id] ?? 0
+          const timeSum = voteTimeSum[sub.id] ?? 0
+          if (scoreMap[sub.user_id]) {
+            scoreMap[sub.user_id].totalVotes += count
+            scoreMap[sub.user_id].totalVoteTimeSum += timeSum
+          }
+          if (overallMap[sub.user_id]) {
+            overallMap[sub.user_id].totalVotes += count
+          }
+          if (count > maxVotes) {
+            maxVotes = count; winnerSub = sub; winnerTimeSum = timeSum; hasTie = false
+          } else if (count === maxVotes && count > 0) {
+            hasTie = true
+            if (timeSum < winnerTimeSum) { winnerSub = sub; winnerTimeSum = timeSum }
+          }
+        }
+
+        if (winnerSub && scoreMap[winnerSub.user_id]) {
+          scoreMap[winnerSub.user_id].wins += 1
+        }
+
+        const topicText = cardMap[game.topic_card_id] ?? ''
+        const handText = winnerSub ? (cardMap[winnerSub.hand_card_id] ?? '') : ''
+        const winnerText = winnerSub
+          ? winnerSub.position === 'before' ? `${handText}${topicText}` : `${topicText}${handText}`
+          : ''
+        const winnerUser = winnerSub ? participants.find((p) => p.id === winnerSub!.user_id) : null
+
+        rounds.push({ roundNumber: game.round_number, topicText, winnerName: winnerUser?.name ?? '???', winnerText, votes: maxVotes, isTied: hasTie })
+      }
+
+      const sortedScores = participants
+        .map((p) => ({
+          userId: p.id,
+          userName: p.name,
+          totalVotes: scoreMap[p.id]?.totalVotes ?? 0,
+          totalVoteTimeSum: scoreMap[p.id]?.totalVoteTimeSum ?? 0,
+          wins: scoreMap[p.id]?.wins ?? 0,
+          isTied: false,
+        }))
+        .sort((a, b) => b.totalVotes !== a.totalVotes ? b.totalVotes - a.totalVotes : a.totalVoteTimeSum - b.totalVoteTimeSum)
+
+      // 大会優勝者
+      if (sortedScores.length > 0 && sortedScores[0].totalVotes > 0 && overallMap[sortedScores[0].userId]) {
+        overallMap[sortedScores[0].userId].totalWins += 1
+      }
+
+      const countFreq: Record<number, number> = {}
+      for (const s of sortedScores) if (s.totalVotes > 0) countFreq[s.totalVotes] = (countFreq[s.totalVotes] ?? 0) + 1
+      const tiedCounts = new Set(Object.entries(countFreq).filter(([, n]) => n > 1).map(([c]) => Number(c)))
+      sortedScores.forEach((s) => { s.isTied = tiedCounts.has(s.totalVotes) })
+
+      return {
+        tournamentId: t.id,
+        tournamentNumber: idx + 1,
+        createdAt: t.created_at,
+        participants,
+        scores: sortedScores,
+        rounds,
+      }
+    })
+
+    const overall = Object.entries(overallMap)
+      .map(([userId, d]) => ({ userId, userName: d.name, totalVotes: d.totalVotes, totalWins: d.totalWins, isTied: false }))
+      .sort((a, b) => b.totalVotes !== a.totalVotes ? b.totalVotes - a.totalVotes : b.totalWins - a.totalWins)
+
+    const overallFreq: Record<number, number> = {}
+    for (const s of overall) if (s.totalVotes > 0) overallFreq[s.totalVotes] = (overallFreq[s.totalVotes] ?? 0) + 1
+    const overallTied = new Set(Object.entries(overallFreq).filter(([, n]) => n > 1).map(([c]) => Number(c)))
+    overall.forEach((s) => { s.isTied = overallTied.has(s.totalVotes) })
+
+    setTournaments(tournamentSummaries)
+    setOverallStandings(overall)
+    if (tournamentSummaries.length > 0) setExpandedId(tournamentSummaries[tournamentSummaries.length - 1].tournamentId)
+    setLoading(false)
+  }
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(window.location.href)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-gray-400">集計中...</p>
+      </div>
+    )
+  }
+
+  const mvp = overallStandings[0]
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white sticky top-0 z-10 border-b border-gray-200">
+        <div className="px-4 py-3 max-w-md mx-auto flex items-center justify-between">
+          <div>
+            <p className="text-[10px] text-gray-400">おもじゃん for 男根祭</p>
+            <p className="text-base font-bold text-gray-800">全大会サマリ</p>
+          </div>
+          <button
+            onClick={handleCopy}
+            className="text-xs px-3 py-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 active:scale-95 transition-all"
+          >
+            {copied ? 'コピー済み！' : 'URLをコピー'}
+          </button>
+        </div>
+      </header>
+
+      <div className="max-w-md mx-auto p-4 space-y-4 pb-10">
+        {tournaments.length === 0 ? (
+          <div className="text-center py-16">
+            <p className="text-4xl mb-3">🎴</p>
+            <p className="text-gray-500">終了した本番大会がありません</p>
+          </div>
+        ) : (
+          <>
+            {/* 全大会MVP */}
+            {mvp && mvp.totalVotes > 0 && (
+              <div className="bg-yellow-50 border-2 border-yellow-400 rounded-2xl p-5 text-center">
+                <p className="text-xs font-bold text-yellow-500 mb-2">👑 全大会MVP</p>
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <UserIcon name={mvp.userName} size="lg" />
+                  <p className="text-2xl font-black text-gray-800">{mvp.userName}</p>
+                </div>
+                <p className="text-sm text-gray-500">
+                  総獲得票数 <span className="text-xl font-bold text-yellow-500">{mvp.totalVotes}</span>票
+                  　{mvp.totalWins}大会優勝
+                </p>
+                {mvp.isTied && <p className="text-xs text-yellow-500 mt-1">（同点）</p>}
+              </div>
+            )}
+
+            {/* 全体順位 */}
+            <div className="bg-white rounded-2xl shadow-sm p-5">
+              <h3 className="text-sm font-bold text-gray-700 mb-3">全体順位</h3>
+              <div className="space-y-2">
+                {overallStandings.map((s, i) => (
+                  <div key={s.userId} className={`flex items-center gap-3 px-3 py-2 rounded-xl ${i === 0 ? 'bg-yellow-50' : i === 1 ? 'bg-gray-50' : 'bg-white'}`}>
+                    <span className={`text-sm font-bold w-6 text-center ${i === 0 ? 'text-yellow-500' : i === 1 ? 'text-gray-400' : 'text-gray-300'}`}>{i + 1}位</span>
+                    <div className="flex items-center gap-2 flex-1">
+                      <UserIcon name={s.userName} size="xs" />
+                      <span className="text-sm font-medium text-gray-800">{s.userName}</span>
+                    </div>
+                    {s.isTied && <span className="text-xs text-gray-400">同点</span>}
+                    <span className="text-xs text-gray-400">{s.totalWins}大会優勝</span>
+                    <span className="text-sm font-bold text-emerald-600">{s.totalVotes}票</span>
+                  </div>
+                ))}
+              </div>
+              {overallStandings.some((s) => s.isTied) && (
+                <p className="text-xs text-gray-400 mt-3 text-center">※同点は大会優勝数で順位を決定</p>
+              )}
+            </div>
+
+            {/* 大会別サマリ */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-gray-600">大会別サマリ</h3>
+              {tournaments.map((t) => {
+                const isOpen = expandedId === t.tournamentId
+                const winner = t.scores[0]
+                return (
+                  <div key={t.tournamentId} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                    <button
+                      onClick={() => setExpandedId(isOpen ? null : t.tournamentId)}
+                      className="w-full p-4 text-left flex items-center justify-between"
+                    >
+                      <div>
+                        <span className="text-sm font-bold text-gray-700">第{t.tournamentNumber}回大会</span>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {new Date(t.createdAt).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}
+                        </p>
+                        {winner && winner.totalVotes > 0 && (
+                          <p className="text-xs text-yellow-600 mt-1">👑 {winner.userName}（{winner.totalVotes}票）</p>
+                        )}
+                      </div>
+                      <svg className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
+
+                    {isOpen && (
+                      <div className="border-t border-gray-100 p-4 space-y-4">
+                        {/* 大会順位 */}
+                        <div>
+                          <p className="text-xs font-bold text-gray-500 mb-2">順位</p>
+                          <div className="space-y-1.5">
+                            {t.scores.map((s, i) => (
+                              <div key={s.userId} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${i === 0 ? 'bg-yellow-50' : 'bg-gray-50'}`}>
+                                <span className={`text-xs font-bold w-6 text-center ${i === 0 ? 'text-yellow-500' : 'text-gray-400'}`}>{i + 1}位</span>
+                                <div className="flex items-center gap-1.5 flex-1">
+                                  <UserIcon name={s.userName} size="xs" />
+                                  <span className="text-xs font-medium text-gray-700">{s.userName}</span>
+                                </div>
+                                {s.isTied && <span className="text-xs text-gray-400">同点</span>}
+                                <span className="text-xs text-gray-400">{s.wins}勝</span>
+                                <span className="text-xs font-bold text-emerald-600">{s.totalVotes}票</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* 回戦別MVP */}
+                        <div>
+                          <p className="text-xs font-bold text-gray-500 mb-2">回戦別MVP</p>
+                          <div className="space-y-2">
+                            {t.rounds.map((r) => (
+                              <div key={r.roundNumber} className="border border-gray-100 rounded-xl p-3">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs font-bold text-emerald-600">第{r.roundNumber}回戦</span>
+                                  <div className="flex items-center gap-2">
+                                    {r.isTied && <span className="text-xs text-gray-400">（同点・投票時間で決定）</span>}
+                                    <span className="text-xs text-gray-400">{r.votes}票</span>
+                                  </div>
+                                </div>
+                                <p className="text-xs text-gray-400 mb-1">お題：{r.topicText}</p>
+                                <p className="text-sm font-bold text-gray-800">{r.winnerText}</p>
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <UserIcon name={r.winnerName} size="xs" />
+                                  <p className="text-xs text-gray-600">{r.winnerName}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
+      </div>
+
+      <footer className="text-center py-4">
+        <p className="text-xs text-gray-300">v1.9.0</p>
+      </footer>
+    </div>
+  )
+}

@@ -31,6 +31,7 @@ export default function AdminPage() {
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [copiedSummary, setCopiedSummary] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [resetDone, setResetDone] = useState(false)
   const [tournaments, setTournaments] = useState<TournamentRow[]>([])
@@ -131,7 +132,32 @@ export default function AdminPage() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md">
         <h1 className="text-2xl font-bold text-gray-800 mb-1">管理者画面</h1>
-        <p className="text-sm text-gray-500 mb-8">大会URLを発行します</p>
+        <p className="text-sm text-gray-500 mb-6">大会URLを発行します</p>
+
+        {/* 全大会サマリ */}
+        <div className="mb-8 p-4 bg-gray-50 rounded-xl border border-gray-200">
+          <p className="text-xs font-medium text-gray-500 mb-3">全大会サマリ</p>
+          <div className="flex gap-2">
+            <a
+              href="/summary"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 py-2 text-center text-sm font-medium text-emerald-600 bg-white border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors"
+            >
+              サマリを開く
+            </a>
+            <button
+              onClick={async () => {
+                await navigator.clipboard.writeText(`${window.location.origin}/summary`)
+                setCopiedSummary(true)
+                setTimeout(() => setCopiedSummary(false), 2000)
+              }}
+              className="flex-1 py-2 text-sm font-medium text-white bg-emerald-500 rounded-lg hover:bg-emerald-600 transition-colors"
+            >
+              {copiedSummary ? 'コピー済み！' : 'URLをコピー'}
+            </button>
+          </div>
+        </div>
 
         <p className="text-sm font-medium text-gray-700 mb-3">モードを選択</p>
         <div className="space-y-3 mb-8">
