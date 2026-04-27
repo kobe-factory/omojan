@@ -183,7 +183,7 @@ export default function Results({ tournament, game, participants, onNext, nextLa
         disabled={advancing}
         className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-600 active:scale-95 transition-all disabled:opacity-50"
       >
-        {advancing ? '移動中...' : nextLabel ?? (isLastRound ? '大会終了' : `第${game.round_number + 1}回戦へ`)}
+        {advancing ? '移動中...' : nextLabel ?? (isLastRound ? '大会結果へ' : `第${game.round_number + 1}回戦へ`)}
       </button>
     </div>
   )

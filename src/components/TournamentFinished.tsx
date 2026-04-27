@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import UserIcon from './UserIcon'
+import Archive from './Archive'
 
 interface User {
   id: string
@@ -36,6 +37,7 @@ export default function TournamentFinished({ tournamentId, participants }: Props
   const [scores, setScores] = useState<PlayerScore[]>([])
   const [rounds, setRounds] = useState<RoundSummary[]>([])
   const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<'result' | 'archive'>('result')
 
   useEffect(() => {
     async function fetchData() {
@@ -182,6 +184,29 @@ export default function TournamentFinished({ tournamentId, participants }: Props
   const mvp = scores[0]
 
   return (
+    <>
+    <div className="flex border-b border-gray-200 bg-white sticky top-[77px] z-10">
+      <button
+        onClick={() => setActiveTab('result')}
+        className={`flex-1 py-3 text-sm font-medium transition-colors ${
+          activeTab === 'result' ? 'text-emerald-500 border-b-2 border-emerald-500' : 'text-gray-400'
+        }`}
+      >
+        大会結果
+      </button>
+      <button
+        onClick={() => setActiveTab('archive')}
+        className={`flex-1 py-3 text-sm font-medium transition-colors ${
+          activeTab === 'archive' ? 'text-emerald-500 border-b-2 border-emerald-500' : 'text-gray-400'
+        }`}
+      >
+        過去結果
+      </button>
+    </div>
+
+    {activeTab === 'archive' ? (
+      <Archive tournamentId={tournamentId} participants={participants} />
+    ) : (
     <div className="p-4 space-y-4 pb-10">
       {/* 大会終了ヘッダー */}
       <div className="text-center py-6">
@@ -264,5 +289,7 @@ export default function TournamentFinished({ tournamentId, participants }: Props
         </div>
       </div>
     </div>
+    )}
+    </>
   )
 }
