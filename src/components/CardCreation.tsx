@@ -23,10 +23,28 @@ interface Props {
 }
 
 export default function CardCreation({ tournament, token, currentUserId, participants, onSubmitted }: Props) {
-  const [texts, setTexts] = useState<string[]>(Array(tournament.cards_per_user).fill(''))
+  const draftKey = `omojan:draft:cards:${tournament.id}:${currentUserId}`
+
+  const [texts, setTexts] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return Array(tournament.cards_per_user).fill('')
+    try {
+      const saved = localStorage.getItem(draftKey)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length === tournament.cards_per_user) return parsed
+      }
+    } catch { /* ignore */ }
+    return Array(tournament.cards_per_user).fill('')
+  })
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [cardCounts, setCardCounts] = useState<Record<string, number>>({})
+
+  // texts が変わるたびに下書き保存（送信済みの場合は保存しない）
+  useEffect(() => {
+    if (submitted) return
+    localStorage.setItem(draftKey, JSON.stringify(texts))
+  }, [texts, submitted, draftKey])
 
   useEffect(() => {
     // 既存の作成済みカードを取得
@@ -47,9 +65,10 @@ export default function CardCreation({ tournament, token, currentUserId, partici
           const padded = [...myCards, ...Array(Math.max(0, tournament.cards_per_user - myCards.length)).fill('')]
           setTexts(padded)
           setSubmitted(true)
+          localStorage.removeItem(draftKey)
         }
       })
-  }, [tournament.id, tournament.cards_per_user, currentUserId])
+  }, [tournament.id, tournament.cards_per_user, currentUserId, draftKey])
 
   const completedUserIds = participants
     .filter((p) => (cardCounts[p.id] ?? 0) >= tournament.cards_per_user)
@@ -67,6 +86,7 @@ export default function CardCreation({ tournament, token, currentUserId, partici
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: currentUserId, texts: filled }),
     })
+    localStorage.removeItem(draftKey)
     setSubmitted(true)
     setSubmitting(false)
     setCardCounts(prev => ({ ...prev, [currentUserId]: tournament.cards_per_user }))

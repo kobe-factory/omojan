@@ -38,6 +38,8 @@ interface Props {
 }
 
 export default function GamePlay({ tournament, token, game, currentUserId, participants, onSubmitted }: Props) {
+  const draftKey = `omojan:draft:submission:${game.id}:${currentUserId}`
+
   const [topicText, setTopicText] = useState('')
   const [handCards, setHandCards] = useState<HandCard[]>([])
   const [selectedCard, setSelectedCard] = useState<HandCard | null>(null)
@@ -48,6 +50,16 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
   const [submittedUserIds, setSubmittedUserIds] = useState<string[]>([])
   // 現在このゲームでDBに保存されている投稿カードID
   const [submittedCardId, setSubmittedCardId] = useState<string | null>(null)
+
+  // 選択状態が変わるたびに下書き保存（送信済みの場合は保存しない）
+  useEffect(() => {
+    if (submitted || !selectedCard) return
+    localStorage.setItem(draftKey, JSON.stringify({
+      cardId: selectedCard.id,
+      position,
+      preamble,
+    }))
+  }, [selectedCard, position, preamble, submitted, draftKey])
 
   useEffect(() => {
     async function init() {
@@ -69,7 +81,7 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
       const ids = (subsRes.data ?? []).map((s) => s.user_id)
       setSubmittedUserIds(ids)
 
-      // 自分の投稿済みデータを復元
+      // 自分の投稿済みデータを復元（DB優先）
       const mySub = (subsRes.data ?? []).find((s) => s.user_id === currentUserId)
       if (mySub) {
         setSubmitted(true)
@@ -78,11 +90,27 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
         setSubmittedCardId(mySub.hand_card_id)
         const myCard = cards.find((c) => c.id === mySub.hand_card_id)
         if (myCard) setSelectedCard(myCard)
+        localStorage.removeItem(draftKey)
+        return
       }
+
+      // DB に投稿なし → localStorage ドラフトを復元
+      try {
+        const saved = localStorage.getItem(draftKey)
+        if (saved) {
+          const { cardId, position: dPos, preamble: dPreamble } = JSON.parse(saved)
+          const draftCard = cards.find((c) => c.id === cardId)
+          if (draftCard) {
+            setSelectedCard(draftCard)
+            setPosition(dPos as CardPosition)
+            setPreamble(dPreamble ?? '')
+          }
+        }
+      } catch { /* ignore */ }
     }
 
     init()
-  }, [game.id, game.topic_card_id, tournament.id, currentUserId])
+  }, [game.id, game.topic_card_id, tournament.id, currentUserId, draftKey])
 
   const completedUserIds = submittedUserIds
 
@@ -109,6 +137,7 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
         c.id === submittedCardId ? { ...c, is_used: false } : c
       ))
     }
+    localStorage.removeItem(draftKey)
     setSubmittedCardId(selectedCard.id)
     setSubmitted(true)
     setSubmitting(false)
