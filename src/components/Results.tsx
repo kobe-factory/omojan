@@ -180,9 +180,15 @@ export default function Results({ tournament, game, participants, onNext, nextLa
                 <p className="text-xs text-gray-400">{r.userName}</p>
               </div>
               {r.voterNames.length > 0 && (
-                <p className="text-xs text-gray-400 mt-2">
-                  投票：{r.voterNames.join('・')}
-                </p>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-2">
+                  <span className="text-xs text-gray-400">投票：</span>
+                  {r.voterNames.map((name) => (
+                    <div key={name} className="flex items-center gap-1">
+                      <UserIcon name={name} size="xs" />
+                      <span className="text-xs text-gray-400">{name}</span>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           )

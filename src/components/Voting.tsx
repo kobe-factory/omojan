@@ -47,6 +47,7 @@ export default function Voting({ tournament, token, game, currentUserId, partici
   const [voting, setVoting] = useState(false)
   const [voted, setVoted] = useState(false)
   const [votedUserIds, setVotedUserIds] = useState<string[]>([])
+  const [voteError, setVoteError] = useState(false)
 
   useEffect(() => {
     supabase
@@ -107,24 +108,31 @@ export default function Voting({ tournament, token, game, currentUserId, partici
   const completedUserIds = votedUserIds
 
   async function handleVote() {
-    if (!selectedSubmissionId) {
-      alert('投票する作品を選んでください')
-      return
-    }
+    if (!selectedSubmissionId) return
     setVoting(true)
-    await fetch(`/api/tournaments/${token}/vote`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        voter_user_id: currentUserId,
-        game_id: game.id,
-        submission_id: selectedSubmissionId,
-      }),
-    })
-    setVoted(true)
-    setVoting(false)
-    setVotedUserIds(prev => [...prev, currentUserId])
-    await onVoted()
+    setVoteError(false)
+    try {
+      const res = await fetch(`/api/tournaments/${token}/vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          voter_user_id: currentUserId,
+          game_id: game.id,
+          submission_id: selectedSubmissionId,
+        }),
+      })
+      if (!res.ok) throw new Error()
+      setVoted(true)
+      setVotedUserIds(prev => {
+        if (prev.includes(currentUserId)) return prev
+        return [...prev, currentUserId]
+      })
+      await onVoted()
+    } catch {
+      setVoteError(true)
+    } finally {
+      setVoting(false)
+    }
   }
 
   return (
@@ -207,6 +215,22 @@ export default function Voting({ tournament, token, game, currentUserId, partici
         nextPhaseText="全員が投票すると、結果発表へ進みます"
         allDoneText="全員が投票しました！結果発表へ進みます"
       />
+
+      {voteError && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm text-center shadow-xl">
+            <p className="text-3xl mb-3">⚠️</p>
+            <p className="text-gray-800 font-bold mb-1">投票に失敗しました</p>
+            <p className="text-sm text-gray-500 mb-5">通信エラーが発生しました。もう一度投票してください。</p>
+            <button
+              onClick={() => setVoteError(false)}
+              className="w-full py-3 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-600 active:scale-95 transition-all"
+            >
+              閉じて再投票する
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
