@@ -135,9 +135,9 @@ export default function UserSelection({ tournament, allUsers, participants, curr
         )}
 
         {remaining > 0 ? (
-          <p className="text-xs text-gray-400">あと{remaining}名参加すると、札作成フェーズに進みます</p>
+          <p className="text-xs text-gray-400">あと{remaining}名参加すると、ゲーム札作成に進みます</p>
         ) : (
-          <p className="text-xs text-green-600 font-medium">全員揃いました！札作成フェーズへ進みます</p>
+          <p className="text-xs text-green-600 font-medium">全員揃いました！ゲーム札作成に進みます</p>
         )}
       </div>
     </div>
