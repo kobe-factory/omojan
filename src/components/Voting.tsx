@@ -175,7 +175,7 @@ export default function Voting({ tournament, token, game, currentUserId, partici
               </div>
               {isOwnSubmission ? (
                 <div className="mt-2 flex items-center gap-1">
-                  <span className="text-gray-400 text-xs">投票できません</span>
+                  <span className="text-gray-400 text-xs">自分の作品には投票できません</span>
                 </div>
               ) : isSelected ? (
                 <div className="mt-2 flex items-center gap-1">
