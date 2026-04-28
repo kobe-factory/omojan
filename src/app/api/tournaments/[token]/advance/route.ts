@@ -68,6 +68,13 @@ export async function POST(
       .update({ status: 'creating_cards' })
       .eq('id', tournament.id)
 
+    await notifyParticipants(
+      participantIds,
+      triggeringUserId,
+      `全員の参加が揃いました！\nおもじゃんを開いてお題を作成してください ✍️`,
+      tournament.mode
+    )
+
     return NextResponse.json({ advanced: true, newStatus: 'creating_cards' })
   }
 
