@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { sendLinePush } from '@/lib/line-push'
 import { nanoid } from 'nanoid'
+
+const LIFF_URL = `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID}`
 
 export async function POST(request: Request) {
   const { mode, required_players, game_count, cards_per_user, hand_cards_per_player } = await request.json()
@@ -29,6 +32,23 @@ export async function POST(request: Request) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  // 本番大会発行時：LINE登録済みユーザー全員に通知
+  if (mode === 'production') {
+    const { data: users } = await supabase
+      .from('users')
+      .select('line_user_id')
+      .not('line_user_id', 'is', null)
+
+    const lineUserIds = (users ?? []).map((u) => u.line_user_id).filter(Boolean) as string[]
+    if (lineUserIds.length > 0) {
+      await sendLinePush(
+        lineUserIds,
+        '新しい大会が始まりました！\nおもじゃんを開いてユーザー登録してください 🎴',
+        LIFF_URL
+      )
+    }
   }
 
   return NextResponse.json({ token: data.token })

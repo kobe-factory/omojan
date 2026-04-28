@@ -38,6 +38,8 @@ export default function AdminPage() {
   const [listLoading, setListLoading] = useState(false)
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
   const [activeProductionTournament, setActiveProductionTournament] = useState<TournamentRow | null>(null)
+  const [notifying, setNotifying] = useState(false)
+  const [notified, setNotified] = useState(false)
 
   const fetchTournaments = useCallback(async () => {
     setListLoading(true)
@@ -110,6 +112,19 @@ export default function AdminPage() {
     await navigator.clipboard.writeText(`${window.location.origin}/${token}`)
     setCopiedToken(token)
     setTimeout(() => setCopiedToken(null), 2000)
+  }
+
+  async function handleNotifyStart() {
+    if (!activeProductionTournament) return
+    setNotifying(true)
+    setNotified(false)
+    try {
+      await fetch(`/api/tournaments/${activeProductionTournament.token}/notify-start`, { method: 'POST' })
+      setNotified(true)
+      setTimeout(() => setNotified(false), 3000)
+    } finally {
+      setNotifying(false)
+    }
   }
 
   async function handleReset() {
@@ -220,6 +235,22 @@ export default function AdminPage() {
         >
           {loading ? '発行中...' : '大会URLを発行する'}
         </button>
+
+        {/* 進行中の本番大会への参加催促通知 */}
+        {activeProductionTournament && activeProductionTournament.status === 'waiting_users' && (
+          <div className="mt-4">
+            <button
+              onClick={handleNotifyStart}
+              disabled={notifying}
+              className="w-full py-3 bg-blue-500 text-white font-medium text-sm rounded-xl hover:bg-blue-600 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {notifying ? '送信中...' : '参加催促通知を送る（LINE）'}
+            </button>
+            {notified && (
+              <p className="text-center text-xs text-blue-600 mt-2">✓ 通知を送信しました</p>
+            )}
+          </div>
+        )}
 
         {generatedUrl && (
           <div className="mt-6 p-4 bg-emerald-50 rounded-xl border border-emerald-200">
