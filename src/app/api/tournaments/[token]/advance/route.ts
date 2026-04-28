@@ -7,9 +7,10 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://omojan.vercel.app'
 async function notifyParticipants(
   participantIds: string[],
   triggeringUserId: string | null,
-  message: string
+  message: string,
+  mode: string
 ) {
-  if (!triggeringUserId) return
+  if (!triggeringUserId || mode !== 'production') return
 
   const targetIds = participantIds.filter((id) => id !== triggeringUserId)
   if (targetIds.length === 0) return
@@ -40,7 +41,7 @@ export async function POST(
 
   const { data: tournament } = await supabase
     .from('tournaments')
-    .select('id, status, game_count, cards_per_user, hand_cards_per_player, required_players')
+    .select('id, status, mode, game_count, cards_per_user, hand_cards_per_player, required_players')
     .eq('token', token)
     .single()
 
@@ -110,7 +111,8 @@ export async function POST(
     await notifyParticipants(
       participantIds,
       triggeringUserId,
-      `全員の札作成が完了しました！\nおもじゃんを開いて作品を投稿しましょう 🎴\n${APP_URL}/current`
+      `全員の札作成が完了しました！\nおもじゃんを開いて作品を投稿しましょう 🎴\n${APP_URL}/current`,
+      tournament.mode
     )
 
     return NextResponse.json({ advanced: true, newStatus: 'playing' })
@@ -153,7 +155,8 @@ export async function POST(
       await notifyParticipants(
         participantIds,
         triggeringUserId,
-        `全員の作品投稿が完了しました！\nおもじゃんを開いて投票しましょう 🗳️\n${APP_URL}/current`
+        `全員の作品投稿が完了しました！\nおもじゃんを開いて投票しましょう 🗳️\n${APP_URL}/current`,
+        tournament.mode
       )
 
       return NextResponse.json({ advanced: true, newGameStatus: 'waiting_vote' })
@@ -182,7 +185,8 @@ export async function POST(
       await notifyParticipants(
         participantIds,
         triggeringUserId,
-        `全員の投票が完了しました！\nおもじゃんを開いて結果を確認しましょう 🏆\n${APP_URL}/current`
+        `全員の投票が完了しました！\nおもじゃんを開いて結果を確認しましょう 🏆\n${APP_URL}/current`,
+        tournament.mode
       )
 
       return NextResponse.json({ advanced: true, newGameStatus: 'showing_result' })
