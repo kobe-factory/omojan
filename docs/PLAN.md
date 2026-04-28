@@ -1,62 +1,63 @@
 # おもじゃん 実装プラン
 
-> **最終更新**: 2026-04-24（ゲーム設定config化対応）
+> **最終更新**: 2026-04-28（LIFF連携・LINE通知 v1.12.0）
 
 ## コンテキスト
 
-「おもじゃん for 男根祭 〜ご神体ワードバトル〜」は、5名の友人がLINEで共有したURLからブラウザを開き、カードゲームを楽しむWebアプリケーション。ログイン機能は不要で、ユーザーは名前リストから自分を選択して参加。Next.js + TailwindCSS + Supabase + Vercelで構築するPOC。
+「おもじゃん for 男根祭 〜ご神体ワードバトル〜」は、5名の友人がLINEで共有したURLからブラウザを開き、カードゲームを楽しむWebアプリケーション。ログイン機能は不要で、ユーザーは名前リストから自分を選択して参加。Next.js + TailwindCSS + Supabase + Vercelで構築。
 
 ## 確定済み要件
 
 | 項目 | 仕様 |
 |------|------|
 | URL発行 | 管理者画面（/admin）から発行 |
-| 手札ルール | 使った手札は消える（5ゲームで最大5枚消費） |
+| 手札ルール | 使った手札は消える |
 | セッション管理 | localStorageに保存、再度URLを開いた際は自動で前回ユーザーで再開 |
 | 自己投票 | 自分の作品にも投票可能 |
 | 管理者画面制限 | なし（URLを知っている人のみアクセス） |
 
+## ユーザー
+
+5名固定（DBの `users` テーブルに初期データとして登録済み）：
+- はじむ、スラパン、こんべ、かねおか、カズさん
+
 ## ゲームの基本ルール
 
-- **ユーザー**: はじむ、スラパン、こんべ、かねおか、カズさん（5名）
-- **テスト**: こんべ・カズさんの2名で実施
-- **手札配布**: 全カードをシャッフルしランダムで配布（作成者に関係なし）
-- **1大会**: 5ゲーム（テスト時は3ゲーム）
+| モード | 人数 | 札作成枚数/人 | 手札枚数/人 | ゲーム数 |
+|--------|------|-------------|------------|---------|
+| 本番（production） | 5名 | 20枚 | 15枚 | 10回戦 |
+| テスト（test） | 2名 | 10枚 | 5枚 | 3回戦 |
+| ソロ（solo） | 1名 | 任意 | 任意 | 任意 |
 
-### 枚数ルール
-
-| モード | 札作成枚数/人 | 手札枚数/人 | お題用 | ゲーム数 |
-|--------|-------------|------------|--------|---------|
-| 本番（5名） | 20枚 | 10枚 | 50枚 | 5回戦 |
-| テスト（2名） | 10枚 | 5枚 | 10枚 | 3回戦 |
+※ 本番設定は `src/config/game.ts` で管理
 
 ## システム構成
 
 ```
-Next.js (App Router) + TailwindCSS + Supabase + Vercel
+Next.js (App Router) + TypeScript + TailwindCSS + Supabase + Vercel
 ```
 
-## DBスキーマ
+## DBスキーマ（現在適用済み）
 
 ```sql
--- 大会
 CREATE TABLE tournaments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  token TEXT UNIQUE NOT NULL,            -- URLパラメータ（乱数）
-  game_count INT DEFAULT 5,              -- 回戦数（テスト時は3）
-  cards_per_user INT DEFAULT 20,         -- 1人あたりの札作成枚数（テスト時は10）
+  token TEXT UNIQUE NOT NULL,
+  mode TEXT DEFAULT 'solo',              -- solo | test | production
+  required_players INT DEFAULT 1,
+  game_count INT DEFAULT 5,
+  cards_per_user INT DEFAULT 20,
+  hand_cards_per_player INT DEFAULT 10,
   status TEXT DEFAULT 'waiting_users',   -- waiting_users | creating_cards | playing | finished
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- ユーザーマスタ（固定5名）
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT UNIQUE NOT NULL
+  name TEXT UNIQUE NOT NULL,
+  line_user_id TEXT UNIQUE              -- LIFF連携で保存（migration 002で追加）
 );
--- 初期データ: はじむ, スラパン, こんべ, かねおか, カズさん
 
--- 大会参加者
 CREATE TABLE tournament_participants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tournament_id UUID REFERENCES tournaments(id),
@@ -65,7 +66,6 @@ CREATE TABLE tournament_participants (
   UNIQUE(tournament_id, user_id)
 );
 
--- 札（全ユーザーが作成したカード）
 CREATE TABLE cards (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tournament_id UUID REFERENCES tournaments(id),
@@ -74,7 +74,6 @@ CREATE TABLE cards (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 手札配布（全カードをシャッフルして割り当て）
 CREATE TABLE player_hands (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tournament_id UUID REFERENCES tournaments(id),
@@ -84,7 +83,6 @@ CREATE TABLE player_hands (
   UNIQUE(tournament_id, user_id, card_id)
 );
 
--- ゲーム（各ラウンド）
 CREATE TABLE games (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tournament_id UUID REFERENCES tournaments(id),
@@ -94,19 +92,17 @@ CREATE TABLE games (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 作品投稿
 CREATE TABLE submissions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   game_id UUID REFERENCES games(id),
   user_id UUID REFERENCES users(id),
   hand_card_id UUID REFERENCES cards(id),
-  position TEXT NOT NULL,   -- 'before'（手札＋お題）or 'after'（お題＋手札）
-  preamble TEXT,            -- 前口上（任意）
+  position TEXT NOT NULL,                  -- 'before' | 'after'
+  preamble TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE(game_id, user_id)
 );
 
--- 投票
 CREATE TABLE votes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   game_id UUID REFERENCES games(id),
@@ -117,19 +113,142 @@ CREATE TABLE votes (
 );
 ```
 
-## 状態遷移
+### マイグレーション
+
+| ファイル | 内容 | 適用状況 |
+|---------|------|---------|
+| `supabase/migrations/001_initial.sql` | 初期スキーマ | ✅ 適用済み |
+| `supabase/migrations/002_add_line_user_id.sql` | usersにline_user_idカラム追加 | ✅ 適用済み（2026-04-28） |
+
+## ページ構成
+
+| パス | 内容 |
+|------|------|
+| `/admin` | 管理者画面（大会URL発行・本番大会二重発行防止） |
+| `/[token]` | 大会メインページ（状態に応じてコンポーネント切替） |
+| `/current` | 進行中の本番大会 → 最新大会の順にリダイレクト |
+| `/summary` | 全大会サマリページ（総合MVP・結果一覧） |
+
+## 画面の状態遷移
 
 ```
 tournaments.status
-  waiting_users     → 全員参加完了したら creating_cards へ
-  creating_cards    → 全員が規定枚数作成したら playing へ（手札・お題割り当て）
-  playing           → 全ゲーム終了したら finished へ
+  waiting_users   → 全員参加完了したら creating_cards へ
+  creating_cards  → 全員が規定枚数作成したら playing へ（手札・お題割り当て）
+  playing         → 全ゲーム終了したら finished へ
 
 games.status
   waiting_submission → 全員投稿したら waiting_vote へ
   waiting_vote       → 全員投票したら showing_result へ
-  showing_result     → （cookie制御）リロード後 finished へ
+  showing_result     → 結果確認ボタン押下で finished へ（自動advanceの対象外）
   finished           → 次ラウンド開始（次のgameレコード作成）
+```
+
+## LINE LIFF連携
+
+### 概要
+
+LINEアプリ内でURLを開いた際にLINE User IDを取得し、DBの `users.line_user_id` に保存。
+フェーズ進行時（本番大会のみ）に、トリガーユーザー以外の参加者へプッシュ通知を送信。
+
+### 通知タイミング
+
+| フェーズ遷移 | メッセージ |
+|---|---|
+| 全員の札作成完了 → ゲーム開始 | 全員の札作成が完了しました！おもじゃんを開いて作品を投稿しましょう 🎴 |
+| 全員の作品投稿完了 → 投票フェーズ | 全員の作品投稿が完了しました！おもじゃんを開いて投票しましょう 🗳️ |
+| 全員の投票完了 → 結果発表 | 全員の投票が完了しました！おもじゃんを開いて結果を確認しましょう 🏆 |
+
+- 通知形式：Flex Message（「おもじゃんを開く」ボタン付き）
+- ボタンリンク：`https://liff.line.me/2009919064-RhkS05i8`（LIFF URL経由）
+- 本番モード（`mode = production`）のみ送信
+- トリガーユーザー本人には送らない
+- `line_user_id` が未登録のユーザーはスキップ
+
+### 通知数の試算（5名・10回戦）
+
+1回の送信 = 最大4通（5名 − トリガー1名）
+
+| タイミング | 回数 | 通知数 |
+|---|---|---|
+| 札作成完了（大会1回） | 1回 | 4通 |
+| 作品投稿完了（回戦ごと） | 10回 | 40通 |
+| 投票完了（回戦ごと） | 10回 | 40通 |
+| **合計** | | **84通/大会** |
+
+- LINE Messaging API 無料枠：200通/月 → **月2大会**が目安
+- ライトプラン（約500円/月）：5,000通/月 → **月59大会**まで対応
+- 投票完了通知は「結果確認ボタンを押さないと次回戦に進めない」ため削除不可
+
+### ID連携の仕組み
+
+- LIFFアプリURL（`https://liff.line.me/{liffId}`）経由でアクセスした場合のみ動作
+- `liff.isInClient()` が true の場合のみ `liff.getProfile()` を呼び出す
+- `userId`（ゲームユーザー）と `lineUserId` が揃ったタイミングでDBに保存
+- 既にDBに保存済みの場合はスキップ（上書きなし）
+- 1ユーザー1回限り、大会をまたいで有効
+
+### LINE Developer Console設定
+
+| 項目 | 値 |
+|------|-----|
+| LIFFアプリID | `2009919064-RhkS05i8` |
+| LIFFエンドポイントURL | `https://omojan.vercel.app/current` |
+| LIFFアプリURL | `https://liff.line.me/2009919064-RhkS05i8` |
+| スコープ | `profile` |
+
+### リッチメニュー設定
+
+| ボタン | リンク |
+|-------|--------|
+| おもじゃん（現在の大会） | `https://liff.line.me/2009919064-RhkS05i8` |
+| 総合結果 | `https://omojan.vercel.app/summary` |
+
+### 環境変数
+
+| 変数名 | 設定場所 | 値 |
+|--------|---------|-----|
+| `NEXT_PUBLIC_LIFF_ID` | Vercel (Production) | `2009919064-RhkS05i8` |
+| `LINE_CHANNEL_ACCESS_TOKEN` | Vercel (Production, Sensitive) | （非公開） |
+| `NEXT_PUBLIC_APP_URL` | Vercel (Production) | `https://omojan.vercel.app` |
+
+## ディレクトリ構成
+
+```
+src/
+  app/
+    admin/page.tsx                        - 管理者画面
+    [token]/page.tsx                      - 大会メインページ
+    current/page.tsx                      - 進行中大会へのリダイレクト
+    summary/page.tsx                      - 全大会サマリ
+    api/
+      tournaments/route.ts               - 大会作成API（本番二重発行防止）
+      tournaments/[token]/
+        join/route.ts                    - ユーザー参加
+        cards/route.ts                   - 札作成
+        submit/route.ts                  - 作品投稿
+        vote/route.ts                    - 投票
+        advance/route.ts                 - ステータス進行 + LINE通知
+      users/[userId]/
+        line-id/route.ts                 - LINE User ID保存（PATCH）
+  components/
+    UserSelection.tsx
+    CardCreation.tsx
+    GamePlay.tsx
+    Voting.tsx
+    Results.tsx
+    Archive.tsx
+    TournamentFinished.tsx
+    WaitingStatus.tsx
+  lib/
+    supabase.ts
+    line-push.ts                         - LINE Messaging API push通知
+  hooks/
+    useCurrentUser.ts
+  config/
+    game.ts                              - ゲーム設定（本番プリセット等）
+  types/
+    database.ts
 ```
 
 ## ローカル開発
@@ -141,79 +260,21 @@ games.status
 | ローカルURL | http://localhost:3001 |
 | 管理者画面 | http://localhost:3001/admin |
 
-## ディレクトリ構成
+## バージョン履歴
 
-```
-src/
-  app/
-    admin/page.tsx            - 管理者画面（大会URL発行）
-    [token]/page.tsx          - 大会メインページ
-    api/
-      tournaments/route.ts    - 大会作成API
-      tournaments/[token]/
-        join/route.ts         - ユーザー参加
-        cards/route.ts        - 札作成
-        submit/route.ts       - 作品投稿
-        vote/route.ts         - 投票
-        advance/route.ts      - ステータス進行（サーバー側チェック）
-  components/
-    UserSelection.tsx
-    CardCreation.tsx
-    GamePlay.tsx
-    Voting.tsx
-    Results.tsx
-    Archive.tsx
-    WaitingStatus.tsx
-  lib/
-    supabase.ts
-    gameLogic.ts
-  hooks/
-    useCurrentUser.ts
-    useTournament.ts
-```
+| バージョン | 内容 |
+|-----------|------|
+| v1.12.0 | LIFF連携・LINE通知・/currentページ・本番大会二重発行防止 |
+| v1.11.0 | 本番設定を手札15枚・10回戦に変更（config/hand15-round10） |
+| v1.10.1 | サマリ画面URLコピー削除・「総合MVP」テキスト修正・大会結果詳細リンク追加 |
+| v1.9.0 | 全大会サマリページ（/summary）追加 |
+| v1.8.0 | バージョン管理ルール強化 |
+| v1.0〜v1.7 | ゲーム基本機能実装（ユーザー選択・札作成・投稿・投票・結果・アーカイブ） |
 
-## 実装フェーズ
+## 今後の対応
 
-### Phase 1: 環境構築 ✅（進行中）
-- [x] CLAUDE.md更新
-- [ ] Next.jsプロジェクト作成
-- [ ] Supabase接続設定
-- [ ] DBスキーマ適用・初期データ投入
-- [ ] Vercel + GitHub連携ドキュメント作成
-
-### Phase 2: 管理者画面・ユーザー選択
-- [ ] /admin ページ（大会URL発行・ゲーム数/枚数設定）
-- [ ] useCurrentUser フック
-- [ ] ユーザー選択画面（排他制御・修正機能付き）
-
-### Phase 3: 札作成画面
-- [ ] カード入力UI（規定枚数のテキスト入力）
-- [ ] 全員完了チェック → ゲーム開始処理（手札・お題振り分け）
-
-### Phase 4: ゲームプレイ
-- [ ] 作品作成画面（お題＋手札選択＋前後配置＋前口上）
-- [ ] 投票画面
-- [ ] 結果発表画面（cookie制御）
-
-### Phase 5: アーカイブ
-- [ ] 次ラウンド遷移
-- [ ] アーカイブタブ（過去ラウンドの作品・結果一覧）
-
-### Phase 6: テスト・デプロイ
-- [ ] 2名でのE2Eテスト
-- [ ] モバイル表示確認
-- [ ] 5名対応に変更してリリース
-
-## デザイン方針
-
-- モバイルアプリ風（最大幅480px中央寄せ）
-- 白ベース、ポップなアクセントカラー
-- タイトル：「おもじゃん for 男根祭 〜ご神体ワードバトル〜」
-- バージョン：v1.0
-
-## Supabase / Vercel 無料枠
-
-| サービス | 無料枠 | 5名利用での問題 |
-|---------|--------|--------------|
-| Supabase Free | 500MB DB, 50,000 MAU, 2GB帯域 | 問題なし |
-| Vercel Hobby | 100GB帯域/月, 100GB-Hrs | 問題なし |
+- [ ] `feat/liff-integration` を `main` にマージ・デプロイ（v1.12.0）
+- [ ] LINE DeveloperコンソールでLIFFエンドポイントURLを `https://omojan.vercel.app/current` に変更
+- [ ] リッチメニューのリンクを `https://liff.line.me/2009919064-RhkS05i8` に設定
+- [ ] 全参加者がリッチメニューから `/current` を開いてLINE ID連携を完了
+- [ ] 次大会でLINE通知が届くことを確認
