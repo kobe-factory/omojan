@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       const num = idx >= 0 ? idx + 1 : 1
 
       await sendLinePush(lineUserIds, {
-        headerTitle: '🎯 新大会開始',
+        headerTitle: '🎯 新大会スタート！',
         headerColor: '#0284c7',
         headerSub: `第${num}回大会`,
         body: '新しい大会が始まりました！\nおもじゃんを開いてユーザー登録してください 👥',

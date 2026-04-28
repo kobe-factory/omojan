@@ -4,13 +4,13 @@ import { sendLinePush, type LinePushPayload } from '@/lib/line-push'
 
 const LIFF_URL = `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID}`
 
-// フェーズごとのヘッダー色（アプリ画面のステータスカラーに対応）
+// 遷移先フェーズの色（通知ヘッダーは「これから始まるフェーズ」の色）
 const PHASE_COLORS = {
-  joining:    '#0284c7', // sky-600    参加完了
-  cards:      '#d97706', // amber-600  札作成完了
-  playing:    '#059669', // emerald-600 ゲーム開始
-  voting:     '#7c3aed', // violet-600  作品投稿完了
-  result:     '#ca8a04', // yellow-600  投票完了
+  joining:    '#0284c7', // sky-600    新大会スタート
+  cards:      '#d97706', // amber-600  お題作成スタート
+  playing:    '#059669', // emerald-600 作品投稿スタート
+  voting:     '#7c3aed', // violet-600  投票スタート
+  result:     '#ca8a04', // yellow-600  結果発表
 }
 
 async function notifyParticipants(
@@ -93,8 +93,8 @@ export async function POST(
       participantIds,
       triggeringUserId,
       {
-        headerTitle: '👥 参加完了',
-        headerColor: PHASE_COLORS.joining,
+        headerTitle: '✍️ お題作成スタート！',
+        headerColor: PHASE_COLORS.cards,
         headerSub: `第${num}回大会`,
         body: '全員の参加が揃いました！\nおもじゃんを開いてお題を作成してください ✍️',
         url: LIFF_URL,
@@ -145,9 +145,9 @@ export async function POST(
       participantIds,
       triggeringUserId,
       {
-        headerTitle: '🎴 札作成完了',
-        headerColor: PHASE_COLORS.cards,
-        headerSub: `第${num}回大会 第1回戦`,
+        headerTitle: '🎨 作品投稿スタート！',
+        headerColor: PHASE_COLORS.playing,
+        headerSub: `第${num}回大会 / 1回戦`,
         body: '全員の札作成が完了しました！\nおもじゃんを開いて作品を投稿しましょう 🎨',
         url: LIFF_URL,
       },
@@ -196,9 +196,9 @@ export async function POST(
         participantIds,
         triggeringUserId,
         {
-          headerTitle: '🎨 作品投稿完了',
+          headerTitle: '🗳️ 投票スタート！',
           headerColor: PHASE_COLORS.voting,
-          headerSub: `第${num}回大会 第${currentGame.round_number}回戦`,
+          headerSub: `第${num}回大会 / ${currentGame.round_number}回戦`,
           body: '全員の作品投稿が完了しました！\nおもじゃんを開いて投票しましょう 🗳️',
           url: LIFF_URL,
         },
@@ -233,9 +233,9 @@ export async function POST(
         participantIds,
         triggeringUserId,
         {
-          headerTitle: '🗳️ 投票完了',
+          headerTitle: '🏆 結果発表！',
           headerColor: PHASE_COLORS.result,
-          headerSub: `第${num}回大会 第${currentGame.round_number}回戦`,
+          headerSub: `第${num}回大会 / ${currentGame.round_number}回戦`,
           body: '全員の投票が完了しました！\nおもじゃんを開いて結果を確認しましょう 🏆',
           url: LIFF_URL,
         },
