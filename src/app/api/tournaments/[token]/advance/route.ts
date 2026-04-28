@@ -1,5 +1,29 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { sendLinePush } from '@/lib/line-push'
+
+const LIFF_URL = `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID}`
+
+async function notifyParticipants(
+  participantIds: string[],
+  triggeringUserId: string | null,
+  message: string,
+  mode: string
+) {
+  if (!triggeringUserId || mode !== 'production') return
+
+  const targetIds = participantIds.filter((id) => id !== triggeringUserId)
+  if (targetIds.length === 0) return
+
+  const { data: users } = await supabase
+    .from('users')
+    .select('line_user_id')
+    .in('id', targetIds)
+    .not('line_user_id', 'is', null)
+
+  const lineUserIds = (users ?? []).map((u) => u.line_user_id).filter(Boolean) as string[]
+  await sendLinePush(lineUserIds, message, LIFF_URL)
+}
 
 export async function POST(
   request: Request,
@@ -8,14 +32,16 @@ export async function POST(
   const { token } = await params
 
   let confirmResult = false
+  let triggeringUserId: string | null = null
   try {
     const body = await request.json()
     confirmResult = !!body.confirm_result
+    triggeringUserId = body.triggering_user_id ?? null
   } catch { /* body なし */ }
 
   const { data: tournament } = await supabase
     .from('tournaments')
-    .select('id, status, game_count, cards_per_user, hand_cards_per_player, required_players')
+    .select('id, status, mode, game_count, cards_per_user, hand_cards_per_player, required_players')
     .eq('token', token)
     .single()
 
@@ -82,6 +108,13 @@ export async function POST(
       .update({ status: 'playing' })
       .eq('id', tournament.id)
 
+    await notifyParticipants(
+      participantIds,
+      triggeringUserId,
+      `全員の札作成が完了しました！\nおもじゃんを開いて作品を投稿しましょう 🎴`,
+      tournament.mode
+    )
+
     return NextResponse.json({ advanced: true, newStatus: 'playing' })
   }
 
@@ -119,6 +152,13 @@ export async function POST(
         .update({ status: 'waiting_vote' })
         .eq('id', currentGame.id)
 
+      await notifyParticipants(
+        participantIds,
+        triggeringUserId,
+        `全員の作品投稿が完了しました！\nおもじゃんを開いて投票しましょう 🗳️`,
+        tournament.mode
+      )
+
       return NextResponse.json({ advanced: true, newGameStatus: 'waiting_vote' })
     }
 
@@ -141,6 +181,13 @@ export async function POST(
         .from('games')
         .update({ status: 'showing_result' })
         .eq('id', currentGame.id)
+
+      await notifyParticipants(
+        participantIds,
+        triggeringUserId,
+        `全員の投票が完了しました！\nおもじゃんを開いて結果を確認しましょう 🏆`,
+        tournament.mode
+      )
 
       return NextResponse.json({ advanced: true, newGameStatus: 'showing_result' })
     }
