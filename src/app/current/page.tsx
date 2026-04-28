@@ -3,12 +3,28 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
+export const PENDING_LINE_USER_ID_KEY = 'omojan:pendingLineUserId'
+
 export default function CurrentPage() {
   const router = useRouter()
   const [notFound, setNotFound] = useState(false)
 
   useEffect(() => {
-    async function findAndRedirect() {
+    async function init() {
+      // 1. LIFF init を /current（LIFFエンドポイント）で行う
+      const liffId = process.env.NEXT_PUBLIC_LIFF_ID
+      if (liffId) {
+        try {
+          const { default: liff } = await import('@line/liff')
+          await liff.init({ liffId })
+          if (liff.isInClient()) {
+            const profile = await liff.getProfile()
+            sessionStorage.setItem(PENDING_LINE_USER_ID_KEY, profile.userId)
+          }
+        } catch {}
+      }
+
+      // 2. 進行中の本番大会 → 最新大会の順に取得
       const { data: active } = await supabase
         .from('tournaments')
         .select('token')
@@ -36,12 +52,11 @@ export default function CurrentPage() {
         return
       }
 
-      // liff.state クエリパラメータをそのまま引き継いで LIFF 認証を維持する
-      const search = window.location.search
-      router.replace(`/${token}${search}`)
+      // 3. liff.state を渡さずクリーンに遷移
+      router.replace(`/${token}`)
     }
 
-    findAndRedirect()
+    init()
   }, [router])
 
   if (notFound) {

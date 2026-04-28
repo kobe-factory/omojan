@@ -106,8 +106,16 @@ export default function TournamentPage() {
     setLoading(false)
   }, [token])
 
-  // LIFF init → LINE User ID 取得（LINEアプリ内の場合のみ）
+  // LIFF init → LINE User ID 取得
+  // /current経由の場合はsessionStorageから取得、直接アクセスの場合はLIFF initで取得
   useEffect(() => {
+    const stored = sessionStorage.getItem('omojan:pendingLineUserId')
+    if (stored) {
+      sessionStorage.removeItem('omojan:pendingLineUserId')
+      setLineUserId(stored)
+      return
+    }
+
     const liffId = process.env.NEXT_PUBLIC_LIFF_ID
     if (!liffId) return
 
