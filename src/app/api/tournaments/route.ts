@@ -43,11 +43,21 @@ export async function POST(request: Request) {
 
     const lineUserIds = (users ?? []).map((u) => u.line_user_id).filter(Boolean) as string[]
     if (lineUserIds.length > 0) {
-      await sendLinePush(
-        lineUserIds,
-        '新しい大会が始まりました！\nおもじゃんを開いてユーザー登録してください 🎴',
-        LIFF_URL
-      )
+      const { data: allTournaments } = await supabase
+        .from('tournaments')
+        .select('id, created_at')
+        .eq('mode', 'production')
+        .order('created_at', { ascending: true })
+      const idx = (allTournaments ?? []).findIndex((t) => t.id === data.id)
+      const num = idx >= 0 ? idx + 1 : 1
+
+      await sendLinePush(lineUserIds, {
+        headerTitle: '🎯 新大会開始',
+        headerColor: '#0284c7',
+        headerSub: `第${num}回大会`,
+        body: '新しい大会が始まりました！\nおもじゃんを開いてユーザー登録してください 👥',
+        url: LIFF_URL,
+      })
     }
   }
 

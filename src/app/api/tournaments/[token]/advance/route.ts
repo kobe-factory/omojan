@@ -1,13 +1,22 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { sendLinePush } from '@/lib/line-push'
+import { sendLinePush, type LinePushPayload } from '@/lib/line-push'
 
 const LIFF_URL = `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID}`
+
+// フェーズごとのヘッダー色（アプリ画面のステータスカラーに対応）
+const PHASE_COLORS = {
+  joining:    '#0284c7', // sky-600    参加完了
+  cards:      '#d97706', // amber-600  札作成完了
+  playing:    '#059669', // emerald-600 ゲーム開始
+  voting:     '#7c3aed', // violet-600  作品投稿完了
+  result:     '#ca8a04', // yellow-600  投票完了
+}
 
 async function notifyParticipants(
   participantIds: string[],
   triggeringUserId: string | null,
-  message: string,
+  payload: LinePushPayload,
   mode: string
 ) {
   if (!triggeringUserId || mode !== 'production') return
@@ -22,7 +31,18 @@ async function notifyParticipants(
     .not('line_user_id', 'is', null)
 
   const lineUserIds = (users ?? []).map((u) => u.line_user_id).filter(Boolean) as string[]
-  await sendLinePush(lineUserIds, message, LIFF_URL)
+  await sendLinePush(lineUserIds, payload)
+}
+
+async function getTournamentNumber(tournamentId: string): Promise<number> {
+  const { data } = await supabase
+    .from('tournaments')
+    .select('id, created_at')
+    .eq('mode', 'production')
+    .order('created_at', { ascending: true })
+
+  const idx = (data ?? []).findIndex((t) => t.id === tournamentId)
+  return idx >= 0 ? idx + 1 : 1
 }
 
 export async function POST(
@@ -57,7 +77,7 @@ export async function POST(
   const participantCount = participants?.length ?? 0
   const participantIds = participants?.map((p) => p.user_id) ?? []
 
-  // waiting_users → creating_cards（required_players人数揃ったら進行）
+  // waiting_users → creating_cards
   if (tournament.status === 'waiting_users') {
     if (participantCount < tournament.required_players) {
       return NextResponse.json({ waiting: true, message: 'ユーザー参加待ち' })
@@ -68,17 +88,24 @@ export async function POST(
       .update({ status: 'creating_cards' })
       .eq('id', tournament.id)
 
+    const num = await getTournamentNumber(tournament.id)
     await notifyParticipants(
       participantIds,
       triggeringUserId,
-      `全員の参加が揃いました！\nおもじゃんを開いてお題を作成してください ✍️`,
+      {
+        headerTitle: '👥 参加完了',
+        headerColor: PHASE_COLORS.joining,
+        headerSub: `第${num}回大会`,
+        body: '全員の参加が揃いました！\nおもじゃんを開いてお題を作成してください ✍️',
+        url: LIFF_URL,
+      },
       tournament.mode
     )
 
     return NextResponse.json({ advanced: true, newStatus: 'creating_cards' })
   }
 
-  // creating_cards → playing（全員が規定枚数作成済みか確認）
+  // creating_cards → playing
   if (tournament.status === 'creating_cards') {
     const { data: cardCounts } = await supabase
       .from('cards')
@@ -98,13 +125,11 @@ export async function POST(
       return NextResponse.json({ waiting: true, message: '札作成待ち', countByUser })
     }
 
-    // 手札とお題を振り分け
     const { error: dealError } = await dealCards(tournament.id, participantIds, tournament.hand_cards_per_player)
     if (dealError) {
       return NextResponse.json({ error: dealError }, { status: 500 })
     }
 
-    // 第1ゲームを作成
     const { error: gameError } = await createNextGame(tournament.id, 1)
     if (gameError) {
       return NextResponse.json({ error: gameError }, { status: 500 })
@@ -115,17 +140,24 @@ export async function POST(
       .update({ status: 'playing' })
       .eq('id', tournament.id)
 
+    const num = await getTournamentNumber(tournament.id)
     await notifyParticipants(
       participantIds,
       triggeringUserId,
-      `全員の札作成が完了しました！\nおもじゃんを開いて作品を投稿しましょう 🎴`,
+      {
+        headerTitle: '🎴 札作成完了',
+        headerColor: PHASE_COLORS.cards,
+        headerSub: `第${num}回大会 第1回戦`,
+        body: '全員の札作成が完了しました！\nおもじゃんを開いて作品を投稿しましょう 🎨',
+        url: LIFF_URL,
+      },
       tournament.mode
     )
 
     return NextResponse.json({ advanced: true, newStatus: 'playing' })
   }
 
-  // playing: 現在のゲームの状態を確認して進行
+  // playing
   if (tournament.status === 'playing') {
     const { data: currentGame } = await supabase
       .from('games')
@@ -139,7 +171,7 @@ export async function POST(
       return NextResponse.json({ error: 'ゲームが見つかりません' }, { status: 500 })
     }
 
-    // waiting_submission → waiting_vote（全員投稿済みか確認）
+    // waiting_submission → waiting_vote
     if (currentGame.status === 'waiting_submission') {
       const { data: submissions } = await supabase
         .from('submissions')
@@ -159,17 +191,24 @@ export async function POST(
         .update({ status: 'waiting_vote' })
         .eq('id', currentGame.id)
 
+      const num = await getTournamentNumber(tournament.id)
       await notifyParticipants(
         participantIds,
         triggeringUserId,
-        `全員の作品投稿が完了しました！\nおもじゃんを開いて投票しましょう 🗳️`,
+        {
+          headerTitle: '🎨 作品投稿完了',
+          headerColor: PHASE_COLORS.voting,
+          headerSub: `第${num}回大会 第${currentGame.round_number}回戦`,
+          body: '全員の作品投稿が完了しました！\nおもじゃんを開いて投票しましょう 🗳️',
+          url: LIFF_URL,
+        },
         tournament.mode
       )
 
       return NextResponse.json({ advanced: true, newGameStatus: 'waiting_vote' })
     }
 
-    // waiting_vote → showing_result（全員投票済みか確認）
+    // waiting_vote → showing_result
     if (currentGame.status === 'waiting_vote') {
       const { data: votes } = await supabase
         .from('votes')
@@ -189,17 +228,24 @@ export async function POST(
         .update({ status: 'showing_result' })
         .eq('id', currentGame.id)
 
+      const num = await getTournamentNumber(tournament.id)
       await notifyParticipants(
         participantIds,
         triggeringUserId,
-        `全員の投票が完了しました！\nおもじゃんを開いて結果を確認しましょう 🏆`,
+        {
+          headerTitle: '🗳️ 投票完了',
+          headerColor: PHASE_COLORS.result,
+          headerSub: `第${num}回大会 第${currentGame.round_number}回戦`,
+          body: '全員の投票が完了しました！\nおもじゃんを開いて結果を確認しましょう 🏆',
+          url: LIFF_URL,
+        },
         tournament.mode
       )
 
       return NextResponse.json({ advanced: true, newGameStatus: 'showing_result' })
     }
 
-    // showing_result → 結果確認ボタン押下時のみ遷移（自動advance非対象）
+    // showing_result → 結果確認ボタン押下時のみ遷移
     if (currentGame.status === 'showing_result') {
       if (!confirmResult) {
         return NextResponse.json({ noChange: true })
@@ -239,7 +285,6 @@ async function dealCards(tournamentId: string, participantIds: string[], handCar
 
   if (!allCards) return { error: 'カードが見つかりません' }
 
-  // シャッフル
   const shuffled = [...allCards].sort(() => Math.random() - 0.5)
 
   const handCount = participantIds.length * handCardsPerPlayer
@@ -262,7 +307,6 @@ async function dealCards(tournamentId: string, participantIds: string[], handCar
 }
 
 async function createNextGame(tournamentId: string, roundNumber: number) {
-  // 既存のゲームで使用済みのお題カードIDを取得
   const { data: usedTopics } = await supabase
     .from('games')
     .select('topic_card_id')
@@ -270,7 +314,6 @@ async function createNextGame(tournamentId: string, roundNumber: number) {
 
   const usedTopicIds = new Set(usedTopics?.map((g) => g.topic_card_id) ?? [])
 
-  // 手札として配布されていないカードをお題候補にする
   const { data: handCardIds } = await supabase
     .from('player_hands')
     .select('card_id')

@@ -4,6 +4,17 @@ import { sendLinePush } from '@/lib/line-push'
 
 const LIFF_URL = `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID}`
 
+async function getTournamentNumber(tournamentId: string): Promise<number> {
+  const { data } = await supabase
+    .from('tournaments')
+    .select('id, created_at')
+    .eq('mode', 'production')
+    .order('created_at', { ascending: true })
+
+  const idx = (data ?? []).findIndex((t) => t.id === tournamentId)
+  return idx >= 0 ? idx + 1 : 1
+}
+
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ token: string }> }
@@ -47,11 +58,14 @@ export async function POST(
     return NextResponse.json({ sent: 0 })
   }
 
-  await sendLinePush(
-    lineUserIds,
-    '新しい大会が始まりました！\nおもじゃんを開いてユーザー登録してください 🎴',
-    LIFF_URL
-  )
+  const num = await getTournamentNumber(tournament.id)
+  await sendLinePush(lineUserIds, {
+    headerTitle: '🎯 新大会開始',
+    headerColor: '#0284c7',
+    headerSub: `第${num}回大会`,
+    body: '新しい大会が始まりました！\nおもじゃんを開いてユーザー登録してください 👥',
+    url: LIFF_URL,
+  })
 
   return NextResponse.json({ sent: lineUserIds.length })
 }
