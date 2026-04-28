@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { sendLinePush } from '@/lib/line-push'
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://omojan.vercel.app'
+const LIFF_URL = `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID}`
 
 async function notifyParticipants(
   participantIds: string[],
@@ -22,7 +22,7 @@ async function notifyParticipants(
     .not('line_user_id', 'is', null)
 
   const lineUserIds = (users ?? []).map((u) => u.line_user_id).filter(Boolean) as string[]
-  await sendLinePush(lineUserIds, message)
+  await sendLinePush(lineUserIds, message, LIFF_URL)
 }
 
 export async function POST(
@@ -111,7 +111,7 @@ export async function POST(
     await notifyParticipants(
       participantIds,
       triggeringUserId,
-      `全員の札作成が完了しました！\nおもじゃんを開いて作品を投稿しましょう 🎴\n${APP_URL}/current`,
+      `全員の札作成が完了しました！\nおもじゃんを開いて作品を投稿しましょう 🎴`,
       tournament.mode
     )
 
@@ -155,7 +155,7 @@ export async function POST(
       await notifyParticipants(
         participantIds,
         triggeringUserId,
-        `全員の作品投稿が完了しました！\nおもじゃんを開いて投票しましょう 🗳️\n${APP_URL}/current`,
+        `全員の作品投稿が完了しました！\nおもじゃんを開いて投票しましょう 🗳️`,
         tournament.mode
       )
 
@@ -185,7 +185,7 @@ export async function POST(
       await notifyParticipants(
         participantIds,
         triggeringUserId,
-        `全員の投票が完了しました！\nおもじゃんを開いて結果を確認しましょう 🏆\n${APP_URL}/current`,
+        `全員の投票が完了しました！\nおもじゃんを開いて結果を確認しましょう 🏆`,
         tournament.mode
       )
 
