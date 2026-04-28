@@ -24,12 +24,24 @@ export async function POST(
     return NextResponse.json({ error: '本番大会のみ通知できます' }, { status: 400 })
   }
 
+  // 参加済みユーザーのIDを取得
+  const { data: participants } = await supabase
+    .from('tournament_participants')
+    .select('user_id')
+    .eq('tournament_id', tournament.id)
+
+  const joinedUserIds = new Set((participants ?? []).map((p) => p.user_id))
+
+  // 未参加かつLINE ID登録済みのユーザーのみ対象
   const { data: users } = await supabase
     .from('users')
-    .select('line_user_id')
+    .select('id, line_user_id')
     .not('line_user_id', 'is', null)
 
-  const lineUserIds = (users ?? []).map((u) => u.line_user_id).filter(Boolean) as string[]
+  const lineUserIds = (users ?? [])
+    .filter((u) => !joinedUserIds.has(u.id))
+    .map((u) => u.line_user_id)
+    .filter(Boolean) as string[]
 
   if (lineUserIds.length === 0) {
     return NextResponse.json({ sent: 0 })
