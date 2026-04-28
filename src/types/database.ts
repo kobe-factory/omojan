@@ -46,14 +46,17 @@ export type Database = {
         Row: {
           id: string
           name: string
+          line_user_id: string | null
         }
         Insert: {
           id?: string
           name: string
+          line_user_id?: string | null
         }
         Update: {
           id?: string
           name?: string
+          line_user_id?: string | null
         }
         Relationships: []
       }

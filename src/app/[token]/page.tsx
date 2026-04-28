@@ -51,8 +51,11 @@ export default function TournamentPage() {
   const [tournamentNumber, setTournamentNumber] = useState<number | null>(null)
   const [prevResultGame, setPrevResultGame] = useState<Game | null>(null)
 
+  const [lineUserId, setLineUserId] = useState<string | null>(null)
+
   // 初回ロード時に一度だけadvanceを試みるためのフラグ
   const hasTriedAdvance = useRef(false)
+  const hasSavedLineId = useRef(false)
 
   const fetchState = useCallback(async () => {
     const { data: t } = await supabase
@@ -102,6 +105,30 @@ export default function TournamentPage() {
 
     setLoading(false)
   }, [token])
+
+  // LIFF init → LINE User ID 取得（LINEアプリ内の場合のみ）
+  useEffect(() => {
+    const liffId = process.env.NEXT_PUBLIC_LIFF_ID
+    if (!liffId) return
+
+    import('@line/liff').then(({ default: liff }) => {
+      liff.init({ liffId }).then(() => {
+        if (!liff.isInClient()) return
+        return liff.getProfile().then((profile) => setLineUserId(profile.userId))
+      }).catch(() => {})
+    }).catch(() => {})
+  }, [])
+
+  // userId と lineUserId が揃ったらDBに保存（1回のみ）
+  useEffect(() => {
+    if (!userId || !lineUserId || hasSavedLineId.current) return
+    hasSavedLineId.current = true
+    fetch(`/api/users/${userId}/line-id`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ line_user_id: lineUserId }),
+    }).catch(() => {})
+  }, [userId, lineUserId])
 
   // 初回マウント時にデータ取得 + 状態を自動進行（1回のみ）
   useEffect(() => {
@@ -262,7 +289,11 @@ export default function TournamentPage() {
               })
               saveUser(uid)
               await fetchState()
-              const res = await fetch(`/api/tournaments/${token}/advance`, { method: 'POST' })
+              const res = await fetch(`/api/tournaments/${token}/advance`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ triggering_user_id: uid }),
+              })
               const data = await res.json()
               if (data.advanced) await fetchState()
             }}
@@ -295,7 +326,11 @@ export default function TournamentPage() {
             currentUserId={userId}
             participants={participants}
             onSubmitted={async () => {
-              const res = await fetch(`/api/tournaments/${token}/advance`, { method: 'POST' })
+              const res = await fetch(`/api/tournaments/${token}/advance`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ triggering_user_id: userId }),
+              })
               const data = await res.json()
               if (data.advanced) await fetchState()
               else await fetchState()
@@ -339,7 +374,11 @@ export default function TournamentPage() {
                   currentUserId={userId}
                   participants={participants}
                   onSubmitted={async () => {
-                    const res = await fetch(`/api/tournaments/${token}/advance`, { method: 'POST' })
+                    const res = await fetch(`/api/tournaments/${token}/advance`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ triggering_user_id: userId }),
+                    })
                     const data = await res.json()
                     if (data.advanced) await fetchState()
                     else await fetchState()
@@ -354,7 +393,11 @@ export default function TournamentPage() {
                 currentUserId={userId}
                 participants={participants}
                 onVoted={async () => {
-                  const res = await fetch(`/api/tournaments/${token}/advance`, { method: 'POST' })
+                  const res = await fetch(`/api/tournaments/${token}/advance`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ triggering_user_id: userId }),
+                  })
                   const data = await res.json()
                   if (data.advanced) await fetchState()
                   else await fetchState()
@@ -396,7 +439,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.11.0</p>
+        <p className="text-xs text-gray-300">v1.12.0</p>
       </footer>
 
       {/* 前戦結果モーダル（まだ結果を確認していないユーザー向け） */}
