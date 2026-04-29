@@ -93,7 +93,7 @@ export async function POST(
       participantIds,
       triggeringUserId,
       {
-        headerTitle: '✍️ お題作成スタート！',
+        headerTitle: '✍️ お題作成どうぞ！',
         headerColor: PHASE_COLORS.cards,
         headerSub: `第${num}回大会`,
         body: '全員の参加が揃いました！\nおもじゃんを開いてお題を作成してください ✍️',
@@ -145,7 +145,7 @@ export async function POST(
       participantIds,
       triggeringUserId,
       {
-        headerTitle: '🎨 作品投稿スタート！',
+        headerTitle: '🎨 作品投稿の時間！',
         headerColor: PHASE_COLORS.playing,
         headerSub: `第${num}回大会 / 1回戦`,
         body: '全員の札作成が完了しました！\nおもじゃんを開いて作品を投稿しましょう 🎨',
@@ -196,7 +196,7 @@ export async function POST(
         participantIds,
         triggeringUserId,
         {
-          headerTitle: '🗳️ 投票スタート！',
+          headerTitle: '🗳️ 投票 開始！',
           headerColor: PHASE_COLORS.voting,
           headerSub: `第${num}回大会 / ${currentGame.round_number}回戦`,
           body: '全員の作品投稿が完了しました！\nおもじゃんを開いて投票しましょう 🗳️',
