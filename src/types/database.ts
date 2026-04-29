@@ -177,6 +177,7 @@ export type Database = {
           hand_card_id: string
           position: CardPosition
           preamble: string | null
+          preamble_position: 'above' | 'below'
           created_at: string
         }
         Insert: {
@@ -186,6 +187,7 @@ export type Database = {
           hand_card_id: string
           position: CardPosition
           preamble?: string | null
+          preamble_position?: 'above' | 'below'
           created_at?: string
         }
         Update: {
@@ -195,6 +197,7 @@ export type Database = {
           hand_card_id?: string
           position?: CardPosition
           preamble?: string | null
+          preamble_position?: 'above' | 'below'
           created_at?: string
         }
         Relationships: []

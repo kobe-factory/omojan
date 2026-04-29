@@ -28,6 +28,7 @@ interface ResultItem {
   handText: string
   position: 'before' | 'after'
   preamble: string | null
+  preamble_position: 'above' | 'below'
   voteCount: number
   voteTimeSum: number
   voterNames: string[]
@@ -54,7 +55,7 @@ export default function Results({ tournament, game, participants, onNext, nextLa
     async function fetchResults() {
       const [{ data: topicCard }, { data: subs }, { data: votes }] = await Promise.all([
         supabase.from('cards').select('text').eq('id', game.topic_card_id).single(),
-        supabase.from('submissions').select('id, user_id, hand_card_id, position, preamble').eq('game_id', game.id),
+        supabase.from('submissions').select('id, user_id, hand_card_id, position, preamble, preamble_position').eq('game_id', game.id),
         supabase.from('votes').select('submission_id, created_at, voter_user_id').eq('game_id', game.id),
       ])
 
@@ -86,6 +87,7 @@ export default function Results({ tournament, game, participants, onNext, nextLa
             handText: card?.text ?? '',
             position: s.position as 'before' | 'after',
             preamble: s.preamble,
+            preamble_position: (s.preamble_position ?? 'above') as 'above' | 'below',
             voteCount: count,
             voteTimeSum: voteTimeSum[s.id] ?? 0,
             voterNames: voterNamesMap[s.id] ?? [],
@@ -167,12 +169,14 @@ export default function Results({ tournament, game, participants, onNext, nextLa
                 <span className="text-emerald-500 text-sm font-bold">{r.voteCount}票</span>
               </div>
 
+              {r.preamble && r.preamble_position === 'above' && (
+                <p className="text-sm text-gray-500 italic mb-3">「{r.preamble}」</p>
+              )}
               {/* 作品（お題＋手札の組み合わせ） */}
               <p className="text-lg font-bold text-gray-800 mb-3">
                 {r.position === 'before' ? `${r.handText}${r.topicText}` : `${r.topicText}${r.handText}`}
               </p>
-
-              {r.preamble && (
+              {r.preamble && r.preamble_position === 'below' && (
                 <p className="text-sm text-gray-500 italic mb-2">「{r.preamble}」</p>
               )}
               <div className="mt-2">

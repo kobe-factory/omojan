@@ -91,7 +91,13 @@ READMEも適宜更新してください。
 - `src/app/layout.tsx` の metadata description `v1.x.x`
 - `CLAUDE.md` の「現在のバージョン」
 
-**現在のバージョン：v1.16.0**
+**現在のバージョン：v1.17.0**
+
+## ローカル開発
+
+- ポートは **3001** を使用すること
+- 起動コマンド: `npm run dev -- -p 3001`
+- URL: `http://localhost:3001`
 
 ## システム概要
 

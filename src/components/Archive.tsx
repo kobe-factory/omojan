@@ -24,6 +24,7 @@ interface ArchiveSubmission {
   userName: string
   fullText: string
   preamble: string | null
+  preamble_position: 'above' | 'below'
   voteCount: number
   voteTimeSum: number
   voterNames: string[]
@@ -59,7 +60,7 @@ export default function Archive({ tournamentId, participants }: Props) {
         finishedGames.map(async (g) => {
           const [{ data: topicCard }, { data: subs }, { data: votes }] = await Promise.all([
             supabase.from('cards').select('text').eq('id', g.topic_card_id).single(),
-            supabase.from('submissions').select('id, user_id, hand_card_id, position, preamble').eq('game_id', g.id),
+            supabase.from('submissions').select('id, user_id, hand_card_id, position, preamble, preamble_position').eq('game_id', g.id),
             supabase.from('votes').select('submission_id, created_at, voter_user_id').eq('game_id', g.id),
           ])
 
@@ -95,6 +96,7 @@ export default function Archive({ tournamentId, participants }: Props) {
                 userName: user?.name ?? '???',
                 fullText,
                 preamble: s.preamble,
+                preamble_position: (s.preamble_position ?? 'above') as 'above' | 'below',
                 voteCount: count,
                 voteTimeSum: voteTimeSum[s.id] ?? 0,
                 voterNames: voterNamesMap[s.id] ?? [],
@@ -220,11 +222,14 @@ export default function Archive({ tournamentId, participants }: Props) {
                       </div>
                       <span className="text-emerald-500 text-xs font-bold">{s.voteCount}票</span>
                     </div>
-                    <p className="text-base font-bold text-gray-800 mt-1">{s.fullText}</p>
-                    {s.preamble && (
+                    {s.preamble && s.preamble_position === 'above' && (
                       <p className="text-xs text-gray-500 italic mt-1">「{s.preamble}」</p>
                     )}
-                    <div className="mt-2">
+                    <p className="text-base font-bold text-gray-800 mt-1">{s.fullText}</p>
+                    {s.preamble && s.preamble_position === 'below' && (
+                      <p className="text-xs text-gray-500 italic mt-1">「{s.preamble}」</p>
+                    )}
+                    <div className="mt-3">
                       <div className="flex items-center gap-1.5">
                         <UserIcon name={s.userName} size="xs" />
                         <p className="text-xs text-gray-600">{s.userName}</p>

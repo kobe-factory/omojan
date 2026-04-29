@@ -45,6 +45,7 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
   const [selectedCard, setSelectedCard] = useState<HandCard | null>(null)
   const [position, setPosition] = useState<CardPosition>('after')
   const [preamble, setPreamble] = useState('')
+  const [preamblePosition, setPreamblePosition] = useState<'above' | 'below'>('above')
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [submittedUserIds, setSubmittedUserIds] = useState<string[]>([])
@@ -58,15 +59,16 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
       cardId: selectedCard.id,
       position,
       preamble,
+      preamblePosition,
     }))
-  }, [selectedCard, position, preamble, submitted, draftKey])
+  }, [selectedCard, position, preamble, preamblePosition, submitted, draftKey])
 
   useEffect(() => {
     async function init() {
       const [topicRes, handsRes, subsRes] = await Promise.all([
         supabase.from('cards').select('text').eq('id', game.topic_card_id).single(),
         supabase.from('player_hands').select('card_id, is_used, cards(id, text, created_at)').eq('tournament_id', tournament.id).eq('user_id', currentUserId),
-        supabase.from('submissions').select('user_id, hand_card_id, position, preamble').eq('game_id', game.id),
+        supabase.from('submissions').select('user_id, hand_card_id, position, preamble, preamble_position').eq('game_id', game.id),
       ])
 
       if (topicRes.data) setTopicText(topicRes.data.text)
@@ -87,6 +89,7 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
         setSubmitted(true)
         setPosition(mySub.position as CardPosition)
         setPreamble(mySub.preamble ?? '')
+        setPreamblePosition(mySub.preamble_position ?? 'above')
         setSubmittedCardId(mySub.hand_card_id)
         const myCard = cards.find((c) => c.id === mySub.hand_card_id)
         if (myCard) setSelectedCard(myCard)
@@ -98,12 +101,13 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
       try {
         const saved = localStorage.getItem(draftKey)
         if (saved) {
-          const { cardId, position: dPos, preamble: dPreamble } = JSON.parse(saved)
+          const { cardId, position: dPos, preamble: dPreamble, preamblePosition: dPreamblePos } = JSON.parse(saved)
           const draftCard = cards.find((c) => c.id === cardId)
           if (draftCard) {
             setSelectedCard(draftCard)
             setPosition(dPos as CardPosition)
             setPreamble(dPreamble ?? '')
+            setPreamblePosition(dPreamblePos ?? 'above')
           }
         }
       } catch { /* ignore */ }
@@ -148,6 +152,7 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
         hand_card_id: selectedCard.id,
         position,
         preamble: preamble.trim() || null,
+        preamble_position: preamblePosition,
       }),
     })
     // 前回と別のカードに変えた場合、ローカルのis_usedを戻す
@@ -238,6 +243,9 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
 
           <div className="bg-emerald-50 rounded-xl px-4 py-5 text-center">
             <p className="text-xs text-emerald-500 mb-3">作品プレビュー</p>
+            {preamble && preamblePosition === 'above' && (
+              <p className="text-sm text-gray-500 italic mb-2">「{preamble}」</p>
+            )}
             <p className="text-xl font-bold text-gray-800 leading-relaxed">
               {position === 'before' ? (
                 <><span className="text-emerald-600">{selectedCard.text}</span>{topicText}</>
@@ -245,6 +253,9 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
                 <>{topicText}<span className="text-emerald-600">{selectedCard.text}</span></>
               )}
             </p>
+            {preamble && preamblePosition === 'below' && (
+              <p className="text-sm text-gray-500 italic mt-2">「{preamble}」</p>
+            )}
             <p className="text-xs text-gray-400 mt-3">
               <span className="text-emerald-500">■</span> 手札　<span className="text-gray-500">■</span> お題
             </p>
@@ -266,6 +277,26 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
           rows={3}
           className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400 resize-none"
         />
+        {preamble && (
+          <div className="flex bg-gray-100 rounded-xl p-1 gap-1 mt-3">
+            <button
+              onClick={() => { setPreamblePosition('above'); if (submitted) setSubmitted(false) }}
+              className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
+                preamblePosition === 'above' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-400'
+              }`}
+            >
+              作品の上に表示
+            </button>
+            <button
+              onClick={() => { setPreamblePosition('below'); if (submitted) setSubmitted(false) }}
+              className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
+                preamblePosition === 'below' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-400'
+              }`}
+            >
+              作品の下に表示
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 投稿ボタン */}

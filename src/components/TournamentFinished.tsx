@@ -24,6 +24,8 @@ interface RoundSummary {
   topicText: string
   winnerName: string
   winnerText: string
+  winnerPreamble: string | null
+  winnerPreamblePosition: 'above' | 'below'
   votes: number
   isTied: boolean
 }
@@ -56,7 +58,7 @@ export default function TournamentFinished({ tournamentId, participants }: Props
 
       const [{ data: allVotes }, { data: allSubs }] = await Promise.all([
         supabase.from('votes').select('game_id, submission_id, created_at').in('game_id', gameIds),
-        supabase.from('submissions').select('id, game_id, user_id, hand_card_id, position').in('game_id', gameIds),
+        supabase.from('submissions').select('id, game_id, user_id, hand_card_id, position, preamble, preamble_position').in('game_id', gameIds),
       ])
 
       const topicIds = games.map((g) => g.topic_card_id)
@@ -135,6 +137,8 @@ export default function TournamentFinished({ tournamentId, participants }: Props
           topicText,
           winnerName: winnerUser?.name ?? '???',
           winnerText,
+          winnerPreamble: winnerSub?.preamble ?? null,
+          winnerPreamblePosition: (winnerSub?.preamble_position ?? 'above') as 'above' | 'below',
           votes: maxVotes,
           isTied: hasTie,
         })
@@ -278,9 +282,17 @@ export default function TournamentFinished({ tournamentId, participants }: Props
                   <span className="text-xs text-gray-400">{r.votes}票</span>
                 </div>
               </div>
-              <p className="text-xs text-gray-400 mb-1">お題：{r.topicText}</p>
-              <p className="text-sm font-bold text-gray-800">{r.winnerText}</p>
-              <div className="flex items-center gap-1.5 mt-1">
+              <p className="text-xs text-gray-400 mb-2">お題：{r.topicText}</p>
+              <div className="bg-yellow-50 rounded-xl px-3 py-2">
+                {r.winnerPreamble && r.winnerPreamblePosition === 'above' && (
+                  <p className="text-xs text-gray-500 italic mb-1">「{r.winnerPreamble}」</p>
+                )}
+                <p className="text-sm font-bold text-gray-800">{r.winnerText}</p>
+                {r.winnerPreamble && r.winnerPreamblePosition === 'below' && (
+                  <p className="text-xs text-gray-500 italic mt-1">「{r.winnerPreamble}」</p>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 mt-3">
                 <UserIcon name={r.winnerName} size="xs" />
                 <p className="text-xs text-gray-400">{r.winnerName}</p>
               </div>

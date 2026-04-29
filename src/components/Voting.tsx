@@ -26,6 +26,7 @@ interface Submission {
   hand_card_id: string
   position: 'before' | 'after'
   preamble: string | null
+  preamble_position: 'above' | 'below'
   created_at: string
   userName: string
   handCardText: string
@@ -62,7 +63,7 @@ export default function Voting({ tournament, token, game, currentUserId, partici
     Promise.all([
       supabase
         .from('submissions')
-        .select('id, user_id, hand_card_id, position, preamble, created_at')
+        .select('id, user_id, hand_card_id, position, preamble, preamble_position, created_at')
         .eq('game_id', game.id)
         .order('created_at', { ascending: true }),
       supabase
@@ -95,6 +96,7 @@ export default function Voting({ tournament, token, game, currentUserId, partici
           return {
             ...s,
             position: s.position as 'before' | 'after',
+            preamble_position: (s.preamble_position ?? 'above') as 'above' | 'below',
             userName: user?.name ?? '???',
             handCardText: card?.text ?? '',
           }
@@ -173,11 +175,14 @@ export default function Voting({ tournament, token, game, currentUserId, partici
                   : 'border-gray-200 bg-white hover:border-emerald-200'
               }`}
             >
-              <p className="text-lg font-bold text-gray-800 mb-2">{fullText}</p>
-              {sub.preamble && (
+              {sub.preamble && sub.preamble_position === 'above' && (
                 <p className="text-sm text-gray-500 italic mb-2">「{sub.preamble}」</p>
               )}
-              <div className="flex items-center gap-1.5 mt-1">
+              <p className="text-lg font-bold text-gray-800 mb-2">{fullText}</p>
+              {sub.preamble && sub.preamble_position === 'below' && (
+                <p className="text-sm text-gray-500 italic mb-2">「{sub.preamble}」</p>
+              )}
+              <div className="flex items-center gap-1.5 mt-3">
                 <UserIcon name={sub.userName} size="xs" />
                 <p className="text-xs text-gray-400">{sub.userName}</p>
               </div>
