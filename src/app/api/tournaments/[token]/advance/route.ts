@@ -196,7 +196,7 @@ export async function POST(
         participantIds,
         triggeringUserId,
         {
-          headerTitle: '🗳️ 投票 開始！',
+          headerTitle: '🗳️ 投票が始まりました！',
           headerColor: PHASE_COLORS.voting,
           headerSub: `第${num}回大会 / ${currentGame.round_number}回戦`,
           body: '全員の作品投稿が完了しました！\nおもじゃんを開いて投票しましょう 🗳️',
