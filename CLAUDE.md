@@ -86,9 +86,10 @@ READMEも適宜更新してください。
 - 機能追加 → `1.minor.0` をインクリメント（例：1.3.0 → 1.4.0）
 - メジャーアップデート → `2.0.0`
 
-**更新対象ファイル（3箇所）：必ず同一コミットに含める**
+**更新対象ファイル（4箇所）：必ず同一コミットに含める**
 - `src/app/[token]/page.tsx` のフッター `v1.x.x`
 - `src/app/layout.tsx` の metadata description `v1.x.x`
+- `src/app/admin/page.tsx` のフッター `v1.x.x`
 - `CLAUDE.md` の「現在のバージョン」
 
 **現在のバージョン：v1.17.1**
