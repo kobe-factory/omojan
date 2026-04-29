@@ -156,7 +156,8 @@ export default function Voting({ tournament, token, game, currentUserId, partici
               ? `${sub.handCardText}${topicText}`
               : `${topicText}${sub.handCardText}`
           const isSelected = selectedSubmissionId === sub.id
-          const isOwnSubmission = sub.user_id === currentUserId
+          const isSolo = participants.length === 1
+          const isOwnSubmission = !isSolo && sub.user_id === currentUserId
 
           return (
             <button
