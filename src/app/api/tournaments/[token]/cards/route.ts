@@ -6,7 +6,7 @@ export async function POST(
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params
-  const { user_id, texts } = await request.json()
+  const { user_id, texts, dirty_texts } = await request.json()
 
   const { data: tournament } = await supabase
     .from('tournaments')
@@ -21,11 +21,19 @@ export async function POST(
   // 既存の札を削除して作り直し（修正対応）
   await supabase.from('cards').delete().eq('tournament_id', tournament.id).eq('creator_user_id', user_id)
 
-  const cardRows = texts.map((text: string) => ({
+  const regularRows = (texts ?? []).map((text: string) => ({
     tournament_id: tournament.id,
     creator_user_id: user_id,
     text,
+    is_dirty: false,
   }))
+  const dirtyRows = (dirty_texts ?? []).map((text: string) => ({
+    tournament_id: tournament.id,
+    creator_user_id: user_id,
+    text,
+    is_dirty: true,
+  }))
+  const cardRows = [...regularRows, ...dirtyRows]
 
   const { error } = await supabase.from('cards').insert(cardRows)
 

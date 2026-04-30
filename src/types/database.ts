@@ -15,6 +15,7 @@ export type Database = {
           game_count: number
           cards_per_user: number
           hand_cards_per_player: number
+          dirty_cards_per_user: number
           status: TournamentStatus
           created_at: string
         }
@@ -26,6 +27,7 @@ export type Database = {
           game_count?: number
           cards_per_user?: number
           hand_cards_per_player?: number
+          dirty_cards_per_user?: number
           status?: TournamentStatus
           created_at?: string
         }
@@ -37,6 +39,7 @@ export type Database = {
           game_count?: number
           cards_per_user?: number
           hand_cards_per_player?: number
+          dirty_cards_per_user?: number
           status?: TournamentStatus
           created_at?: string
         }
@@ -100,6 +103,7 @@ export type Database = {
           tournament_id: string
           creator_user_id: string
           text: string
+          is_dirty: boolean
           created_at: string
         }
         Insert: {
@@ -107,6 +111,7 @@ export type Database = {
           tournament_id: string
           creator_user_id: string
           text: string
+          is_dirty?: boolean
           created_at?: string
         }
         Update: {
@@ -114,6 +119,7 @@ export type Database = {
           tournament_id?: string
           creator_user_id?: string
           text?: string
+          is_dirty?: boolean
           created_at?: string
         }
         Relationships: []

@@ -14,8 +14,9 @@ export interface GamePreset {
   mode: TournamentMode         // データ区分（リセット対象の判定に使用）
   required_players: number     // ゲーム開始に必要な参加人数
   game_count: number           // 1大会のゲーム数（回戦数）
-  cards_per_user: number       // 各ユーザーが作成する札の枚数
+  cards_per_user: number       // 各ユーザーが作成する札の枚数（下ネタ含む合計）
   hand_cards_per_player: number // 各プレイヤーに配られる手札の枚数
+  dirty_cards_per_user: number  // cards_per_user のうち下ネタ専用枠の枚数
 }
 
 export const GAME_PRESETS: GamePreset[] = [
@@ -27,6 +28,7 @@ export const GAME_PRESETS: GamePreset[] = [
     game_count: 3,
     cards_per_user: 10,
     hand_cards_per_player: 5,
+    dirty_cards_per_user: 1,
   },
   {
     label: '2名テスト',
@@ -36,6 +38,7 @@ export const GAME_PRESETS: GamePreset[] = [
     game_count: 3,
     cards_per_user: 10,
     hand_cards_per_player: 5,
+    dirty_cards_per_user: 1,
   },
   {
     label: '本番',
@@ -45,6 +48,7 @@ export const GAME_PRESETS: GamePreset[] = [
     game_count: 10,
     cards_per_user: 20,
     hand_cards_per_player: 15,
+    dirty_cards_per_user: 0,
   },
 ]
 
