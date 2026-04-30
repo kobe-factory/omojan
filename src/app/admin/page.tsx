@@ -50,6 +50,8 @@ export default function AdminPage() {
   const [prodCardsPerUser, setProdCardsPerUser] = useState(productionPreset.cards_per_user)
   const [prodHandCards, setProdHandCards] = useState(productionPreset.hand_cards_per_player)
   const [prodDirtyCards, setProdDirtyCards] = useState(productionPreset.dirty_cards_per_user)
+  const [cardSource, setCardSource] = useState<'new' | 'previous' | 'all'>('new')
+  const [hasPastTournaments, setHasPastTournaments] = useState(false)
 
   const fetchTournaments = useCallback(async () => {
     setListLoading(true)
@@ -79,6 +81,9 @@ export default function AdminPage() {
     ) ?? null
     setActiveProductionTournament(active)
 
+    const hasPast = mapped.some((t) => t.mode === 'production' && t.status === 'finished')
+    setHasPastTournaments(hasPast)
+
     setListLoading(false)
   }, [])
 
@@ -100,6 +105,7 @@ export default function AdminPage() {
           cards_per_user: selectedPreset.mode === 'production' ? prodCardsPerUser : selectedPreset.cards_per_user,
           hand_cards_per_player: selectedPreset.mode === 'production' ? prodHandCards : selectedPreset.hand_cards_per_player,
           dirty_cards_per_user: selectedPreset.mode === 'production' ? prodDirtyCards : selectedPreset.dirty_cards_per_user,
+          card_source: selectedPreset.mode === 'production' ? cardSource : 'new',
         }),
       })
       const data = await res.json()
@@ -236,8 +242,38 @@ export default function AdminPage() {
 
         {/* 本番モード：カスタム設定 */}
         {selectedPreset.mode === 'production' && !activeProductionTournament && (
-          <div className="bg-gray-50 rounded-xl p-4 mb-6 space-y-3">
+          <div className="bg-gray-50 rounded-xl p-4 mb-6 space-y-4">
             <p className="text-xs font-medium text-gray-600">本番設定</p>
+
+            {/* 札のソース選択 */}
+            <div className="space-y-2">
+              {(
+                [
+                  { value: 'new', label: '札を作成する', disabled: false },
+                  { value: 'previous', label: '前回大会の札を使用する', disabled: !hasPastTournaments },
+                  { value: 'all', label: '全大会の札を使用する', disabled: !hasPastTournaments },
+                ] as const
+              ).map((opt) => (
+                <label
+                  key={opt.value}
+                  className={`flex items-center gap-2 text-sm cursor-pointer ${opt.disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                >
+                  <input
+                    type="radio"
+                    name="cardSource"
+                    value={opt.value}
+                    checked={cardSource === opt.value}
+                    disabled={opt.disabled}
+                    onChange={() => setCardSource(opt.value)}
+                    className="accent-emerald-500"
+                  />
+                  <span className={cardSource === opt.value && !opt.disabled ? 'text-emerald-700 font-medium' : 'text-gray-600'}>
+                    {opt.label}
+                  </span>
+                </label>
+              ))}
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-gray-500 mb-1 block">回戦数</label>
@@ -250,13 +286,16 @@ export default function AdminPage() {
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-500 mb-1 block">札作成枚数</label>
+                <label className={`text-xs mb-1 block ${cardSource !== 'new' ? 'text-gray-300' : 'text-gray-500'}`}>
+                  札作成枚数
+                </label>
                 <input
                   type="number"
                   min={1}
                   value={prodCardsPerUser}
+                  disabled={cardSource !== 'new'}
                   onChange={(e) => setProdCardsPerUser(Number(e.target.value))}
-                  className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:border-emerald-400"
+                  className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:border-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed"
                 />
               </div>
               <div>
@@ -423,7 +462,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.20.0</p>
+        <p className="text-center text-xs text-gray-300 mt-8">v1.21.0</p>
       </div>
     </div>
   )

@@ -6,7 +6,7 @@ import { nanoid } from 'nanoid'
 const LIFF_URL = `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID}`
 
 export async function POST(request: Request) {
-  const { mode, required_players, game_count, cards_per_user, hand_cards_per_player, dirty_cards_per_user } = await request.json()
+  const { mode, required_players, game_count, cards_per_user, hand_cards_per_player, dirty_cards_per_user, card_source } = await request.json()
 
   if (mode === 'production') {
     const { data: active } = await supabase
@@ -22,16 +22,36 @@ export async function POST(request: Request) {
     }
   }
 
+  const skipCardCreation = mode === 'production' && (card_source === 'previous' || card_source === 'all')
   const token = nanoid(10)
 
   const { data, error } = await supabase
     .from('tournaments')
-    .insert({ token, mode: mode ?? 'production', required_players, game_count, cards_per_user, hand_cards_per_player, dirty_cards_per_user: dirty_cards_per_user ?? 0 })
+    .insert({
+      token,
+      mode: mode ?? 'production',
+      required_players,
+      game_count,
+      cards_per_user: cards_per_user ?? 0,
+      hand_cards_per_player,
+      dirty_cards_per_user: dirty_cards_per_user ?? 0,
+      skip_card_creation: skipCardCreation,
+    })
     .select()
     .single()
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  // 前回 or 全大会の札をコピー
+  if (skipCardCreation) {
+    const sourceError = await copyCards(data.id, card_source)
+    if (sourceError) {
+      // ロールバック：作成した大会を削除
+      await supabase.from('tournaments').delete().eq('id', data.id)
+      return NextResponse.json({ error: sourceError }, { status: 500 })
+    }
   }
 
   // 本番大会発行時：LINE登録済みユーザー全員に通知
@@ -62,4 +82,47 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ token: data.token })
+}
+
+async function copyCards(newTournamentId: string, source: 'previous' | 'all'): Promise<string | null> {
+  // コピー元の本番大会を取得
+  const query = supabase
+    .from('tournaments')
+    .select('id')
+    .eq('mode', 'production')
+    .eq('status', 'finished')
+    .order('created_at', { ascending: false })
+
+  if (source === 'previous') {
+    query.limit(1)
+  }
+
+  const { data: sourceTournaments } = await query
+
+  if (!sourceTournaments || sourceTournaments.length === 0) {
+    return '参照できる過去の本番大会がありません'
+  }
+
+  const sourceIds = sourceTournaments.map((t) => t.id)
+
+  const { data: sourceCards } = await supabase
+    .from('cards')
+    .select('creator_user_id, text, is_dirty')
+    .in('tournament_id', sourceIds)
+
+  if (!sourceCards || sourceCards.length === 0) {
+    return '参照元の大会に札がありません'
+  }
+
+  const cardRows = sourceCards.map((c) => ({
+    tournament_id: newTournamentId,
+    creator_user_id: c.creator_user_id,
+    text: c.text,
+    is_dirty: c.is_dirty,
+  }))
+
+  const { error } = await supabase.from('cards').insert(cardRows)
+  if (error) return error.message
+
+  return null
 }

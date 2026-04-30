@@ -61,7 +61,7 @@ export async function POST(
 
   const { data: tournament } = await supabase
     .from('tournaments')
-    .select('id, status, mode, game_count, cards_per_user, hand_cards_per_player, required_players, dirty_cards_per_user')
+    .select('id, status, mode, game_count, cards_per_user, hand_cards_per_player, required_players, dirty_cards_per_user, skip_card_creation')
     .eq('token', token)
     .single()
 
@@ -77,10 +77,45 @@ export async function POST(
   const participantCount = participants?.length ?? 0
   const participantIds = participants?.map((p) => p.user_id) ?? []
 
-  // waiting_users → creating_cards
+  // waiting_users → creating_cards (or playing if skip_card_creation)
   if (tournament.status === 'waiting_users') {
     if (participantCount < tournament.required_players) {
       return NextResponse.json({ waiting: true, message: 'ユーザー参加待ち' })
+    }
+
+    const num = await getTournamentNumber(tournament.id)
+
+    if (tournament.skip_card_creation) {
+      // 札作成スキップ：即座に手札配布 → 第1回戦作成 → playing へ
+      const { error: dealError } = await dealCards(tournament.id, participantIds, tournament.hand_cards_per_player, tournament.dirty_cards_per_user)
+      if (dealError) {
+        return NextResponse.json({ error: dealError }, { status: 500 })
+      }
+
+      const { error: gameError } = await createNextGame(tournament.id, 1)
+      if (gameError) {
+        return NextResponse.json({ error: gameError }, { status: 500 })
+      }
+
+      await supabase
+        .from('tournaments')
+        .update({ status: 'playing' })
+        .eq('id', tournament.id)
+
+      await notifyParticipants(
+        participantIds,
+        triggeringUserId,
+        {
+          headerTitle: '🎨 作品投稿の時間！',
+          headerColor: PHASE_COLORS.playing,
+          headerSub: `第${num}回大会 / 1回戦`,
+          body: '全員の参加が揃いました！\nおもじゃんを開いて作品を投稿しましょう 🎨',
+          url: LIFF_URL,
+        },
+        tournament.mode
+      )
+
+      return NextResponse.json({ advanced: true, newStatus: 'playing' })
     }
 
     await supabase
@@ -88,7 +123,6 @@ export async function POST(
       .update({ status: 'creating_cards' })
       .eq('id', tournament.id)
 
-    const num = await getTournamentNumber(tournament.id)
     await notifyParticipants(
       participantIds,
       triggeringUserId,
