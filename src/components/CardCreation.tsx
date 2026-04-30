@@ -12,6 +12,7 @@ interface User {
 interface Tournament {
   id: string
   cards_per_user: number
+  dirty_cards_per_user: number
 }
 
 interface Props {
@@ -50,17 +51,22 @@ export default function CardCreation({ tournament, token, currentUserId, partici
     // 既存の作成済みカードを取得
     supabase
       .from('cards')
-      .select('creator_user_id, text')
+      .select('creator_user_id, text, is_dirty')
       .eq('tournament_id', tournament.id)
       .then(({ data }) => {
         if (!data) return
         const counts: Record<string, number> = {}
-        const myCards: string[] = []
+        const myRegular: string[] = []
+        const myDirty: string[] = []
         for (const c of data) {
           counts[c.creator_user_id] = (counts[c.creator_user_id] ?? 0) + 1
-          if (c.creator_user_id === currentUserId) myCards.push(c.text)
+          if (c.creator_user_id === currentUserId) {
+            if (c.is_dirty) myDirty.push(c.text)
+            else myRegular.push(c.text)
+          }
         }
         setCardCounts(counts)
+        const myCards = [...myRegular, ...myDirty]
         if (myCards.length > 0) {
           const padded = [...myCards, ...Array(Math.max(0, tournament.cards_per_user - myCards.length)).fill('')]
           setTexts(padded)
@@ -104,11 +110,14 @@ export default function CardCreation({ tournament, token, currentUserId, partici
       alert(`${tournament.cards_per_user}枚すべて入力してください`)
       return
     }
+    const regularCount = tournament.cards_per_user - tournament.dirty_cards_per_user
+    const regularTexts = texts.slice(0, regularCount).filter((t) => t.trim() !== '')
+    const dirtyTexts = texts.slice(regularCount).filter((t) => t.trim() !== '')
     setSubmitting(true)
     await fetch(`/api/tournaments/${token}/cards`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: currentUserId, texts: filled }),
+      body: JSON.stringify({ user_id: currentUserId, texts: regularTexts, dirty_texts: dirtyTexts }),
     })
     localStorage.removeItem(draftKey)
     setSubmitted(true)
@@ -129,23 +138,30 @@ export default function CardCreation({ tournament, token, currentUserId, partici
         <p className="text-xs text-gray-400 mb-6">単語や短いフレーズを自由に書いてね</p>
 
         <div className="space-y-2">
-          {texts.map((text, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <span className="text-xs text-gray-300 w-6 text-right">{i + 1}</span>
-              <input
-                type="text"
-                value={text}
-                onChange={(e) => {
-                  const next = [...texts]
-                  next[i] = e.target.value
-                  setTexts(next)
-                  if (submitted) setSubmitted(false)
-                }}
-                placeholder={`札 ${i + 1}`}
-                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400 transition-colors"
-              />
-            </div>
-          ))}
+          {texts.map((text, i) => {
+            const isDirtySlot = i >= tournament.cards_per_user - tournament.dirty_cards_per_user
+            return (
+              <div key={i} className="flex items-center gap-2">
+                <span className="text-xs text-gray-300 w-6 text-right">{i + 1}</span>
+                <input
+                  type="text"
+                  value={text}
+                  onChange={(e) => {
+                    const next = [...texts]
+                    next[i] = e.target.value
+                    setTexts(next)
+                    if (submitted) setSubmitted(false)
+                  }}
+                  placeholder={isDirtySlot ? '下ネタ札専用' : `札 ${i + 1}`}
+                  className={`flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none transition-colors ${
+                    isDirtySlot
+                      ? 'border-pink-200 bg-pink-50 focus:border-pink-400 placeholder:text-pink-300'
+                      : 'border-gray-200 focus:border-emerald-400'
+                  }`}
+                />
+              </div>
+            )
+          })}
         </div>
 
         <div className="mt-6">

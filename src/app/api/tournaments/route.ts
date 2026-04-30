@@ -6,7 +6,7 @@ import { nanoid } from 'nanoid'
 const LIFF_URL = `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID}`
 
 export async function POST(request: Request) {
-  const { mode, required_players, game_count, cards_per_user, hand_cards_per_player } = await request.json()
+  const { mode, required_players, game_count, cards_per_user, hand_cards_per_player, dirty_cards_per_user } = await request.json()
 
   if (mode === 'production') {
     const { data: active } = await supabase
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 
   const { data, error } = await supabase
     .from('tournaments')
-    .insert({ token, mode: mode ?? 'production', required_players, game_count, cards_per_user, hand_cards_per_player })
+    .insert({ token, mode: mode ?? 'production', required_players, game_count, cards_per_user, hand_cards_per_player, dirty_cards_per_user: dirty_cards_per_user ?? 0 })
     .select()
     .single()
 

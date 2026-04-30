@@ -45,6 +45,7 @@ export default function AdminPage() {
   const [prodGameCount, setProdGameCount] = useState(productionPreset.game_count)
   const [prodCardsPerUser, setProdCardsPerUser] = useState(productionPreset.cards_per_user)
   const [prodHandCards, setProdHandCards] = useState(productionPreset.hand_cards_per_player)
+  const [prodDirtyCards, setProdDirtyCards] = useState(productionPreset.dirty_cards_per_user)
 
   const fetchTournaments = useCallback(async () => {
     setListLoading(true)
@@ -94,6 +95,7 @@ export default function AdminPage() {
           game_count: selectedPreset.mode === 'production' ? prodGameCount : selectedPreset.game_count,
           cards_per_user: selectedPreset.mode === 'production' ? prodCardsPerUser : selectedPreset.cards_per_user,
           hand_cards_per_player: selectedPreset.mode === 'production' ? prodHandCards : selectedPreset.hand_cards_per_player,
+          dirty_cards_per_user: selectedPreset.mode === 'production' ? prodDirtyCards : selectedPreset.dirty_cards_per_user,
         }),
       })
       const data = await res.json()
@@ -232,7 +234,7 @@ export default function AdminPage() {
         {selectedPreset.mode === 'production' && !activeProductionTournament && (
           <div className="bg-gray-50 rounded-xl p-4 mb-6 space-y-3">
             <p className="text-xs font-medium text-gray-600">本番設定</p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-gray-500 mb-1 block">回戦数</label>
                 <input
@@ -261,6 +263,16 @@ export default function AdminPage() {
                   value={prodHandCards}
                   onChange={(e) => setProdHandCards(Number(e.target.value))}
                   className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:border-emerald-400"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-pink-400 mb-1 block">下ネタ枠数</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={prodDirtyCards}
+                  onChange={(e) => setProdDirtyCards(Number(e.target.value))}
+                  className="w-full border border-pink-200 rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:border-pink-400 bg-pink-50"
                 />
               </div>
             </div>
@@ -397,7 +409,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.18.0</p>
+        <p className="text-center text-xs text-gray-300 mt-8">v1.19.0</p>
       </div>
     </div>
   )

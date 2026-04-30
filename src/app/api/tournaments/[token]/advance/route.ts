@@ -61,7 +61,7 @@ export async function POST(
 
   const { data: tournament } = await supabase
     .from('tournaments')
-    .select('id, status, mode, game_count, cards_per_user, hand_cards_per_player, required_players')
+    .select('id, status, mode, game_count, cards_per_user, hand_cards_per_player, required_players, dirty_cards_per_user')
     .eq('token', token)
     .single()
 
@@ -125,7 +125,7 @@ export async function POST(
       return NextResponse.json({ waiting: true, message: '札作成待ち', countByUser })
     }
 
-    const { error: dealError } = await dealCards(tournament.id, participantIds, tournament.hand_cards_per_player)
+    const { error: dealError } = await dealCards(tournament.id, participantIds, tournament.hand_cards_per_player, tournament.dirty_cards_per_user)
     if (dealError) {
       return NextResponse.json({ error: dealError }, { status: 500 })
     }
@@ -277,27 +277,37 @@ export async function POST(
   return NextResponse.json({ noChange: true })
 }
 
-async function dealCards(tournamentId: string, participantIds: string[], handCardsPerPlayer: number) {
+async function dealCards(tournamentId: string, participantIds: string[], handCardsPerPlayer: number, dirtyCardsPerUser: number) {
   const { data: allCards } = await supabase
     .from('cards')
-    .select('id')
+    .select('id, is_dirty')
     .eq('tournament_id', tournamentId)
 
   if (!allCards) return { error: 'カードが見つかりません' }
 
-  const shuffled = [...allCards].sort(() => Math.random() - 0.5)
+  const dirtyCards = allCards.filter((c) => c.is_dirty)
+  const regularCards = allCards.filter((c) => !c.is_dirty)
 
-  const handCount = participantIds.length * handCardsPerPlayer
-  const handCards = shuffled.slice(0, handCount)
+  const shuffledDirty = [...dirtyCards].sort(() => Math.random() - 0.5)
+  const shuffledRegular = [...regularCards].sort(() => Math.random() - 0.5)
 
   const handRows = []
-  for (let i = 0; i < handCards.length; i++) {
-    handRows.push({
-      tournament_id: tournamentId,
-      user_id: participantIds[i % participantIds.length],
-      card_id: handCards[i].id,
-      is_used: false,
-    })
+
+  // 各プレイヤーに dirty カードを均等に配布
+  for (let i = 0; i < participantIds.length; i++) {
+    const playerDirty = shuffledDirty.slice(i * dirtyCardsPerUser, (i + 1) * dirtyCardsPerUser)
+    for (const card of playerDirty) {
+      handRows.push({ tournament_id: tournamentId, user_id: participantIds[i], card_id: card.id, is_used: false })
+    }
+  }
+
+  // 各プレイヤーに regular カードを均等に配布
+  const regularPerPlayer = handCardsPerPlayer - dirtyCardsPerUser
+  for (let i = 0; i < participantIds.length; i++) {
+    const playerRegular = shuffledRegular.slice(i * regularPerPlayer, (i + 1) * regularPerPlayer)
+    for (const card of playerRegular) {
+      handRows.push({ tournament_id: tournamentId, user_id: participantIds[i], card_id: card.id, is_used: false })
+    }
   }
 
   const { error } = await supabase.from('player_hands').insert(handRows)
@@ -323,11 +333,11 @@ async function createNextGame(tournamentId: string, roundNumber: number) {
 
   const { data: allCards } = await supabase
     .from('cards')
-    .select('id')
+    .select('id, is_dirty')
     .eq('tournament_id', tournamentId)
 
   const topicPool = (allCards ?? []).filter(
-    (c) => !handCardIdSet.has(c.id) && !usedTopicIds.has(c.id)
+    (c) => !c.is_dirty && !handCardIdSet.has(c.id) && !usedTopicIds.has(c.id)
   )
 
   if (topicPool.length === 0) {
