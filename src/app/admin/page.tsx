@@ -41,6 +41,11 @@ export default function AdminPage() {
   const [notifying, setNotifying] = useState(false)
   const [notified, setNotified] = useState(false)
 
+  const productionPreset = GAME_PRESETS.find((p) => p.mode === 'production')!
+  const [prodGameCount, setProdGameCount] = useState(productionPreset.game_count)
+  const [prodCardsPerUser, setProdCardsPerUser] = useState(productionPreset.cards_per_user)
+  const [prodHandCards, setProdHandCards] = useState(productionPreset.hand_cards_per_player)
+
   const fetchTournaments = useCallback(async () => {
     setListLoading(true)
     const { data } = await supabase
@@ -86,9 +91,9 @@ export default function AdminPage() {
         body: JSON.stringify({
           mode: selectedPreset.mode,
           required_players: selectedPreset.required_players,
-          game_count: selectedPreset.game_count,
-          cards_per_user: selectedPreset.cards_per_user,
-          hand_cards_per_player: selectedPreset.hand_cards_per_player,
+          game_count: selectedPreset.mode === 'production' ? prodGameCount : selectedPreset.game_count,
+          cards_per_user: selectedPreset.mode === 'production' ? prodCardsPerUser : selectedPreset.cards_per_user,
+          hand_cards_per_player: selectedPreset.mode === 'production' ? prodHandCards : selectedPreset.hand_cards_per_player,
         }),
       })
       const data = await res.json()
@@ -223,6 +228,45 @@ export default function AdminPage() {
           })}
         </div>
 
+        {/* 本番モード：カスタム設定 */}
+        {selectedPreset.mode === 'production' && !activeProductionTournament && (
+          <div className="bg-gray-50 rounded-xl p-4 mb-6 space-y-3">
+            <p className="text-xs font-medium text-gray-600">本番設定</p>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">回戦数</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={prodGameCount}
+                  onChange={(e) => setProdGameCount(Number(e.target.value))}
+                  className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:border-emerald-400"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">札作成枚数</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={prodCardsPerUser}
+                  onChange={(e) => setProdCardsPerUser(Number(e.target.value))}
+                  className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:border-emerald-400"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">配布手札</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={prodHandCards}
+                  onChange={(e) => setProdHandCards(Number(e.target.value))}
+                  className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:border-emerald-400"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeProductionTournament && selectedPreset.mode === 'production' && (
           <p className="text-xs text-red-400 text-center mb-3">
             本番大会が進行中のため、新たに発行できません
@@ -353,7 +397,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.17.3</p>
+        <p className="text-center text-xs text-gray-300 mt-8">v1.18.0</p>
       </div>
     </div>
   )
