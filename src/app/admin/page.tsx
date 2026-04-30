@@ -10,6 +10,10 @@ interface TournamentRow {
   mode: string
   status: string
   created_at: string
+  game_count: number
+  cards_per_user: number
+  hand_cards_per_player: number
+  dirty_cards_per_user: number
   productionNumber?: number
 }
 
@@ -51,7 +55,7 @@ export default function AdminPage() {
     setListLoading(true)
     const { data } = await supabase
       .from('tournaments')
-      .select('id, token, mode, status, created_at')
+      .select('id, token, mode, status, created_at, game_count, cards_per_user, hand_cards_per_player, dirty_cards_per_user')
       .order('created_at', { ascending: false })
 
     // 本番大会に作成日時昇順で連番を付与
@@ -392,6 +396,16 @@ export default function AdminPage() {
                       })}
                     </span>
                   </div>
+                  {t.mode === 'production' && (
+                    <div className="flex gap-3 text-xs text-gray-400 mb-2 flex-wrap">
+                      <span>全{t.game_count}回戦</span>
+                      <span>札作成枚数：{t.cards_per_user}</span>
+                      <span>手札数：{t.hand_cards_per_player}</span>
+                      <span className={t.dirty_cards_per_user > 0 ? 'text-pink-400' : ''}>
+                        下ネタ枠：{t.dirty_cards_per_user}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <p className="text-xs font-mono text-gray-400 truncate flex-1">
                       /{t.token}
@@ -409,7 +423,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.19.0</p>
+        <p className="text-center text-xs text-gray-300 mt-8">v1.20.0</p>
       </div>
     </div>
   )
