@@ -17,6 +17,7 @@ export type Database = {
           hand_cards_per_player: number
           dirty_cards_per_user: number
           skip_card_creation: boolean
+          secret_voting: boolean
           status: TournamentStatus
           created_at: string
         }
@@ -30,6 +31,7 @@ export type Database = {
           hand_cards_per_player?: number
           dirty_cards_per_user?: number
           skip_card_creation?: boolean
+          secret_voting?: boolean
           status?: TournamentStatus
           created_at?: string
         }
@@ -43,6 +45,7 @@ export type Database = {
           hand_cards_per_player?: number
           dirty_cards_per_user?: number
           skip_card_creation?: boolean
+          secret_voting?: boolean
           status?: TournamentStatus
           created_at?: string
         }

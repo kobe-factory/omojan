@@ -52,6 +52,7 @@ export default function AdminPage() {
   const [prodDirtyCards, setProdDirtyCards] = useState(productionPreset.dirty_cards_per_user)
   const [cardSource, setCardSource] = useState<'new' | 'previous' | 'all'>('new')
   const [hasPastTournaments, setHasPastTournaments] = useState(false)
+  const [secretVoting, setSecretVoting] = useState(false)
 
   const fetchTournaments = useCallback(async () => {
     setListLoading(true)
@@ -106,6 +107,7 @@ export default function AdminPage() {
           hand_cards_per_player: selectedPreset.mode === 'production' ? prodHandCards : selectedPreset.hand_cards_per_player,
           dirty_cards_per_user: selectedPreset.mode === 'production' ? prodDirtyCards : selectedPreset.dirty_cards_per_user,
           card_source: selectedPreset.mode === 'production' ? cardSource : 'new',
+          secret_voting: selectedPreset.mode === 'production' ? secretVoting : false,
         }),
       })
       const data = await res.json()
@@ -273,6 +275,20 @@ export default function AdminPage() {
                 </label>
               ))}
             </div>
+
+            {/* シークレット投票トグル */}
+            <label className="flex items-center justify-between cursor-pointer">
+              <div>
+                <p className="text-sm text-gray-700 font-medium">シークレットモード</p>
+                <p className="text-xs text-gray-400">投票画面で作者名を非表示にする</p>
+              </div>
+              <div
+                onClick={() => setSecretVoting((v) => !v)}
+                className={`relative w-11 h-6 rounded-full transition-colors ${secretVoting ? 'bg-emerald-500' : 'bg-gray-200'}`}
+              >
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${secretVoting ? 'translate-x-5' : 'translate-x-0'}`} />
+              </div>
+            </label>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -462,7 +478,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.21.0</p>
+        <p className="text-center text-xs text-gray-300 mt-8">v1.22.0</p>
       </div>
     </div>
   )

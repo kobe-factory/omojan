@@ -12,6 +12,7 @@ interface User {
 
 interface Tournament {
   id: string
+  secret_voting: boolean
 }
 
 interface Game {
@@ -183,10 +184,12 @@ export default function Voting({ tournament, token, game, currentUserId, partici
               {sub.preamble && sub.preamble_position === 'below' && (
                 <p className="text-sm text-gray-500 italic mb-2">「{sub.preamble}」</p>
               )}
-              <div className="flex items-center gap-1.5 mt-3">
-                <UserIcon name={sub.userName} size="xs" />
-                <p className="text-xs text-gray-400">{sub.userName}</p>
-              </div>
+              {!tournament.secret_voting && (
+                <div className="flex items-center gap-1.5 mt-3">
+                  <UserIcon name={sub.userName} size="xs" />
+                  <p className="text-xs text-gray-400">{sub.userName}</p>
+                </div>
+              )}
               {isOwnSubmission ? (
                 <div className="mt-2 flex items-center gap-1">
                   <span className="text-gray-400 text-xs">自分の作品には投票できません</span>
