@@ -196,7 +196,9 @@ export default function Voting({ tournament, token, game, currentUserId, partici
             ? 'bg-gray-100 text-gray-500'
             : 'bg-red-50 text-red-700 border border-red-200'
         }`}>
-          {currentUserIsExcluded
+          {isSolo
+            ? 'テストモード：決選投票フローの確認です'
+            : currentUserIsExcluded
             ? '決選投票中。作者は投票できません。'
             : '同票！上位2作品で決選投票です'}
         </div>

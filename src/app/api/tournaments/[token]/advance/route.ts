@@ -225,6 +225,12 @@ export async function POST(
         .filter(([, c]) => c === maxVotes)
         .map(([id]) => id)
 
+      // ソロモード：決選投票フローのテスト用に強制遷移
+      if (tournament.mode === 'solo') {
+        await supabase.from('games').update({ status: 'waiting_tiebreaker_vote' }).eq('id', currentGame.id)
+        return NextResponse.json({ advanced: true, newGameStatus: 'waiting_tiebreaker_vote' })
+      }
+
       const num = await getTournamentNumber(tournament.id)
 
       if (tiedAtTopIds.length >= 3) {
