@@ -1,6 +1,6 @@
 export type TournamentStatus = 'waiting_users' | 'creating_cards' | 'playing' | 'finished'
 export type TournamentMode = 'solo' | 'test' | 'production'
-export type GameStatus = 'waiting_submission' | 'waiting_vote' | 'showing_result' | 'finished'
+export type GameStatus = 'waiting_submission' | 'waiting_vote' | 'waiting_tiebreaker_vote' | 'showing_result' | 'showing_rematch' | 'finished'
 export type CardPosition = 'before' | 'after'
 
 export type Database = {
@@ -161,6 +161,7 @@ export type Database = {
           round_number: number
           status: GameStatus
           topic_card_id: string
+          is_rematch: boolean
           created_at: string
         }
         Insert: {
@@ -169,6 +170,7 @@ export type Database = {
           round_number: number
           status?: GameStatus
           topic_card_id: string
+          is_rematch?: boolean
           created_at?: string
         }
         Update: {
@@ -177,6 +179,7 @@ export type Database = {
           round_number?: number
           status?: GameStatus
           topic_card_id?: string
+          is_rematch?: boolean
           created_at?: string
         }
         Relationships: []
@@ -220,6 +223,7 @@ export type Database = {
           game_id: string
           voter_user_id: string
           submission_id: string
+          is_tiebreaker: boolean
           created_at: string
         }
         Insert: {
@@ -227,6 +231,7 @@ export type Database = {
           game_id: string
           voter_user_id: string
           submission_id: string
+          is_tiebreaker?: boolean
           created_at?: string
         }
         Update: {
@@ -234,6 +239,7 @@ export type Database = {
           game_id?: string
           voter_user_id?: string
           submission_id?: string
+          is_tiebreaker?: boolean
           created_at?: string
         }
         Relationships: []

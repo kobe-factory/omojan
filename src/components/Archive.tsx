@@ -15,7 +15,9 @@ interface ArchiveGame {
   topic_card_id: string
   topicText: string
   submissions: ArchiveSubmission[]
-  isTied: boolean
+  isRematch: boolean
+  isVoided: boolean
+  hasTiebreaker: boolean
 }
 
 interface ArchiveSubmission {
@@ -26,10 +28,11 @@ interface ArchiveSubmission {
   preamble: string | null
   preamble_position: 'above' | 'below'
   voteCount: number
-  voteTimeSum: number
   voterNames: string[]
+  tbVoteCount: number
+  tbVoterNames: string[]
   isWinner: boolean
-  isTied: boolean
+  decidedByTiebreaker: boolean
 }
 
 interface Props {
@@ -46,10 +49,11 @@ export default function Archive({ tournamentId, participants }: Props) {
     async function fetchArchive() {
       const { data: finishedGames } = await supabase
         .from('games')
-        .select('id, round_number, topic_card_id, status')
+        .select('id, round_number, topic_card_id, status, is_rematch')
         .eq('tournament_id', tournamentId)
-        .in('status', ['showing_result', 'finished'])
+        .in('status', ['showing_result', 'finished', 'showing_rematch'])
         .order('round_number', { ascending: true })
+        .order('created_at', { ascending: true })
 
       if (!finishedGames) {
         setLoading(false)
@@ -58,21 +62,35 @@ export default function Archive({ tournamentId, participants }: Props) {
 
       const result: ArchiveGame[] = await Promise.all(
         finishedGames.map(async (g) => {
+          const isVoided = g.status === 'showing_rematch'
+
           const [{ data: topicCard }, { data: subs }, { data: votes }] = await Promise.all([
             supabase.from('cards').select('text').eq('id', g.topic_card_id).single(),
             supabase.from('submissions').select('id, user_id, hand_card_id, position, preamble, preamble_position').eq('game_id', g.id),
-            supabase.from('votes').select('submission_id, created_at, voter_user_id').eq('game_id', g.id),
+            supabase.from('votes').select('submission_id, voter_user_id, is_tiebreaker').eq('game_id', g.id),
           ])
 
-          const voteCount: Record<string, number> = {}
-          const voteTimeSum: Record<string, number> = {}
-          const voterNamesMap: Record<string, string[]> = {}
-          for (const v of votes ?? []) {
-            voteCount[v.submission_id] = (voteCount[v.submission_id] ?? 0) + 1
-            voteTimeSum[v.submission_id] = (voteTimeSum[v.submission_id] ?? 0) + new Date(v.created_at).getTime()
+          const allVotes = votes ?? []
+          const initialVotes = allVotes.filter((v) => !v.is_tiebreaker)
+          const tiebreakerVotes = allVotes.filter((v) => v.is_tiebreaker)
+          const hasTiebreaker = tiebreakerVotes.length > 0
+
+          const initVoteCount: Record<string, number> = {}
+          const initVoterNames: Record<string, string[]> = {}
+          for (const v of initialVotes) {
+            initVoteCount[v.submission_id] = (initVoteCount[v.submission_id] ?? 0) + 1
             const voter = participants.find((p) => p.id === v.voter_user_id)
-            if (!voterNamesMap[v.submission_id]) voterNamesMap[v.submission_id] = []
-            voterNamesMap[v.submission_id].push(voter?.name ?? '???')
+            if (!initVoterNames[v.submission_id]) initVoterNames[v.submission_id] = []
+            initVoterNames[v.submission_id].push(voter?.name ?? '???')
+          }
+
+          const tbVoteCount: Record<string, number> = {}
+          const tbVoterNames: Record<string, string[]> = {}
+          for (const v of tiebreakerVotes) {
+            tbVoteCount[v.submission_id] = (tbVoteCount[v.submission_id] ?? 0) + 1
+            const voter = participants.find((p) => p.id === v.voter_user_id)
+            if (!tbVoterNames[v.submission_id]) tbVoterNames[v.submission_id] = []
+            tbVoterNames[v.submission_id].push(voter?.name ?? '???')
           }
 
           const submissions: ArchiveSubmission[] = await Promise.all(
@@ -89,7 +107,6 @@ export default function Archive({ tournamentId, participants }: Props) {
               const fullText =
                 s.position === 'before' ? `${handText}${topicText}` : `${topicText}${handText}`
 
-              const count = voteCount[s.id] ?? 0
               return {
                 id: s.id,
                 userId: s.user_id,
@@ -97,37 +114,37 @@ export default function Archive({ tournamentId, participants }: Props) {
                 fullText,
                 preamble: s.preamble,
                 preamble_position: (s.preamble_position ?? 'above') as 'above' | 'below',
-                voteCount: count,
-                voteTimeSum: voteTimeSum[s.id] ?? 0,
-                voterNames: voterNamesMap[s.id] ?? [],
+                voteCount: initVoteCount[s.id] ?? 0,
+                voterNames: initVoterNames[s.id] ?? [],
+                tbVoteCount: tbVoteCount[s.id] ?? 0,
+                tbVoterNames: tbVoterNames[s.id] ?? [],
                 isWinner: false,
-                isTied: false,
+                decidedByTiebreaker: false,
               }
             })
           )
 
-          // 同点タイブレーク：票数→投票時間合計の順でソート
-          const sorted = submissions.sort((a, b) => {
-            if (b.voteCount !== a.voteCount) return b.voteCount - a.voteCount
-            return a.voteTimeSum - b.voteTimeSum
-          })
+          const sorted = submissions.sort((a, b) => b.voteCount - a.voteCount)
 
-          // 同点検出
-          const countFreq: Record<number, number> = {}
-          for (const s of sorted) {
-            if (s.voteCount > 0) countFreq[s.voteCount] = (countFreq[s.voteCount] ?? 0) + 1
+          if (!isVoided) {
+            if (hasTiebreaker) {
+              const maxTb = Math.max(...sorted.map((s) => s.tbVoteCount), 0)
+              sorted.forEach((s) => {
+                if (maxTb > 0 && s.tbVoteCount === maxTb) {
+                  s.isWinner = true
+                  s.decidedByTiebreaker = true
+                }
+              })
+            } else {
+              const maxVotes = sorted.length > 0 ? sorted[0].voteCount : 0
+              if (maxVotes > 0) {
+                const topItems = sorted.filter((s) => s.voteCount === maxVotes)
+                if (topItems.length === 1) {
+                  topItems[0].isWinner = true
+                }
+              }
+            }
           }
-          const tiedCounts = new Set(
-            Object.entries(countFreq).filter(([, n]) => n > 1).map(([c]) => Number(c))
-          )
-
-          const maxVotes = sorted.length > 0 ? sorted[0].voteCount : 0
-          let gameTied = false
-          sorted.forEach((s, i) => {
-            s.isWinner = i === 0 && maxVotes > 0
-            s.isTied = tiedCounts.has(s.voteCount)
-            if (s.isTied) gameTied = true
-          })
 
           return {
             id: g.id,
@@ -135,7 +152,9 @@ export default function Archive({ tournamentId, participants }: Props) {
             topic_card_id: g.topic_card_id,
             topicText: topicCard?.text ?? '',
             submissions: sorted,
-            isTied: gameTied,
+            isRematch: g.is_rematch,
+            isVoided,
+            hasTiebreaker,
           }
         })
       )
@@ -178,12 +197,23 @@ export default function Archive({ tournamentId, participants }: Props) {
               className="w-full p-4 text-left flex items-center justify-between"
             >
               <div>
-                <span className="text-sm font-bold text-gray-700">第{g.round_number}回戦</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-gray-700">第{g.round_number}回戦</span>
+                  {g.isVoided && (
+                    <span className="text-xs bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full">⚔️流れ</span>
+                  )}
+                  {g.isRematch && !g.isVoided && (
+                    <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full">再戦</span>
+                  )}
+                </div>
                 <p className="text-xs text-gray-400 mt-0.5">お題：{g.topicText}</p>
-                {winner && (
+                {!g.isVoided && winner && (
                   <p className="text-xs text-yellow-600 mt-1">
                     👑 {winner.userName}「{winner.fullText}」
                   </p>
+                )}
+                {g.isVoided && (
+                  <p className="text-xs text-orange-600 mt-1">全員同票 - 再戦</p>
                 )}
               </div>
               <svg
@@ -201,6 +231,11 @@ export default function Archive({ tournamentId, participants }: Props) {
 
             {isOpen && (
               <div className="border-t border-gray-100 p-4 space-y-3">
+                {g.isVoided && (
+                  <p className="text-xs text-orange-600 text-center bg-orange-50 rounded-xl py-2">
+                    ⚔️ 全員同票のためこの回はお流れ・再戦となりました
+                  </p>
+                )}
                 {g.submissions.map((s, i) => (
                   <div
                     key={s.id}
@@ -211,14 +246,14 @@ export default function Archive({ tournamentId, participants }: Props) {
                     {s.isWinner && (
                       <div className="flex items-center gap-1 mb-1">
                         <span className="text-yellow-500 text-xs font-bold">👑 WINNER</span>
-                        {s.isTied && (
-                          <span className="text-yellow-500 text-xs">（同点・投票時間で決定）</span>
+                        {s.decidedByTiebreaker && (
+                          <span className="text-red-500 text-xs">（決選投票で決定）</span>
                         )}
                       </div>
                     )}
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-1">
-                        <span className="text-gray-400 text-xs">{i + 1}位</span>
+                        <span className="text-gray-400 text-xs">{g.isVoided ? '−' : `${i + 1}位`}</span>
                       </div>
                       <span className="text-emerald-500 text-xs font-bold">{s.voteCount}票</span>
                     </div>
@@ -245,12 +280,20 @@ export default function Archive({ tournamentId, participants }: Props) {
                           ))}
                         </div>
                       )}
+                      {s.tbVoterNames.length > 0 && (
+                        <div className="flex items-center justify-end gap-1.5 mt-1.5 pt-1.5 border-t border-gray-100 flex-wrap">
+                          <span className="text-[9px] font-bold text-red-400 bg-red-50 px-1.5 py-0.5 rounded-full">決選</span>
+                          {s.tbVoterNames.map((name) => (
+                            <div key={name} className="flex items-center gap-0.5">
+                              <UserIcon name={name} size="xs" />
+                              <span className="text-[10px] text-red-400">{name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
-                {g.isTied && (
-                  <p className="text-xs text-gray-400 text-center">※同点は投票時間の早い順で順位を決定</p>
-                )}
               </div>
             )}
           </div>

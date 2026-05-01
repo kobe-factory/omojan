@@ -32,6 +32,7 @@ interface Game {
   round_number: number
   status: GameStatus
   topic_card_id: string
+  is_rematch: boolean
 }
 
 interface User {
@@ -95,15 +96,15 @@ export default function TournamentPage() {
     )
 
     if (t.status === 'playing' || t.status === 'finished') {
-      const { data: game } = await supabase
+      const { data: games } = await supabase
         .from('games')
         .select('*')
         .eq('tournament_id', t.id)
         .order('round_number', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(1)
-        .single()
 
-      setCurrentGame(game ?? null)
+      setCurrentGame(games?.[0] ?? null)
     }
 
     setLoading(false)
@@ -200,9 +201,11 @@ export default function TournamentPage() {
       .select('*')
       .eq('tournament_id', tournament.id)
       .eq('round_number', prevRound)
-      .single()
+      .in('status', ['showing_result', 'finished', 'showing_rematch'])
+      .order('created_at', { ascending: false })
+      .limit(1)
       .then(({ data }) => {
-        if (data) setPrevResultGame(data as Game)
+        if (data && data.length > 0) setPrevResultGame(data[0] as Game)
       })
   }, [tournament?.id, currentGame?.id, currentGame?.status])
 
@@ -247,6 +250,8 @@ export default function TournamentPage() {
     if (tournament.status === 'playing' && currentGame) {
       if (currentGame.status === 'waiting_submission') return { label: '作品投稿中', bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-200' }
       if (currentGame.status === 'waiting_vote') return { label: '投票中', bg: 'bg-violet-50', text: 'text-violet-600', border: 'border-violet-100' }
+      if (currentGame.status === 'waiting_tiebreaker_vote') return { label: '決選投票中', bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-100' }
+      if (currentGame.status === 'showing_rematch') return { label: '再戦', bg: 'bg-orange-50', text: 'text-orange-600', border: 'border-orange-200' }
       return { label: '結果発表', bg: 'bg-yellow-50', text: 'text-yellow-600', border: 'border-yellow-200' }
     }
     return { label: '', bg: 'bg-gray-50', text: 'text-gray-400', border: 'border-gray-100' }
@@ -266,11 +271,15 @@ export default function TournamentPage() {
             )}
             {tournament.status === 'playing' && currentGame && (
               <span className={`absolute right-0 bottom-0 text-xs font-bold px-2 py-0.5 rounded-full border ${
-                currentGame.round_number === tournament.game_count
+                currentGame.is_rematch
+                  ? 'text-orange-600 bg-orange-50 border-orange-300'
+                  : currentGame.round_number === tournament.game_count
                   ? 'text-red-600 bg-red-50 border-red-300'
                   : 'text-emerald-600 bg-emerald-50 border-emerald-200'
               }`}>
-                {currentGame.round_number === tournament.game_count
+                {currentGame.is_rematch
+                  ? `再戦 ${currentGame.round_number} / ${tournament.game_count}回戦`
+                  : currentGame.round_number === tournament.game_count
                   ? '最終戦'
                   : `${currentGame.round_number} / ${tournament.game_count}回戦`}
               </span>
@@ -396,7 +405,7 @@ export default function TournamentPage() {
                   }}
                 />
               </>
-            ) : currentGame.status === 'waiting_vote' ? (
+            ) : currentGame.status === 'waiting_vote' || currentGame.status === 'waiting_tiebreaker_vote' ? (
               <Voting
                 tournament={tournament}
                 token={token}
@@ -421,6 +430,7 @@ export default function TournamentPage() {
                 game={currentGame}
                 currentUserId={userId}
                 participants={participants}
+                nextLabel={currentGame.status === 'showing_rematch' ? '再戦へ' : undefined}
                 onNext={async () => {
                   localStorage.setItem(
                     `omojan:result_seen:${tournament.id}:${currentGame.round_number}`,
@@ -450,7 +460,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.22.0</p>
+        <p className="text-xs text-gray-300">v1.23.0</p>
       </footer>
 
       {/* 前戦結果モーダル（まだ結果を確認していないユーザー向け） */}

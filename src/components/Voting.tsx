@@ -12,6 +12,7 @@ interface User {
 
 interface Tournament {
   id: string
+  mode: string
   secret_voting: boolean
 }
 
@@ -19,6 +20,7 @@ interface Game {
   id: string
   round_number: number
   topic_card_id: string
+  status: string
 }
 
 interface Submission {
@@ -43,8 +45,11 @@ interface Props {
 }
 
 export default function Voting({ tournament, token, game, currentUserId, participants, onVoted }: Props) {
+  const isTiebreaker = game.status === 'waiting_tiebreaker_vote'
+
   const [topicText, setTopicText] = useState('')
   const [submissions, setSubmissions] = useState<Submission[]>([])
+  const [tiedSubmissionIds, setTiedSubmissionIds] = useState<Set<string>>(new Set())
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null)
   const [voting, setVoting] = useState(false)
   const [voted, setVoted] = useState(false)
@@ -57,9 +62,7 @@ export default function Voting({ tournament, token, game, currentUserId, partici
       .select('text')
       .eq('id', game.topic_card_id)
       .single()
-      .then(({ data }) => {
-        if (data) setTopicText(data.text)
-      })
+      .then(({ data }) => { if (data) setTopicText(data.text) })
 
     Promise.all([
       supabase
@@ -69,16 +72,32 @@ export default function Voting({ tournament, token, game, currentUserId, partici
         .order('created_at', { ascending: true }),
       supabase
         .from('votes')
-        .select('voter_user_id, submission_id')
+        .select('voter_user_id, submission_id, is_tiebreaker')
         .eq('game_id', game.id),
     ]).then(async ([subRes, voteRes]) => {
       const subs = subRes.data ?? []
       const votes = voteRes.data ?? []
 
-      setVotedUserIds(votes.map((v) => v.voter_user_id))
+      // 初回投票で同票の2作品を特定
+      const initialVotes = votes.filter((v) => !v.is_tiebreaker)
+      const initCount: Record<string, number> = {}
+      for (const v of initialVotes) {
+        initCount[v.submission_id] = (initCount[v.submission_id] ?? 0) + 1
+      }
+      if (isTiebreaker) {
+        const maxInit = Math.max(...Object.values(initCount), 0)
+        const tiedIds = new Set(
+          Object.entries(initCount).filter(([, c]) => c === maxInit).map(([id]) => id)
+        )
+        setTiedSubmissionIds(tiedIds)
+      }
+
+      // 現フェーズの投票済みユーザーを設定
+      const phaseVotes = votes.filter((v) => v.is_tiebreaker === isTiebreaker)
+      setVotedUserIds(phaseVotes.map((v) => v.voter_user_id))
 
       // 自分の投票済み作品を復元
-      const myVote = votes.find((v) => v.voter_user_id === currentUserId)
+      const myVote = phaseVotes.find((v) => v.voter_user_id === currentUserId)
       if (myVote) {
         setVoted(true)
         setSelectedSubmissionId(myVote.submission_id)
@@ -92,7 +111,6 @@ export default function Voting({ tournament, token, game, currentUserId, partici
             .select('text')
             .eq('id', s.hand_card_id)
             .single()
-
           const user = participants.find((p) => p.id === s.user_id)
           return {
             ...s,
@@ -106,9 +124,33 @@ export default function Voting({ tournament, token, game, currentUserId, partici
 
       setSubmissions(enriched)
     })
-  }, [game.id, game.topic_card_id, currentUserId, participants])
+  }, [game.id, game.topic_card_id, game.status, currentUserId, participants, isTiebreaker])
 
-  const completedUserIds = votedUserIds
+  // 決選投票：表示する作品は同票の2つのみ
+  const visibleSubmissions = isTiebreaker
+    ? submissions.filter((s) => tiedSubmissionIds.has(s.id))
+    : submissions
+
+  // 決選投票の投票資格チェック
+  function isExcludedFromTiebreaker(sub: Submission): boolean {
+    if (!isTiebreaker) return false
+    if (tournament.mode !== 'production') return false
+    return sub.user_id === currentUserId && tiedSubmissionIds.has(sub.id)
+  }
+
+  const isSolo = participants.length === 1
+  const currentUserIsExcluded = isTiebreaker && tournament.mode === 'production'
+    && visibleSubmissions.some((s) => s.user_id === currentUserId)
+
+  // 完了ユーザーID（投票済み）
+  let completedUserIds: string[]
+  if (isTiebreaker && tournament.mode === 'production') {
+    const authorIds = new Set(visibleSubmissions.map((s) => s.user_id))
+    const eligible = participants.filter((p) => !authorIds.has(p.id)).map((p) => p.id)
+    completedUserIds = votedUserIds.filter((id) => eligible.includes(id))
+  } else {
+    completedUserIds = votedUserIds
+  }
 
   async function handleVote() {
     if (!selectedSubmissionId) return
@@ -122,14 +164,12 @@ export default function Voting({ tournament, token, game, currentUserId, partici
           voter_user_id: currentUserId,
           game_id: game.id,
           submission_id: selectedSubmissionId,
+          is_tiebreaker: isTiebreaker,
         }),
       })
       if (!res.ok) throw new Error()
       setVoted(true)
-      setVotedUserIds(prev => {
-        if (prev.includes(currentUserId)) return prev
-        return [...prev, currentUserId]
-      })
+      setVotedUserIds(prev => prev.includes(currentUserId) ? prev : [...prev, currentUserId])
       await onVoted()
     } catch {
       setVoteError(true)
@@ -140,40 +180,53 @@ export default function Voting({ tournament, token, game, currentUserId, partici
 
   return (
     <div className="p-4 space-y-4">
-      <div className="bg-emerald-500 rounded-2xl p-4 text-center">
-        <p className="text-emerald-100 text-xs mb-1">第{game.round_number}回戦</p>
-        <h2 className="text-white text-lg font-bold">投票</h2>
-        <p className="text-white text-xl font-bold mt-2 bg-emerald-600 rounded-xl px-4 py-3">
+      <div className={`rounded-2xl p-4 text-center ${isTiebreaker ? 'bg-red-500' : 'bg-emerald-500'}`}>
+        <p className={`text-xs mb-1 ${isTiebreaker ? 'text-red-100' : 'text-emerald-100'}`}>第{game.round_number}回戦</p>
+        <h2 className="text-white text-lg font-bold">
+          {isTiebreaker ? '⚔️ 決選投票' : '投票'}
+        </h2>
+        <p className={`text-white text-xl font-bold mt-2 rounded-xl px-4 py-3 ${isTiebreaker ? 'bg-red-600' : 'bg-emerald-600'}`}>
           お題：{topicText}
         </p>
       </div>
 
-      <p className="text-sm text-gray-500 text-center">一番面白い作品に投票しよう！</p>
+      {isTiebreaker && (
+        <div className={`rounded-xl px-4 py-3 text-center text-sm font-medium ${
+          currentUserIsExcluded
+            ? 'bg-gray-100 text-gray-500'
+            : 'bg-red-50 text-red-700 border border-red-200'
+        }`}>
+          {currentUserIsExcluded
+            ? '決選投票中。作者は投票できません。'
+            : '同票！上位2作品で決選投票です'}
+        </div>
+      )}
+
+      {!isTiebreaker && (
+        <p className="text-sm text-gray-500 text-center">一番面白い作品に投票しよう！</p>
+      )}
 
       <div className="space-y-3">
-        {submissions.map((sub) => {
+        {visibleSubmissions.map((sub) => {
           const fullText =
             sub.position === 'before'
               ? `${sub.handCardText}${topicText}`
               : `${topicText}${sub.handCardText}`
           const isSelected = selectedSubmissionId === sub.id
-          const isSolo = participants.length === 1
-          const isOwnSubmission = !isSolo && sub.user_id === currentUserId
+          const isOwnSubmission = !isSolo && sub.user_id === currentUserId && !isTiebreaker
+          const isTiebreakerExcluded = isExcludedFromTiebreaker(sub)
+          const isDisabled = isOwnSubmission || isTiebreakerExcluded
 
           return (
             <button
               key={sub.id}
-              disabled={isOwnSubmission}
-              onClick={() => {
-                if (!isOwnSubmission) {
-                  setSelectedSubmissionId(sub.id)
-                }
-              }}
+              disabled={isDisabled}
+              onClick={() => { if (!isDisabled) setSelectedSubmissionId(sub.id) }}
               className={`w-full text-left rounded-2xl p-4 transition-all border-2 ${
-                isOwnSubmission
+                isDisabled
                   ? 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed'
                   : isSelected
-                  ? 'border-emerald-500 bg-emerald-50'
+                  ? isTiebreaker ? 'border-red-500 bg-red-50' : 'border-emerald-500 bg-emerald-50'
                   : 'border-gray-200 bg-white hover:border-emerald-200'
               }`}
             >
@@ -191,12 +244,12 @@ export default function Voting({ tournament, token, game, currentUserId, partici
                 </div>
               )}
               {isOwnSubmission ? (
-                <div className="mt-2 flex items-center gap-1">
+                <div className="mt-2">
                   <span className="text-gray-400 text-xs">自分の作品には投票できません</span>
                 </div>
               ) : isSelected ? (
-                <div className="mt-2 flex items-center gap-1">
-                  <span className="text-emerald-500 text-xs font-medium">✓ 選択中</span>
+                <div className="mt-2">
+                  <span className={`text-xs font-medium ${isTiebreaker ? 'text-red-500' : 'text-emerald-500'}`}>✓ 選択中</span>
                 </div>
               ) : null}
             </button>
@@ -204,25 +257,33 @@ export default function Voting({ tournament, token, game, currentUserId, partici
         })}
       </div>
 
-      <button
-        onClick={handleVote}
-        disabled={voting || !selectedSubmissionId}
-        className={`w-full py-4 rounded-xl font-bold transition-all ${
-          voted
-            ? 'bg-green-500 text-white'
-            : 'bg-emerald-500 text-white hover:bg-emerald-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed'
-        }`}
-      >
-        {voting ? '投票中...' : voted ? '✓ 投票済み（変更できます）' : '投票する'}
-      </button>
+      {!currentUserIsExcluded && (
+        <button
+          onClick={handleVote}
+          disabled={voting || !selectedSubmissionId}
+          className={`w-full py-4 rounded-xl font-bold transition-all ${
+            voted
+              ? 'bg-green-500 text-white'
+              : isTiebreaker
+              ? 'bg-red-500 text-white hover:bg-red-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed'
+              : 'bg-emerald-500 text-white hover:bg-emerald-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed'
+          }`}
+        >
+          {voting ? '投票中...' : voted ? '✓ 投票済み（変更できます）' : isTiebreaker ? '決選投票する' : '投票する'}
+        </button>
+      )}
 
       <CompletionStatus
         completedUserIds={completedUserIds}
-        participants={participants}
+        participants={
+          isTiebreaker && tournament.mode === 'production'
+            ? participants.filter((p) => !visibleSubmissions.some((s) => s.user_id === p.id))
+            : participants
+        }
         completedLabel="投票完了"
         pendingLabel="投票中"
-        nextPhaseText="全員が投票すると、結果発表へ進みます"
-        allDoneText="全員が投票しました！結果発表へ進みます"
+        nextPhaseText={isTiebreaker ? '全員が決選投票すると、結果発表へ進みます' : '全員が投票すると、結果発表へ進みます'}
+        allDoneText={isTiebreaker ? '決選投票が完了しました！結果発表へ進みます' : '全員が投票しました！結果発表へ進みます'}
       />
 
       {voteError && (
