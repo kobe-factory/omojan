@@ -46,10 +46,10 @@ export default function AdminPage() {
   const [notified, setNotified] = useState(false)
 
   const productionPreset = GAME_PRESETS.find((p) => p.mode === 'production')!
-  const [prodGameCount, setProdGameCount] = useState(productionPreset.game_count)
-  const [prodCardsPerUser, setProdCardsPerUser] = useState(productionPreset.cards_per_user)
-  const [prodHandCards, setProdHandCards] = useState(productionPreset.hand_cards_per_player)
-  const [prodDirtyCards, setProdDirtyCards] = useState(productionPreset.dirty_cards_per_user)
+  const [prodGameCount, setProdGameCount] = useState(String(productionPreset.game_count))
+  const [prodCardsPerUser, setProdCardsPerUser] = useState(String(productionPreset.cards_per_user))
+  const [prodHandCards, setProdHandCards] = useState(String(productionPreset.hand_cards_per_player))
+  const [prodDirtyCards, setProdDirtyCards] = useState(String(productionPreset.dirty_cards_per_user))
   const [cardSource, setCardSource] = useState<'new' | 'previous' | 'all'>('new')
   const [hasPastTournaments, setHasPastTournaments] = useState(false)
   const [secretVoting, setSecretVoting] = useState(false)
@@ -102,10 +102,10 @@ export default function AdminPage() {
         body: JSON.stringify({
           mode: selectedPreset.mode,
           required_players: selectedPreset.required_players,
-          game_count: selectedPreset.mode === 'production' ? prodGameCount : selectedPreset.game_count,
-          cards_per_user: selectedPreset.mode === 'production' ? prodCardsPerUser : selectedPreset.cards_per_user,
-          hand_cards_per_player: selectedPreset.mode === 'production' ? prodHandCards : selectedPreset.hand_cards_per_player,
-          dirty_cards_per_user: selectedPreset.mode === 'production' ? prodDirtyCards : selectedPreset.dirty_cards_per_user,
+          game_count: selectedPreset.mode === 'production' ? (parseInt(prodGameCount) || productionPreset.game_count) : selectedPreset.game_count,
+          cards_per_user: selectedPreset.mode === 'production' ? (parseInt(prodCardsPerUser) || productionPreset.cards_per_user) : selectedPreset.cards_per_user,
+          hand_cards_per_player: selectedPreset.mode === 'production' ? (parseInt(prodHandCards) || productionPreset.hand_cards_per_player) : selectedPreset.hand_cards_per_player,
+          dirty_cards_per_user: selectedPreset.mode === 'production' ? (parseInt(prodDirtyCards) || 0) : selectedPreset.dirty_cards_per_user,
           card_source: selectedPreset.mode === 'production' ? cardSource : 'new',
           secret_voting: selectedPreset.mode === 'production' ? secretVoting : false,
         }),
@@ -297,7 +297,7 @@ export default function AdminPage() {
                   type="number"
                   min={1}
                   value={prodGameCount}
-                  onChange={(e) => setProdGameCount(Number(e.target.value))}
+                  onChange={(e) => setProdGameCount(e.target.value)}
                   className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:border-emerald-400"
                 />
               </div>
@@ -310,7 +310,7 @@ export default function AdminPage() {
                   min={1}
                   value={prodCardsPerUser}
                   disabled={cardSource !== 'new'}
-                  onChange={(e) => setProdCardsPerUser(Number(e.target.value))}
+                  onChange={(e) => setProdCardsPerUser(e.target.value)}
                   className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:border-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed"
                 />
               </div>
@@ -320,7 +320,7 @@ export default function AdminPage() {
                   type="number"
                   min={1}
                   value={prodHandCards}
-                  onChange={(e) => setProdHandCards(Number(e.target.value))}
+                  onChange={(e) => setProdHandCards(e.target.value)}
                   className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:border-emerald-400"
                 />
               </div>
@@ -330,7 +330,7 @@ export default function AdminPage() {
                   type="number"
                   min={0}
                   value={prodDirtyCards}
-                  onChange={(e) => setProdDirtyCards(Number(e.target.value))}
+                  onChange={(e) => setProdDirtyCards(e.target.value)}
                   className="w-full border border-pink-200 rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:border-pink-400 bg-pink-50"
                 />
               </div>
@@ -478,7 +478,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.23.1</p>
+        <p className="text-center text-xs text-gray-300 mt-8">v1.23.2</p>
       </div>
     </div>
   )

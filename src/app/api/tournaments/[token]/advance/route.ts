@@ -246,15 +246,13 @@ export async function POST(
         // 2作品同票 → 決選投票
         await supabase.from('games').update({ status: 'waiting_tiebreaker_vote' }).eq('id', currentGame.id)
 
-        // 決選投票の通知は投票資格者のみ（本番：作者以外、テスト/ソロ：全員）
+        // 決選投票の通知は作者以外の投票資格者のみに送信
         const { data: tiedSubsForNotify } = await supabase
           .from('submissions')
           .select('user_id')
           .in('id', tiedAtTopIds)
         const tiedAuthorIds = new Set((tiedSubsForNotify ?? []).map((s) => s.user_id))
-        const eligibleForNotify = tournament.mode === 'production'
-          ? participantIds.filter((id) => !tiedAuthorIds.has(id))
-          : [...participantIds]
+        const eligibleForNotify = participantIds.filter((id) => !tiedAuthorIds.has(id))
 
         await notifyParticipants(eligibleForNotify, triggeringUserId, {
           headerTitle: '🗳️ 決選投票が始まりました！',

@@ -45,10 +45,10 @@ export const GAME_PRESETS: GamePreset[] = [
     description: '5名全員・フルゲーム',
     mode: 'production',
     required_players: 5,
-    game_count: 10,
-    cards_per_user: 20,
-    hand_cards_per_player: 15,
-    dirty_cards_per_user: 0,
+    game_count: 5,
+    cards_per_user: 12,
+    hand_cards_per_player: 10,
+    dirty_cards_per_user: 2,
   },
 ]
 
