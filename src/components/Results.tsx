@@ -32,6 +32,7 @@ interface ResultItem {
   preamble: string | null
   preamble_position: 'above' | 'below'
   voteCount: number
+  displayVoteCount: number
   voterNames: string[]
   tbVoteCount: number
   tbVoterNames: string[]
@@ -101,6 +102,7 @@ export default function Results({ tournament, game, participants, onNext, nextLa
             preamble: s.preamble,
             preamble_position: (s.preamble_position ?? 'above') as 'above' | 'below',
             voteCount: initVoteCount[s.id] ?? 0,
+            displayVoteCount: initVoteCount[s.id] ?? 0,
             voterNames: initVoterNames[s.id] ?? [],
             tbVoteCount: tbVoteCount[s.id] ?? 0,
             tbVoterNames: tbVoterNames[s.id] ?? [],
@@ -119,6 +121,7 @@ export default function Results({ tournament, game, participants, onNext, nextLa
             if (maxTb > 0 && item.tbVoteCount === maxTb) {
               item.isWinner = true
               item.decidedByTiebreaker = true
+              item.displayVoteCount = item.voteCount + 1
             }
           })
         } else {
@@ -131,6 +134,9 @@ export default function Results({ tournament, game, participants, onNext, nextLa
           }
         }
       }
+
+      // 決選投票で+1した場合、表示順を再ソート
+      sorted.sort((a, b) => b.displayVoteCount - a.displayVoteCount)
 
       setResults(sorted)
       setLoading(false)
@@ -193,7 +199,7 @@ export default function Results({ tournament, game, participants, onNext, nextLa
 
             <div className="flex items-start justify-between gap-2 mb-3">
               <span className="text-gray-400 text-xs">{isRematch ? '−' : `${i + 1}位`}</span>
-              <span className="text-emerald-500 text-sm font-bold">{r.voteCount}票</span>
+              <span className="text-emerald-500 text-sm font-bold">{r.displayVoteCount}票</span>
             </div>
 
             {r.preamble && r.preamble_position === 'above' && (

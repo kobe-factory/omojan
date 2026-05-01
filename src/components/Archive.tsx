@@ -28,6 +28,7 @@ interface ArchiveSubmission {
   preamble: string | null
   preamble_position: 'above' | 'below'
   voteCount: number
+  displayVoteCount: number
   voterNames: string[]
   tbVoteCount: number
   tbVoterNames: string[]
@@ -115,6 +116,7 @@ export default function Archive({ tournamentId, participants }: Props) {
                 preamble: s.preamble,
                 preamble_position: (s.preamble_position ?? 'above') as 'above' | 'below',
                 voteCount: initVoteCount[s.id] ?? 0,
+                displayVoteCount: initVoteCount[s.id] ?? 0,
                 voterNames: initVoterNames[s.id] ?? [],
                 tbVoteCount: tbVoteCount[s.id] ?? 0,
                 tbVoterNames: tbVoterNames[s.id] ?? [],
@@ -133,6 +135,7 @@ export default function Archive({ tournamentId, participants }: Props) {
                 if (maxTb > 0 && s.tbVoteCount === maxTb) {
                   s.isWinner = true
                   s.decidedByTiebreaker = true
+                  s.displayVoteCount = s.voteCount + 1
                 }
               })
             } else {
@@ -145,6 +148,8 @@ export default function Archive({ tournamentId, participants }: Props) {
               }
             }
           }
+
+          sorted.sort((a, b) => b.displayVoteCount - a.displayVoteCount)
 
           return {
             id: g.id,
@@ -255,7 +260,7 @@ export default function Archive({ tournamentId, participants }: Props) {
                       <div className="flex items-center gap-1">
                         <span className="text-gray-400 text-xs">{g.isVoided ? '−' : `${i + 1}位`}</span>
                       </div>
-                      <span className="text-emerald-500 text-xs font-bold">{s.voteCount}票</span>
+                      <span className="text-emerald-500 text-xs font-bold">{s.displayVoteCount}票</span>
                     </div>
                     {s.preamble && s.preamble_position === 'above' && (
                       <p className="text-xs text-gray-500 italic mt-1">「{s.preamble}」</p>
