@@ -11,7 +11,7 @@ const PHASE_COLORS = {
   voting: '#7c3aed',
   tiebreaker: '#dc2626',
   result: '#ca8a04',
-  rematch: '#dc2626',
+  rematch: '#6b7280',
 }
 
 async function notifyParticipants(
@@ -335,7 +335,7 @@ export async function POST(
           participantIds,
           triggeringUserId,
           {
-            headerTitle: '🔄 再戦が決定しました！',
+            headerTitle: '🔄 流局となりました',
             headerColor: PHASE_COLORS.rematch,
             headerSub: `第${num}回大会 / ${currentGame.round_number}回戦`,
             body: '全員同票のためこの回はお流れです。\nおもじゃんを開いて確認してください 🔄',
