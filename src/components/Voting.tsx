@@ -122,7 +122,8 @@ export default function Voting({ tournament, token, game, currentUserId, partici
         })
       )
 
-      setSubmissions(enriched)
+      // 投稿順から作者を推測できないようにシャッフル
+      setSubmissions([...enriched].sort(() => Math.random() - 0.5))
     })
   }, [game.id, game.topic_card_id, game.status, currentUserId, participants, isTiebreaker])
 
@@ -142,12 +143,12 @@ export default function Voting({ tournament, token, game, currentUserId, partici
   const currentUserIsExcluded = isTiebreaker && tournament.mode === 'production'
     && visibleSubmissions.some((s) => s.user_id === currentUserId)
 
-  // 完了ユーザーID（投票済み）
+  // 完了ユーザーID（投票済み + 決選投票の作者は自動完了扱い）
   let completedUserIds: string[]
   if (isTiebreaker && tournament.mode === 'production') {
     const authorIds = new Set(visibleSubmissions.map((s) => s.user_id))
-    const eligible = participants.filter((p) => !authorIds.has(p.id)).map((p) => p.id)
-    completedUserIds = votedUserIds.filter((id) => eligible.includes(id))
+    const eligibleVoted = votedUserIds.filter((id) => !authorIds.has(id))
+    completedUserIds = [...eligibleVoted, ...Array.from(authorIds)]
   } else {
     completedUserIds = votedUserIds
   }
@@ -277,11 +278,7 @@ export default function Voting({ tournament, token, game, currentUserId, partici
 
       <CompletionStatus
         completedUserIds={completedUserIds}
-        participants={
-          isTiebreaker && tournament.mode === 'production'
-            ? participants.filter((p) => !visibleSubmissions.some((s) => s.user_id === p.id))
-            : participants
-        }
+        participants={participants}
         completedLabel="投票完了"
         pendingLabel="投票中"
         nextPhaseText={isTiebreaker ? '全員が決選投票すると、結果発表へ進みます' : '全員が投票すると、結果発表へ進みます'}

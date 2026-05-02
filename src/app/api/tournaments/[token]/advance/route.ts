@@ -353,23 +353,11 @@ export async function POST(
           .update({ status: 'waiting_tiebreaker_vote' })
           .eq('id', currentGame.id)
 
-        // 決選投票の通知は作者以外の投票資格者のみに送信
-        const { data: tiedSubsForNotify } = await supabase
-          .from('submissions')
-          .select('user_id')
-          .in('id', tiedAtTopIds)
-        const tiedAuthorIds = new Set(
-          (tiedSubsForNotify ?? []).map((s) => s.user_id),
-        )
-        const eligibleForNotify = participantIds.filter(
-          (id) => !tiedAuthorIds.has(id),
-        )
-
         await notifyParticipants(
-          eligibleForNotify,
+          participantIds,
           triggeringUserId,
           {
-            headerTitle: '🗳️ 決選投票が始まりました！',
+            headerTitle: '🗳️ 決選投票です！',
             headerColor: PHASE_COLORS.voting,
             headerSub: `第${num}回大会 / ${currentGame.round_number}回戦`,
             body: '同票のため決選投票が行われます！\nおもじゃんを開いて投票しましょう 🗳️',

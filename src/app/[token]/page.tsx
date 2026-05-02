@@ -180,7 +180,13 @@ export default function TournamentPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'submissions' },
         () => fetchState())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'votes' },
-        () => fetchState())
+        async () => {
+          await fetchState()
+          // advance を再試行（最後の投票者の advance が失敗した場合のスタック防止）
+          const res = await fetch(`/api/tournaments/${token}/advance`, { method: 'POST' })
+          const data = await res.json()
+          if (data.advanced) await fetchState()
+        })
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
@@ -460,7 +466,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.23.4</p>
+        <p className="text-xs text-gray-300">v1.23.5</p>
       </footer>
 
       {/* 前戦結果モーダル（まだ結果を確認していないユーザー向け） */}
