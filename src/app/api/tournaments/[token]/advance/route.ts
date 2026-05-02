@@ -9,6 +9,7 @@ const PHASE_COLORS = {
   cards: '#d97706',
   playing: '#059669',
   voting: '#7c3aed',
+  tiebreaker: '#dc2626',
   result: '#ca8a04',
   rematch: '#dc2626',
 }
@@ -362,7 +363,7 @@ export async function POST(
           triggeringUserId,
           {
             headerTitle: '🗳️ 決選投票です！',
-            headerColor: PHASE_COLORS.voting,
+            headerColor: PHASE_COLORS.tiebreaker,
             headerSub: `第${num}回大会 / ${currentGame.round_number}回戦`,
             body: '同票のため決選投票が行われます！\nおもじゃんを開いて投票しましょう 🗳️',
             url: LIFF_URL,
