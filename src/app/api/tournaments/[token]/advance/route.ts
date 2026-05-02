@@ -362,7 +362,7 @@ export async function POST(
           participantIds,
           triggeringUserId,
           {
-            headerTitle: '🗳️ 決選投票です！',
+            headerTitle: '⚔️ 決選投票です！',
             headerColor: PHASE_COLORS.tiebreaker,
             headerSub: `第${num}回大会 / ${currentGame.round_number}回戦`,
             body: '同票のため決選投票が行われます！\nおもじゃんを開いて投票しましょう 🗳️',
