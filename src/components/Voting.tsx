@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import CompletionStatus from './CompletionStatus'
 import UserIcon from './UserIcon'
@@ -46,6 +46,9 @@ interface Props {
 
 export default function Voting({ tournament, token, game, currentUserId, participants, onVoted }: Props) {
   const isTiebreaker = game.status === 'waiting_tiebreaker_vote'
+
+  const shuffleKeyRef = useRef('')
+  const shuffledIdsRef = useRef<string[]>([])
 
   const [topicText, setTopicText] = useState('')
   const [submissions, setSubmissions] = useState<Submission[]>([])
@@ -122,8 +125,17 @@ export default function Voting({ tournament, token, game, currentUserId, partici
         })
       )
 
-      // 投稿順から作者を推測できないようにシャッフル
-      setSubmissions([...enriched].sort(() => Math.random() - 0.5))
+      // ゲーム・フェーズが変わったときだけシャッフル、以降は順序を維持
+      const shuffleKey = `${game.id}-${isTiebreaker}`
+      if (shuffleKeyRef.current !== shuffleKey) {
+        const shuffled = [...enriched].sort(() => Math.random() - 0.5)
+        shuffleKeyRef.current = shuffleKey
+        shuffledIdsRef.current = shuffled.map((s) => s.id)
+        setSubmissions(shuffled)
+      } else {
+        const orderMap = Object.fromEntries(shuffledIdsRef.current.map((id, i) => [id, i]))
+        setSubmissions([...enriched].sort((a, b) => (orderMap[a.id] ?? 999) - (orderMap[b.id] ?? 999)))
+      }
     })
   }, [game.id, game.topic_card_id, game.status, currentUserId, participants, isTiebreaker])
 
