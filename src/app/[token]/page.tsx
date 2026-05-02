@@ -24,6 +24,7 @@ interface Tournament {
   dirty_cards_per_user: number
   skip_card_creation: boolean
   secret_voting: boolean
+  secret_round: number | null
   mode: string
 }
 
@@ -413,7 +414,7 @@ export default function TournamentPage() {
               </>
             ) : currentGame.status === 'waiting_vote' || currentGame.status === 'waiting_tiebreaker_vote' ? (
               <Voting
-                tournament={tournament}
+                tournament={{ ...tournament, secret_voting: currentGame.round_number === tournament.secret_round }}
                 token={token}
                 game={currentGame}
                 currentUserId={userId}
@@ -466,7 +467,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.23.7</p>
+        <p className="text-xs text-gray-300">v1.23.8</p>
       </footer>
 
       {/* 前戦結果モーダル（まだ結果を確認していないユーザー向け） */}

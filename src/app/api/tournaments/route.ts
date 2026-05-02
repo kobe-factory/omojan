@@ -25,18 +25,23 @@ export async function POST(request: Request) {
   const skipCardCreation = mode === 'production' && (card_source === 'previous' || card_source === 'all')
   const token = nanoid(10)
 
+  // シークレットモードONの場合、大会中のランダムな1回戦だけシークレットにする
+  const resolvedGameCount = game_count ?? 5
+  const secretRound = secret_voting ? Math.floor(Math.random() * resolvedGameCount) + 1 : null
+
   const { data, error } = await supabase
     .from('tournaments')
     .insert({
       token,
       mode: mode ?? 'production',
       required_players,
-      game_count,
+      game_count: resolvedGameCount,
       cards_per_user: cards_per_user ?? 0,
       hand_cards_per_player,
       dirty_cards_per_user: dirty_cards_per_user ?? 0,
       skip_card_creation: skipCardCreation,
       secret_voting: secret_voting ?? false,
+      secret_round: secretRound,
     })
     .select()
     .single()

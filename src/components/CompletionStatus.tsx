@@ -12,6 +12,7 @@ interface Props {
   pendingLabel?: string
   nextPhaseText?: string
   allDoneText?: string
+  secret?: boolean
 }
 
 export default function CompletionStatus({
@@ -21,9 +22,29 @@ export default function CompletionStatus({
   pendingLabel = '未完了',
   nextPhaseText = '全員完了すると次のフェーズへ進みます',
   allDoneText = '全員が完了しました！次のフェーズへ進みます',
+  secret = false,
 }: Props) {
   const completed = participants.filter((p) => completedUserIds.includes(p.id))
   const pending = participants.filter((p) => !completedUserIds.includes(p.id))
+
+  if (secret) {
+    const allDone = pending.length === 0
+    return (
+      <div className="bg-gray-50 rounded-2xl p-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-gray-400">{completedLabel}</p>
+          <span className="text-sm font-bold text-emerald-600">
+            {completed.length} / {participants.length} 投票済み
+          </span>
+        </div>
+        {allDone ? (
+          <p className="text-xs text-emerald-600 font-medium">{allDoneText}</p>
+        ) : (
+          <p className="text-xs text-gray-400">あと{pending.length}名の完了を待っています。{nextPhaseText}</p>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="bg-gray-50 rounded-2xl p-4 space-y-3">
