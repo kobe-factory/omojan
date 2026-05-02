@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS games (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tournament_id UUID REFERENCES tournaments(id) ON DELETE CASCADE,
   round_number INT NOT NULL,
-  status TEXT DEFAULT 'waiting_submission' CHECK (status IN ('waiting_submission', 'waiting_vote', 'showing_result', 'finished')),
+  status TEXT DEFAULT 'waiting_submission' CHECK (status IN ('waiting_submission', 'waiting_vote', 'waiting_tiebreaker_vote', 'showing_result', 'showing_rematch', 'finished')),
   topic_card_id UUID REFERENCES cards(id),
   created_at TIMESTAMPTZ DEFAULT now()
 );

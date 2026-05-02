@@ -246,10 +246,11 @@ export async function POST(
         return NextResponse.json({ waiting: true, waitingUserIds: waiting })
       }
 
-      await supabase
+      const { error: toVoteError } = await supabase
         .from('games')
         .update({ status: 'waiting_vote' })
         .eq('id', currentGame.id)
+      if (toVoteError) return NextResponse.json({ error: toVoteError.message }, { status: 500 })
 
       const num = await getTournamentNumber(tournament.id)
       await notifyParticipants(
@@ -311,10 +312,11 @@ export async function POST(
             : currentGame.round_number % 3 === 2
               ? ('waiting_tiebreaker_vote' as const)
               : ('showing_rematch' as const)
-        await supabase
+        const { error: soloUpdateError } = await supabase
           .from('games')
           .update({ status: soloStatus })
           .eq('id', currentGame.id)
+        if (soloUpdateError) return NextResponse.json({ error: soloUpdateError.message }, { status: 500 })
         return NextResponse.json({ advanced: true, newGameStatus: soloStatus })
       }
 
@@ -322,10 +324,11 @@ export async function POST(
 
       if (tiedAtTopIds.length >= 3) {
         // 3作品以上同票 → 再戦
-        await supabase
+        const { error: toRematchError } = await supabase
           .from('games')
           .update({ status: 'showing_rematch' })
           .eq('id', currentGame.id)
+        if (toRematchError) return NextResponse.json({ error: toRematchError.message }, { status: 500 })
 
         await notifyParticipants(
           participantIds,
@@ -348,10 +351,11 @@ export async function POST(
 
       if (tiedAtTopIds.length === 2) {
         // 2作品同票 → 決選投票
-        await supabase
+        const { error: toTiebreakerError } = await supabase
           .from('games')
           .update({ status: 'waiting_tiebreaker_vote' })
           .eq('id', currentGame.id)
+        if (toTiebreakerError) return NextResponse.json({ error: toTiebreakerError.message }, { status: 500 })
 
         await notifyParticipants(
           participantIds,
@@ -373,10 +377,11 @@ export async function POST(
       }
 
       // 明確な勝者
-      await supabase
+      const { error: toResultError } = await supabase
         .from('games')
         .update({ status: 'showing_result' })
         .eq('id', currentGame.id)
+      if (toResultError) return NextResponse.json({ error: toResultError.message }, { status: 500 })
 
       await notifyParticipants(
         participantIds,
@@ -442,10 +447,11 @@ export async function POST(
         return NextResponse.json({ waiting: true, waitingUserIds: waiting })
       }
 
-      await supabase
+      const { error: tbToResultError } = await supabase
         .from('games')
         .update({ status: 'showing_result' })
         .eq('id', currentGame.id)
+      if (tbToResultError) return NextResponse.json({ error: tbToResultError.message }, { status: 500 })
 
       const num = await getTournamentNumber(tournament.id)
       await notifyParticipants(
