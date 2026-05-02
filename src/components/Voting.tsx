@@ -230,7 +230,7 @@ export default function Voting({ tournament, token, game, currentUserId, partici
           const isSelected = selectedSubmissionId === sub.id
           const isOwnSubmission = !isSolo && sub.user_id === currentUserId && !isTiebreaker
           const isTiebreakerExcluded = isExcludedFromTiebreaker(sub)
-          const isDisabled = isOwnSubmission || isTiebreakerExcluded
+          const isDisabled = isOwnSubmission || isTiebreakerExcluded || currentUserIsExcluded
 
           return (
             <button
