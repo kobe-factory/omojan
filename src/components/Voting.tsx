@@ -125,17 +125,21 @@ export default function Voting({ tournament, token, game, currentUserId, partici
         })
       )
 
-      // ゲーム・フェーズが変わったときだけシャッフル、以降は順序を維持
-      const shuffleKey = `${game.id}-${isTiebreaker}`
-      if (shuffleKeyRef.current !== shuffleKey) {
-        const shuffled = [...enriched].sort(() => Math.random() - 0.5)
-        shuffleKeyRef.current = shuffleKey
-        shuffledIdsRef.current = shuffled.map((s) => s.id)
-        setSubmissions(shuffled)
+      // ゲーム・フェーズごとに並び順をsessionStorageで永続化（リロードしても順序を保持）
+      const shuffleKey = `omojan:shuffle:${game.id}-${isTiebreaker}`
+      const stored = sessionStorage.getItem(shuffleKey)
+      let orderedIds: string[]
+      if (stored) {
+        orderedIds = JSON.parse(stored)
       } else {
-        const orderMap = Object.fromEntries(shuffledIdsRef.current.map((id, i) => [id, i]))
-        setSubmissions([...enriched].sort((a, b) => (orderMap[a.id] ?? 999) - (orderMap[b.id] ?? 999)))
+        const shuffled = [...enriched].sort(() => Math.random() - 0.5)
+        orderedIds = shuffled.map((s) => s.id)
+        sessionStorage.setItem(shuffleKey, JSON.stringify(orderedIds))
       }
+      shuffleKeyRef.current = shuffleKey
+      shuffledIdsRef.current = orderedIds
+      const orderMap = Object.fromEntries(orderedIds.map((id, i) => [id, i]))
+      setSubmissions([...enriched].sort((a, b) => (orderMap[a.id] ?? 999) - (orderMap[b.id] ?? 999)))
     })
   }, [game.id, game.topic_card_id, game.status, currentUserId, participants, isTiebreaker])
 
