@@ -14,6 +14,9 @@ interface TournamentRow {
   cards_per_user: number
   hand_cards_per_player: number
   dirty_cards_per_user: number
+  secret_voting: boolean
+  secret_round: number | null
+  impersonation_mode: boolean
   productionNumber?: number
 }
 
@@ -58,7 +61,7 @@ export default function AdminPage() {
     setListLoading(true)
     const { data } = await supabase
       .from('tournaments')
-      .select('id, token, mode, status, created_at, game_count, cards_per_user, hand_cards_per_player, dirty_cards_per_user')
+      .select('id, token, mode, status, created_at, game_count, cards_per_user, hand_cards_per_player, dirty_cards_per_user, secret_voting, secret_round, impersonation_mode')
       .order('created_at', { ascending: false })
 
     // 本番大会に作成日時昇順で連番を付与
@@ -459,6 +462,16 @@ export default function AdminPage() {
                       }`}>
                         {STATUS_LABEL[t.status] ?? t.status}
                       </span>
+                      {/* 投票モードバッジ */}
+                      {t.impersonation_mode && (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-purple-100 text-purple-600">🎭 なりすまし</span>
+                      )}
+                      {t.secret_voting && t.secret_round === null && (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500">🕵️ 全回シークレット</span>
+                      )}
+                      {t.secret_voting && t.secret_round !== null && (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500">🕵️ 第{t.secret_round}回シークレット</span>
+                      )}
                     </div>
                     <span className="text-xs text-gray-300 shrink-0">
                       {new Date(t.created_at).toLocaleDateString('ja-JP', {
@@ -496,7 +509,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.24.7</p>
+        <p className="text-center text-xs text-gray-300 mt-8">v1.24.8</p>
       </div>
     </div>
   )
