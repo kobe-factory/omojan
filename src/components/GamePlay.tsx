@@ -230,6 +230,39 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
         )}
       </div>
 
+      {/* なりすましユーザー選択 */}
+      {tournament.impersonation_mode && (
+        <div className="bg-white rounded-2xl shadow-sm p-5">
+          <h3 className="text-sm font-semibold text-gray-700 mb-1">なりすますユーザー</h3>
+          <p className="text-xs text-gray-400 mb-3">投票画面でこのユーザーの作品として表示されます</p>
+          <div className="grid grid-cols-2 gap-2">
+            {participants.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => {
+                  setImpersonatedUserId(p.id)
+                  if (submitted) setSubmitted(false)
+                }}
+                className={`flex items-center gap-2 px-3 py-3 rounded-xl text-sm font-medium transition-all border-2 ${
+                  impersonatedUserId === p.id
+                    ? 'border-purple-500 bg-purple-50 text-purple-700'
+                    : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-purple-200'
+                }`}
+              >
+                <UserIcon name={p.name} size="sm" />
+                {p.name}
+                {impersonatedUserId === p.id && <span className="ml-auto text-xs">🎭</span>}
+              </button>
+            ))}
+          </div>
+          {impersonatedUserId && (
+            <p className="text-xs text-purple-600 mt-2 text-center">
+              🎭 {participants.find((p) => p.id === impersonatedUserId)?.name} としてなりすまし中
+            </p>
+          )}
+        </div>
+      )}
+
       {/* 位置選択＋作品プレビュー */}
       {selectedCard && (
         <div className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
@@ -280,38 +313,6 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
               ) : null
             })()}
           </div>
-        </div>
-      )}
-
-      {/* なりすましユーザー選択 */}
-      {tournament.impersonation_mode && (
-        <div className="bg-white rounded-2xl shadow-sm p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-1">なりすますユーザー</h3>
-          <p className="text-xs text-gray-400 mb-3">投票画面でこのユーザーの作品として表示されます</p>
-          <div className="grid grid-cols-2 gap-2">
-            {participants.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => {
-                  setImpersonatedUserId(p.id)
-                  if (submitted) setSubmitted(false)
-                }}
-                className={`flex items-center gap-2 px-3 py-3 rounded-xl text-sm font-medium transition-all border-2 ${
-                  impersonatedUserId === p.id
-                    ? 'border-purple-500 bg-purple-50 text-purple-700'
-                    : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-purple-200'
-                }`}
-              >
-                <UserIcon name={p.name} size="sm" />
-                {p.name}
-              </button>
-            ))}
-          </div>
-          {impersonatedUserId && (
-            <p className="text-xs text-purple-600 mt-2 text-center">
-              🎭 {participants.find((p) => p.id === impersonatedUserId)?.name} としてなりすまし中
-            </p>
-          )}
         </div>
       )}
 
