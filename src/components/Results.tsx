@@ -222,7 +222,7 @@ export default function Results({ tournament, game, participants, onNext, nextLa
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <UserIcon name={r.impersonatedUserName} size="xs" />
                   <p className="text-xs text-gray-600">{r.impersonatedUserName}</p>
-                  <span className="text-xs text-gray-400">（本当は…</span>
+                  <span className="text-xs text-gray-400 ml-2">（本当は…</span>
                   <UserIcon name={r.userName} size="xs" />
                   <span className="text-xs text-gray-400">{r.userName}）</span>
                 </div>

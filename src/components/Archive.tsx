@@ -280,7 +280,7 @@ export default function Archive({ tournamentId, participants, impersonationMode 
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <UserIcon name={s.impersonatedUserName} size="xs" />
                           <p className="text-xs text-gray-600">{s.impersonatedUserName}</p>
-                          <span className="text-xs text-gray-400">（本当は…</span>
+                          <span className="text-xs text-gray-400 ml-2">（本当は…</span>
                           <UserIcon name={s.userName} size="xs" />
                           <span className="text-xs text-gray-400">{s.userName}）</span>
                         </div>
