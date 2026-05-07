@@ -6,7 +6,7 @@ import { nanoid } from 'nanoid'
 const LIFF_URL = `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID}`
 
 export async function POST(request: Request) {
-  const { mode, required_players, game_count, cards_per_user, hand_cards_per_player, dirty_cards_per_user, card_source, secret_voting } = await request.json()
+  const { mode, required_players, game_count, cards_per_user, hand_cards_per_player, dirty_cards_per_user, card_source, voting_style } = await request.json()
 
   if (mode === 'production') {
     const { data: active } = await supabase
@@ -25,9 +25,13 @@ export async function POST(request: Request) {
   const skipCardCreation = mode === 'production' && (card_source === 'previous' || card_source === 'all')
   const token = nanoid(10)
 
-  // シークレットモードONの場合、大会中のランダムな1回戦だけシークレットにする
   const resolvedGameCount = game_count ?? 5
-  const secretRound = secret_voting ? Math.floor(Math.random() * resolvedGameCount) + 1 : null
+  const isSecretOne = voting_style === 'secret_one'
+  const isSecretAll = voting_style === 'secret_all'
+  const secretVoting = isSecretOne || isSecretAll
+  // secret_one: ランダムな1回戦のみシークレット / secret_all: 全回戦シークレット(null=全回戦)
+  const secretRound = isSecretOne ? Math.floor(Math.random() * resolvedGameCount) + 1 : null
+  const impersonationMode = voting_style === 'impersonation'
 
   const { data, error } = await supabase
     .from('tournaments')
@@ -40,8 +44,9 @@ export async function POST(request: Request) {
       hand_cards_per_player,
       dirty_cards_per_user: dirty_cards_per_user ?? 0,
       skip_card_creation: skipCardCreation,
-      secret_voting: secret_voting ?? false,
+      secret_voting: secretVoting,
       secret_round: secretRound,
+      impersonation_mode: impersonationMode,
     })
     .select()
     .single()

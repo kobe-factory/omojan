@@ -24,6 +24,7 @@ interface ArchiveSubmission {
   id: string
   userId: string
   userName: string
+  impersonatedUserName: string | null
   fullText: string
   preamble: string | null
   preamble_position: 'above' | 'below'
@@ -39,9 +40,10 @@ interface ArchiveSubmission {
 interface Props {
   tournamentId: string
   participants: User[]
+  impersonationMode?: boolean
 }
 
-export default function Archive({ tournamentId, participants }: Props) {
+export default function Archive({ tournamentId, participants, impersonationMode = false }: Props) {
   const [games, setGames] = useState<ArchiveGame[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedGame, setExpandedGame] = useState<string | null>(null)
@@ -67,7 +69,7 @@ export default function Archive({ tournamentId, participants }: Props) {
 
           const [{ data: topicCard }, { data: subs }, { data: votes }] = await Promise.all([
             supabase.from('cards').select('text').eq('id', g.topic_card_id).single(),
-            supabase.from('submissions').select('id, user_id, hand_card_id, position, preamble, preamble_position').eq('game_id', g.id),
+            supabase.from('submissions').select('id, user_id, hand_card_id, position, preamble, preamble_position, impersonated_user_id').eq('game_id', g.id),
             supabase.from('votes').select('submission_id, voter_user_id, is_tiebreaker').eq('game_id', g.id),
           ])
 
@@ -103,6 +105,9 @@ export default function Archive({ tournamentId, participants }: Props) {
                 .single()
 
               const user = participants.find((p) => p.id === s.user_id)
+              const impersonatedUser = s.impersonated_user_id
+                ? participants.find((p) => p.id === s.impersonated_user_id)
+                : null
               const handText = card?.text ?? ''
               const topicText = topicCard?.text ?? ''
               const fullText =
@@ -112,6 +117,7 @@ export default function Archive({ tournamentId, participants }: Props) {
                 id: s.id,
                 userId: s.user_id,
                 userName: user?.name ?? '???',
+                impersonatedUserName: impersonatedUser?.name ?? null,
                 fullText,
                 preamble: s.preamble,
                 preamble_position: (s.preamble_position ?? 'above') as 'above' | 'below',
@@ -214,7 +220,7 @@ export default function Archive({ tournamentId, participants }: Props) {
                 <p className="text-xs text-gray-400 mt-0.5">お題：{g.topicText}</p>
                 {!g.isVoided && winner && (
                   <p className="text-xs text-yellow-600 mt-1">
-                    👑 {winner.userName}「{winner.fullText}」
+                    👑 {impersonationMode && winner.impersonatedUserName ? winner.impersonatedUserName : winner.userName}「{winner.fullText}」
                   </p>
                 )}
                 {g.isVoided && (
@@ -270,10 +276,20 @@ export default function Archive({ tournamentId, participants }: Props) {
                       <p className="text-xs text-gray-500 italic mt-1">「{s.preamble}」</p>
                     )}
                     <div className="mt-3">
-                      <div className="flex items-center gap-1.5">
-                        <UserIcon name={s.userName} size="xs" />
-                        <p className="text-xs text-gray-600">{s.userName}</p>
-                      </div>
+                      {impersonationMode && s.impersonatedUserName ? (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <UserIcon name={s.impersonatedUserName} size="xs" />
+                          <p className="text-xs text-gray-600">{s.impersonatedUserName}</p>
+                          <span className="text-xs text-gray-400">（本当は…</span>
+                          <UserIcon name={s.userName} size="xs" />
+                          <span className="text-xs text-gray-400">{s.userName}）</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <UserIcon name={s.userName} size="xs" />
+                          <p className="text-xs text-gray-600">{s.userName}</p>
+                        </div>
+                      )}
                       {s.voterNames.length > 0 && (
                         <div className="flex items-center justify-end gap-1.5 mt-1.5 pt-1.5 border-t border-gray-100 flex-wrap">
                           <span className="text-[9px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">投票</span>

@@ -6,7 +6,7 @@ export async function POST(
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params
-  const { user_id, game_id, hand_card_id, position, preamble, preamble_position } = await request.json()
+  const { user_id, game_id, hand_card_id, position, preamble, preamble_position, impersonated_user_id } = await request.json()
 
   const { data: game } = await supabase
     .from('games')
@@ -45,6 +45,7 @@ export async function POST(
     position,
     preamble: preamble || null,
     preamble_position: preamble_position ?? 'above',
+    impersonated_user_id: impersonated_user_id || null,
   })
 
   if (error) {

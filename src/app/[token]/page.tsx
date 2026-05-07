@@ -25,6 +25,7 @@ interface Tournament {
   skip_card_creation: boolean
   secret_voting: boolean
   secret_round: number | null
+  impersonation_mode: boolean
   mode: string
 }
 
@@ -391,7 +392,7 @@ export default function TournamentPage() {
             )}
 
             {activeTab === 'archive' ? (
-              <Archive tournamentId={tournament.id} participants={participants} />
+              <Archive tournamentId={tournament.id} participants={participants} impersonationMode={tournament.impersonation_mode} />
             ) : currentGame.status === 'waiting_submission' ? (
               <>
                 <GamePlay
@@ -414,7 +415,7 @@ export default function TournamentPage() {
               </>
             ) : currentGame.status === 'waiting_vote' || currentGame.status === 'waiting_tiebreaker_vote' ? (
               <Voting
-                tournament={{ ...tournament, secret_voting: currentGame.round_number === tournament.secret_round }}
+                tournament={{ ...tournament, secret_voting: tournament.secret_voting && (tournament.secret_round === null || tournament.secret_round === currentGame.round_number) }}
                 token={token}
                 game={currentGame}
                 currentUserId={userId}
@@ -467,7 +468,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.23.14</p>
+        <p className="text-xs text-gray-300">v1.24.0</p>
       </footer>
 
       {/* 前戦結果モーダル（まだ結果を確認していないユーザー向け） */}

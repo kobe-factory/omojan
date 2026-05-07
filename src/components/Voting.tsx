@@ -14,6 +14,7 @@ interface Tournament {
   id: string
   mode: string
   secret_voting: boolean
+  impersonation_mode: boolean
 }
 
 interface Game {
@@ -31,7 +32,9 @@ interface Submission {
   preamble: string | null
   preamble_position: 'above' | 'below'
   created_at: string
+  impersonated_user_id: string | null
   userName: string
+  impersonatedUserName: string | null
   handCardText: string
 }
 
@@ -70,7 +73,7 @@ export default function Voting({ tournament, token, game, currentUserId, partici
     Promise.all([
       supabase
         .from('submissions')
-        .select('id, user_id, hand_card_id, position, preamble, preamble_position, created_at')
+        .select('id, user_id, hand_card_id, position, preamble, preamble_position, created_at, impersonated_user_id')
         .eq('game_id', game.id)
         .order('created_at', { ascending: true }),
       supabase
@@ -115,11 +118,15 @@ export default function Voting({ tournament, token, game, currentUserId, partici
             .eq('id', s.hand_card_id)
             .single()
           const user = participants.find((p) => p.id === s.user_id)
+          const impersonatedUser = s.impersonated_user_id
+            ? participants.find((p) => p.id === s.impersonated_user_id)
+            : null
           return {
             ...s,
             position: s.position as 'before' | 'after',
             preamble_position: (s.preamble_position ?? 'above') as 'above' | 'below',
             userName: user?.name ?? '???',
+            impersonatedUserName: impersonatedUser?.name ?? null,
             handCardText: card?.text ?? '',
           }
         })
@@ -258,8 +265,8 @@ export default function Voting({ tournament, token, game, currentUserId, partici
               )}
               {!tournament.secret_voting && (
                 <div className="flex items-center gap-1.5 mt-3">
-                  <UserIcon name={sub.userName} size="xs" />
-                  <p className="text-xs text-gray-400">{sub.userName}</p>
+                  <UserIcon name={tournament.impersonation_mode ? (sub.impersonatedUserName ?? sub.userName) : sub.userName} size="xs" />
+                  <p className="text-xs text-gray-400">{tournament.impersonation_mode ? (sub.impersonatedUserName ?? sub.userName) : sub.userName}</p>
                 </div>
               )}
               {isOwnSubmission ? (

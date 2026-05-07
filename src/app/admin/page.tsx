@@ -52,7 +52,7 @@ export default function AdminPage() {
   const [prodDirtyCards, setProdDirtyCards] = useState(String(productionPreset.dirty_cards_per_user))
   const [cardSource, setCardSource] = useState<'new' | 'previous' | 'all'>('new')
   const [hasPastTournaments, setHasPastTournaments] = useState(false)
-  const [secretVoting, setSecretVoting] = useState(false)
+  const [votingStyle, setVotingStyle] = useState<'normal' | 'secret_one' | 'secret_all' | 'impersonation'>('normal')
 
   const fetchTournaments = useCallback(async () => {
     setListLoading(true)
@@ -107,7 +107,7 @@ export default function AdminPage() {
           hand_cards_per_player: selectedPreset.mode === 'production' ? (parseInt(prodHandCards) || productionPreset.hand_cards_per_player) : selectedPreset.hand_cards_per_player,
           dirty_cards_per_user: selectedPreset.mode === 'production' ? (parseInt(prodDirtyCards) || 0) : selectedPreset.dirty_cards_per_user,
           card_source: selectedPreset.mode === 'production' ? cardSource : 'new',
-          secret_voting: selectedPreset.mode === 'production' ? secretVoting : false,
+          voting_style: selectedPreset.mode === 'production' ? votingStyle : 'normal',
         }),
       })
       const data = await res.json()
@@ -276,19 +276,37 @@ export default function AdminPage() {
               ))}
             </div>
 
-            {/* シークレット投票トグル */}
-            <label className="flex items-center justify-between cursor-pointer">
-              <div>
-                <p className="text-sm text-gray-700 font-medium">シークレットモード</p>
-                <p className="text-xs text-gray-400">投票画面で作者名を非表示にする</p>
+            {/* 投票モード選択 */}
+            <div>
+              <p className="text-sm text-gray-700 font-medium mb-2">投票モード</p>
+              <div className="space-y-2">
+                {([
+                  { value: 'normal', label: '通常', desc: '作者名が投票画面に表示されます' },
+                  { value: 'secret_one', label: 'シークレット（1回のみ）', desc: 'ランダムな1回戦のみ作者名を非表示' },
+                  { value: 'secret_all', label: 'シークレット（全回戦）', desc: '全回戦で作者名を非表示' },
+                  { value: 'impersonation', label: 'なりすまし', desc: '投稿時に任意のユーザー名で出品できる' },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setVotingStyle(opt.value)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all ${
+                      votingStyle === opt.value ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-white'
+                    }`}
+                  >
+                    <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+                      votingStyle === opt.value ? 'border-emerald-500' : 'border-gray-300'
+                    }`}>
+                      {votingStyle === opt.value && <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />}
+                    </div>
+                    <div>
+                      <p className={`text-sm font-medium ${votingStyle === opt.value ? 'text-emerald-700' : 'text-gray-700'}`}>{opt.label}</p>
+                      <p className="text-xs text-gray-400">{opt.desc}</p>
+                    </div>
+                  </button>
+                ))}
               </div>
-              <div
-                onClick={() => setSecretVoting((v) => !v)}
-                className={`relative w-11 h-6 rounded-full transition-colors ${secretVoting ? 'bg-emerald-500' : 'bg-gray-200'}`}
-              >
-                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${secretVoting ? 'translate-x-5' : 'translate-x-0'}`} />
-              </div>
-            </label>
+            </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -478,7 +496,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.23.14</p>
+        <p className="text-center text-xs text-gray-300 mt-8">v1.24.0</p>
       </div>
     </div>
   )

@@ -13,6 +13,7 @@ interface User {
 interface Tournament {
   id: string
   cards_per_user: number
+  impersonation_mode: boolean
 }
 
 interface Game {
@@ -46,6 +47,7 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
   const [position, setPosition] = useState<CardPosition>('after')
   const [preamble, setPreamble] = useState('')
   const [preamblePosition, setPreamblePosition] = useState<'above' | 'below'>('above')
+  const [impersonatedUserId, setImpersonatedUserId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [submittedUserIds, setSubmittedUserIds] = useState<string[]>([])
@@ -60,15 +62,16 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
       position,
       preamble,
       preamblePosition,
+      impersonatedUserId,
     }))
-  }, [selectedCard, position, preamble, preamblePosition, submitted, draftKey])
+  }, [selectedCard, position, preamble, preamblePosition, impersonatedUserId, submitted, draftKey])
 
   useEffect(() => {
     async function init() {
       const [topicRes, handsRes, subsRes] = await Promise.all([
         supabase.from('cards').select('text').eq('id', game.topic_card_id).single(),
         supabase.from('player_hands').select('card_id, is_used, cards(id, text, created_at)').eq('tournament_id', tournament.id).eq('user_id', currentUserId),
-        supabase.from('submissions').select('user_id, hand_card_id, position, preamble, preamble_position').eq('game_id', game.id),
+        supabase.from('submissions').select('user_id, hand_card_id, position, preamble, preamble_position, impersonated_user_id').eq('game_id', game.id),
       ])
 
       if (topicRes.data) setTopicText(topicRes.data.text)
@@ -91,6 +94,7 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
         setPreamble(mySub.preamble ?? '')
         setPreamblePosition(mySub.preamble_position ?? 'above')
         setSubmittedCardId(mySub.hand_card_id)
+        if (mySub.impersonated_user_id) setImpersonatedUserId(mySub.impersonated_user_id)
         const myCard = cards.find((c) => c.id === mySub.hand_card_id)
         if (myCard) setSelectedCard(myCard)
         localStorage.removeItem(draftKey)
@@ -101,13 +105,14 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
       try {
         const saved = localStorage.getItem(draftKey)
         if (saved) {
-          const { cardId, position: dPos, preamble: dPreamble, preamblePosition: dPreamblePos } = JSON.parse(saved)
+          const { cardId, position: dPos, preamble: dPreamble, preamblePosition: dPreamblePos, impersonatedUserId: dImpersonatedUserId } = JSON.parse(saved)
           const draftCard = cards.find((c) => c.id === cardId)
           if (draftCard) {
             setSelectedCard(draftCard)
             setPosition(dPos as CardPosition)
             setPreamble(dPreamble ?? '')
             setPreamblePosition(dPreamblePos ?? 'above')
+            if (dImpersonatedUserId) setImpersonatedUserId(dImpersonatedUserId)
           }
         }
       } catch { /* ignore */ }
@@ -142,6 +147,10 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
       alert('手札を選んでください')
       return
     }
+    if (tournament.impersonation_mode && !impersonatedUserId) {
+      alert('なりすますユーザーを選んでください')
+      return
+    }
     setSubmitting(true)
     await fetch(`/api/tournaments/${token}/submit`, {
       method: 'POST',
@@ -153,6 +162,7 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
         position,
         preamble: preamble.trim() || null,
         preamble_position: preamblePosition,
+        impersonated_user_id: tournament.impersonation_mode ? impersonatedUserId : null,
       }),
     })
     // 前回と別のカードに変えた場合、ローカルのis_usedを戻す
@@ -260,6 +270,40 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
               <span className="text-emerald-500">■</span> 手札　<span className="text-gray-500">■</span> お題
             </p>
           </div>
+        </div>
+      )}
+
+      {/* なりすましユーザー選択 */}
+      {tournament.impersonation_mode && (
+        <div className="bg-white rounded-2xl shadow-sm p-5">
+          <h3 className="text-sm font-semibold text-gray-700 mb-1">なりすますユーザー</h3>
+          <p className="text-xs text-gray-400 mb-3">投票画面でこのユーザーの作品として表示されます</p>
+          <div className="grid grid-cols-2 gap-2">
+            {participants.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => {
+                  setImpersonatedUserId(p.id)
+                  if (submitted) setSubmitted(false)
+                }}
+                className={`flex items-center gap-2 px-3 py-3 rounded-xl text-sm font-medium transition-all border-2 ${
+                  impersonatedUserId === p.id
+                    ? 'border-purple-500 bg-purple-50 text-purple-700'
+                    : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-purple-200'
+                }`}
+              >
+                <span className="text-base leading-none">
+                  {impersonatedUserId === p.id ? '🎭' : '👤'}
+                </span>
+                {p.name}
+              </button>
+            ))}
+          </div>
+          {impersonatedUserId && (
+            <p className="text-xs text-purple-600 mt-2 text-center">
+              🎭 {participants.find((p) => p.id === impersonatedUserId)?.name} としてなりすまし中
+            </p>
+          )}
         </div>
       )}
 

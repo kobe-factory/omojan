@@ -12,6 +12,7 @@ interface User {
 interface Tournament {
   id: string
   game_count: number
+  impersonation_mode: boolean
 }
 
 interface Game {
@@ -26,6 +27,7 @@ interface ResultItem {
   submissionId: string
   userId: string
   userName: string
+  impersonatedUserName: string | null
   topicText: string
   handText: string
   position: 'before' | 'after'
@@ -60,7 +62,7 @@ export default function Results({ tournament, game, participants, onNext, nextLa
     async function fetchResults() {
       const [{ data: topicCard }, { data: subs }, { data: votes }] = await Promise.all([
         supabase.from('cards').select('text').eq('id', game.topic_card_id).single(),
-        supabase.from('submissions').select('id, user_id, hand_card_id, position, preamble, preamble_position').eq('game_id', game.id),
+        supabase.from('submissions').select('id, user_id, hand_card_id, position, preamble, preamble_position, impersonated_user_id').eq('game_id', game.id),
         supabase.from('votes').select('submission_id, voter_user_id, is_tiebreaker').eq('game_id', game.id),
       ])
 
@@ -92,10 +94,14 @@ export default function Results({ tournament, game, participants, onNext, nextLa
         (subs ?? []).map(async (s) => {
           const { data: card } = await supabase.from('cards').select('text').eq('id', s.hand_card_id).single()
           const user = participants.find((p) => p.id === s.user_id)
+          const impersonatedUser = s.impersonated_user_id
+            ? participants.find((p) => p.id === s.impersonated_user_id)
+            : null
           return {
             submissionId: s.id,
             userId: s.user_id,
             userName: user?.name ?? '???',
+            impersonatedUserName: impersonatedUser?.name ?? null,
             topicText,
             handText: card?.text ?? '',
             position: s.position as 'before' | 'after',
@@ -212,10 +218,20 @@ export default function Results({ tournament, game, participants, onNext, nextLa
               <p className="text-sm text-gray-500 italic mb-2">「{r.preamble}」</p>
             )}
             <div className="mt-2">
-              <div className="flex items-center gap-1.5">
-                <UserIcon name={r.userName} size="xs" />
-                <p className="text-xs text-gray-600">{r.userName}</p>
-              </div>
+              {tournament.impersonation_mode && r.impersonatedUserName ? (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <UserIcon name={r.impersonatedUserName} size="xs" />
+                  <p className="text-xs text-gray-600">{r.impersonatedUserName}</p>
+                  <span className="text-xs text-gray-400">（本当は…</span>
+                  <UserIcon name={r.userName} size="xs" />
+                  <span className="text-xs text-gray-400">{r.userName}）</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <UserIcon name={r.userName} size="xs" />
+                  <p className="text-xs text-gray-600">{r.userName}</p>
+                </div>
+              )}
               {r.voterNames.length > 0 && (
                 <div className="flex items-center justify-end gap-1.5 mt-1.5 pt-1.5 border-t border-gray-100 flex-wrap">
                   <span className="text-[9px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">投票</span>

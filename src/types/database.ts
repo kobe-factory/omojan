@@ -19,6 +19,7 @@ export type Database = {
           skip_card_creation: boolean
           secret_voting: boolean
           secret_round: number | null
+          impersonation_mode: boolean
           status: TournamentStatus
           created_at: string
         }
@@ -34,6 +35,7 @@ export type Database = {
           skip_card_creation?: boolean
           secret_voting?: boolean
           secret_round?: number | null
+          impersonation_mode?: boolean
           status?: TournamentStatus
           created_at?: string
         }
@@ -49,6 +51,7 @@ export type Database = {
           skip_card_creation?: boolean
           secret_voting?: boolean
           secret_round?: number | null
+          impersonation_mode?: boolean
           status?: TournamentStatus
           created_at?: string
         }
@@ -196,6 +199,7 @@ export type Database = {
           position: CardPosition
           preamble: string | null
           preamble_position: 'above' | 'below'
+          impersonated_user_id: string | null
           created_at: string
         }
         Insert: {
@@ -206,6 +210,7 @@ export type Database = {
           position: CardPosition
           preamble?: string | null
           preamble_position?: 'above' | 'below'
+          impersonated_user_id?: string | null
           created_at?: string
         }
         Update: {
@@ -216,6 +221,7 @@ export type Database = {
           position?: CardPosition
           preamble?: string | null
           preamble_position?: 'above' | 'below'
+          impersonated_user_id?: string | null
           created_at?: string
         }
         Relationships: []
