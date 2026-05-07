@@ -194,6 +194,28 @@ export default function TournamentPage() {
     return () => { supabase.removeChannel(channel) }
   }, [tournament, fetchState])
 
+  // 大会切り替え時にlocalStorageの古いゲームデータを削除
+  useEffect(() => {
+    if (!tournament?.id) return
+    if (typeof window === 'undefined') return
+    const activeKey = 'omojan:active_tournament'
+    const prev = localStorage.getItem(activeKey)
+    if (prev && prev !== tournament.id) {
+      const toDelete: string[] = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)
+        if (k && (
+          k.startsWith('omojan:shuffle:') ||
+          k.startsWith('omojan:handorder:') ||
+          k.startsWith('omojan:draft:submission:') ||
+          k.startsWith('omojan:result_seen:')
+        )) toDelete.push(k)
+      }
+      toDelete.forEach((k) => localStorage.removeItem(k))
+    }
+    localStorage.setItem(activeKey, tournament.id)
+  }, [tournament?.id])
+
   // 前戦の結果モーダル表示チェック（作品投稿中フェーズに入ったとき、未確認なら前戦結果を表示）
   useEffect(() => {
     if (!tournament || !currentGame) return
@@ -468,7 +490,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.24.9</p>
+        <p className="text-xs text-gray-300">v1.25.0</p>
       </footer>
 
       {/* 前戦結果モーダル（まだ結果を確認していないユーザー向け） */}
