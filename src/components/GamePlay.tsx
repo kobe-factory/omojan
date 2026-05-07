@@ -270,6 +270,15 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
             <p className="text-xs text-gray-400 mt-3">
               <span className="text-emerald-500">■</span> 手札　<span className="text-gray-500">■</span> お題
             </p>
+            {tournament.impersonation_mode && impersonatedUserId && (() => {
+              const imp = participants.find((p) => p.id === impersonatedUserId)
+              return imp ? (
+                <div className="flex items-center justify-center gap-1.5 mt-3 pt-3 border-t border-emerald-200">
+                  <UserIcon name={imp.name} size="xs" />
+                  <p className="text-xs text-gray-500">{imp.name}</p>
+                </div>
+              ) : null
+            })()}
           </div>
         </div>
       )}
