@@ -144,14 +144,8 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
   const completedUserIds = submittedUserIds
 
   async function handleSubmit() {
-    if (!selectedCard) {
-      alert('手札を選んでください')
-      return
-    }
-    if (tournament.impersonation_mode && !impersonatedUserId) {
-      alert('なりすますユーザーを選んでください')
-      return
-    }
+    if (!selectedCard) return
+    if (tournament.impersonation_mode && !impersonatedUserId) return
     setSubmitting(true)
     await fetch(`/api/tournaments/${token}/submit`, {
       method: 'POST',
@@ -355,7 +349,7 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
       {/* 投稿ボタン */}
       <button
         onClick={handleSubmit}
-        disabled={submitting || !selectedCard}
+        disabled={submitting || !selectedCard || (tournament.impersonation_mode && !impersonatedUserId)}
         className={`w-full py-4 rounded-xl font-bold transition-all ${
           submitted
             ? 'bg-green-500 text-white'
