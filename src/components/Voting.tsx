@@ -132,16 +132,16 @@ export default function Voting({ tournament, token, game, currentUserId, partici
         })
       )
 
-      // ゲーム・フェーズごとに並び順をsessionStorageで永続化（リロードしても順序を保持）
+      // ゲーム・フェーズごとに並び順をlocalStorageで永続化（LINEのWebView再起動後も順序を保持）
       const shuffleKey = `omojan:shuffle:${game.id}-${isTiebreaker}`
-      const stored = sessionStorage.getItem(shuffleKey)
+      const stored = localStorage.getItem(shuffleKey)
       let orderedIds: string[]
       if (stored) {
         orderedIds = JSON.parse(stored)
       } else {
         const shuffled = [...enriched].sort(() => Math.random() - 0.5)
         orderedIds = shuffled.map((s) => s.id)
-        sessionStorage.setItem(shuffleKey, JSON.stringify(orderedIds))
+        localStorage.setItem(shuffleKey, JSON.stringify(orderedIds))
       }
       shuffleKeyRef.current = shuffleKey
       shuffledIdsRef.current = orderedIds

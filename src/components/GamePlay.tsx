@@ -41,6 +41,7 @@ interface Props {
 
 export default function GamePlay({ tournament, token, game, currentUserId, participants, onSubmitted }: Props) {
   const draftKey = `omojan:draft:submission:${game.id}:${currentUserId}`
+  const handOrderKey = `omojan:handorder:${tournament.id}:${currentUserId}`
 
   const [topicText, setTopicText] = useState('')
   const [handCards, setHandCards] = useState<HandCard[]>([])
@@ -82,7 +83,17 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
         if (!card) return null
         return { ...card, is_used: h.is_used }
       }).filter(Boolean) as HandCard[]
-      setHandCards(cards.sort((a, b) => a.created_at.localeCompare(b.created_at)))
+
+      // 手札の並び順をlocalStorageで固定（全回戦・リロード後も同じ順序）
+      const savedOrder = localStorage.getItem(handOrderKey)
+      if (savedOrder) {
+        const orderMap = Object.fromEntries((JSON.parse(savedOrder) as string[]).map((id, i) => [id, i]))
+        setHandCards([...cards].sort((a, b) => (orderMap[a.id] ?? 999) - (orderMap[b.id] ?? 999)))
+      } else {
+        const sorted = [...cards].sort((a, b) => a.created_at.localeCompare(b.created_at))
+        localStorage.setItem(handOrderKey, JSON.stringify(sorted.map((c) => c.id)))
+        setHandCards(sorted)
+      }
 
       const ids = (subsRes.data ?? []).map((s) => s.user_id)
       setSubmittedUserIds(ids)
