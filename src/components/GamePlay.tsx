@@ -222,6 +222,9 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
             })}
           </div>
         )}
+        {!selectedCard && handCards.length > 0 && (
+          <p className="text-xs text-red-400 mt-2 text-center">手札を選択してください</p>
+        )}
       </div>
 
       {/* なりすましユーザー選択 */}
@@ -249,10 +252,12 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
               </button>
             ))}
           </div>
-          {impersonatedUserId && (
+          {impersonatedUserId ? (
             <p className="text-xs text-purple-600 mt-2 text-center">
               🎭 {participants.find((p) => p.id === impersonatedUserId)?.name} としてなりすまし中
             </p>
+          ) : (
+            <p className="text-xs text-red-400 mt-2 text-center">なりすますユーザーを選択してください</p>
           )}
         </div>
       )}
