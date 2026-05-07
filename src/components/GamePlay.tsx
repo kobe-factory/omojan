@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import CompletionStatus from './CompletionStatus'
+import UserIcon from './UserIcon'
 import type { CardPosition } from '@/types/database'
 
 interface User {
@@ -292,9 +293,7 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
                     : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-purple-200'
                 }`}
               >
-                <span className="text-base leading-none">
-                  {impersonatedUserId === p.id ? '🎭' : '👤'}
-                </span>
+                <UserIcon name={p.name} size="sm" />
                 {p.name}
               </button>
             ))}
