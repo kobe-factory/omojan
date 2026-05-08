@@ -18,6 +18,7 @@ interface TournamentRow {
   secret_round: number | null
   impersonation_mode: boolean
   productionNumber?: number
+  currentGame?: { round_number: number; status: string }
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -25,6 +26,15 @@ const STATUS_LABEL: Record<string, string> = {
   creating_cards: '札作成中',
   playing: 'ゲーム中',
   finished: '終了',
+}
+
+const GAME_STATUS_LABEL: Record<string, string> = {
+  waiting_submission: '作品投稿中',
+  waiting_vote: '投票中',
+  waiting_tiebreaker_vote: '決選投票中',
+  showing_result: '結果発表中',
+  showing_rematch: '再戦準備中',
+  finished: '次回戦準備中',
 }
 
 const MODE_LABEL: Record<string, string> = {
@@ -74,9 +84,27 @@ export default function AdminPage() {
       productionNumberMap[t.id] = i + 1
     })
 
+    // playing状態の大会の最新ゲームを一括取得
+    const playingIds = rows.filter((t) => t.status === 'playing').map((t) => t.id)
+    const gameMap: Record<string, { round_number: number; status: string }> = {}
+    if (playingIds.length > 0) {
+      const { data: games } = await supabase
+        .from('games')
+        .select('tournament_id, round_number, status')
+        .in('tournament_id', playingIds)
+        .order('round_number', { ascending: false })
+        .order('created_at', { ascending: false })
+      for (const g of games ?? []) {
+        if (!gameMap[g.tournament_id]) {
+          gameMap[g.tournament_id] = { round_number: g.round_number, status: g.status }
+        }
+      }
+    }
+
     const mapped = rows.map((t) => ({
       ...t,
       productionNumber: productionNumberMap[t.id],
+      currentGame: gameMap[t.id],
     }))
     setTournaments(mapped)
 
@@ -460,7 +488,9 @@ export default function AdminPage() {
                           ? 'bg-emerald-100 text-emerald-600'
                           : 'bg-yellow-100 text-yellow-600'
                       }`}>
-                        {STATUS_LABEL[t.status] ?? t.status}
+                        {t.status === 'playing' && t.currentGame
+                          ? `第${t.currentGame.round_number}回戦 ${GAME_STATUS_LABEL[t.currentGame.status] ?? t.currentGame.status}`
+                          : STATUS_LABEL[t.status] ?? t.status}
                       </span>
                       {/* 投票モードバッジ */}
                       {t.impersonation_mode && (
@@ -509,7 +539,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.25.0</p>
+        <p className="text-center text-xs text-gray-300 mt-8">v1.25.1</p>
       </div>
     </div>
   )
