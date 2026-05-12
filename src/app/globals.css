@@ -17,6 +17,7 @@ body {
   touch-action: pan-x pan-y;
   overflow-y: auto;
   height: 100%;
+  font-family: var(--font-noto-sans-jp), 'Apple Color Emoji', 'Noto Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
 }
 
 * {

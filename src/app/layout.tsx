@@ -5,11 +5,12 @@ import './globals.css'
 const notoSansJP = Noto_Sans_JP({
   subsets: ['latin'],
   weight: ['400', '500', '700', '900'],
+  variable: '--font-noto-sans-jp',
 })
 
 export const metadata: Metadata = {
   title: 'おもじゃん for 男根祭',
-  description: 'ご神体ワードバトル v1.25.2',
+  description: 'ご神体ワードバトル v1.26.0',
   robots: { index: false, follow: false },
 }
 
@@ -34,7 +35,7 @@ export default function RootLayout({
           document.addEventListener('touchmove', function(e) { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
         `}} />
       </head>
-      <body className={`${notoSansJP.className} min-h-full bg-gray-50`}>{children}</body>
+      <body className={`${notoSansJP.variable} min-h-full bg-gray-50`}>{children}</body>
     </html>
   )
 }

@@ -7,6 +7,7 @@ export async function POST(
 ) {
   const { token } = await params
   const { user_id, game_id, hand_card_id, position, preamble, preamble_position, impersonated_user_id } = await request.json()
+  console.log('[submit] preamble raw:', JSON.stringify(preamble))
 
   const { data: game } = await supabase
     .from('games')
