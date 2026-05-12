@@ -30,6 +30,7 @@ interface RoundSummary {
   winnerPreamblePosition: 'above' | 'below'
   votes: number
   isTied: boolean
+  isWinByTiebreaker: boolean
 }
 
 interface Props {
@@ -59,7 +60,7 @@ export default function TournamentFinished({ tournamentId, participants }: Props
       const gameIds = games.map((g) => g.id)
 
       const [{ data: allVotes }, { data: allSubs }] = await Promise.all([
-        supabase.from('votes').select('game_id, submission_id, created_at').in('game_id', gameIds),
+        supabase.from('votes').select('game_id, submission_id, created_at, is_tiebreaker').in('game_id', gameIds),
         supabase.from('submissions').select('id, game_id, user_id, hand_card_id, position, preamble, preamble_position').in('game_id', gameIds),
       ])
 
@@ -78,12 +79,17 @@ export default function TournamentFinished({ tournamentId, participants }: Props
       const topicMap = Object.fromEntries((topicCards ?? []).map((c) => [c.id, c.text]))
       const handMap = Object.fromEntries((handCards ?? []).map((c) => [c.id, c.text]))
 
-      // submission_id → 票数・投票時間合計
-      const voteCount: Record<string, number> = {}
-      const voteTimeSum: Record<string, number> = {}
+      // 通常投票・決選投票を分けてカウント
+      const regularVoteCount: Record<string, number> = {}
+      const regularVoteTimeSum: Record<string, number> = {}
+      const tiebreakerVoteCount: Record<string, number> = {}
       for (const v of allVotes ?? []) {
-        voteCount[v.submission_id] = (voteCount[v.submission_id] ?? 0) + 1
-        voteTimeSum[v.submission_id] = (voteTimeSum[v.submission_id] ?? 0) + new Date(v.created_at).getTime()
+        if (v.is_tiebreaker) {
+          tiebreakerVoteCount[v.submission_id] = (tiebreakerVoteCount[v.submission_id] ?? 0) + 1
+        } else {
+          regularVoteCount[v.submission_id] = (regularVoteCount[v.submission_id] ?? 0) + 1
+          regularVoteTimeSum[v.submission_id] = (regularVoteTimeSum[v.submission_id] ?? 0) + new Date(v.created_at).getTime()
+        }
       }
 
       const scoreMap: Record<string, { totalVotes: number; totalVoteTimeSum: number; wins: number; bigWins4: number; bigWins3: number }> = {}
@@ -95,24 +101,26 @@ export default function TournamentFinished({ tournamentId, participants }: Props
 
       for (const game of games) {
         const gameSubs = (allSubs ?? []).filter((s) => s.game_id === game.id)
-        let maxVotes = 0
+        let maxRegularVotes = 0
         let winnerTimeSum = Infinity
         let winnerSub: typeof gameSubs[0] | null = null
         let hasTie = false
+        let isWinByTiebreaker = false
 
+        // 通常投票で集計
         for (const sub of gameSubs) {
-          const count = voteCount[sub.id] ?? 0
-          const timeSum = voteTimeSum[sub.id] ?? 0
+          const count = regularVoteCount[sub.id] ?? 0
+          const timeSum = regularVoteTimeSum[sub.id] ?? 0
           if (scoreMap[sub.user_id]) {
             scoreMap[sub.user_id].totalVotes += count
             scoreMap[sub.user_id].totalVoteTimeSum += timeSum
           }
-          if (count > maxVotes) {
-            maxVotes = count
+          if (count > maxRegularVotes) {
+            maxRegularVotes = count
             winnerSub = sub
             winnerTimeSum = timeSum
             hasTie = false
-          } else if (count === maxVotes && count > 0) {
+          } else if (count === maxRegularVotes && count > 0) {
             hasTie = true
             if (timeSum < winnerTimeSum) {
               winnerSub = sub
@@ -121,10 +129,33 @@ export default function TournamentFinished({ tournamentId, participants }: Props
           }
         }
 
+        // 同票の場合は決選投票で勝者を決定
+        if (hasTie) {
+          let maxTbVotes = 0
+          let tbWinner: typeof gameSubs[0] | null = null
+          for (const sub of gameSubs) {
+            const tbCount = tiebreakerVoteCount[sub.id] ?? 0
+            if (tbCount > maxTbVotes) {
+              maxTbVotes = tbCount
+              tbWinner = sub
+            }
+          }
+          if (tbWinner) {
+            winnerSub = tbWinner
+            isWinByTiebreaker = true
+            hasTie = false
+          }
+        }
+
+        // 表示票数: 通常最多票 + 決選投票の場合+1
+        const displayVotes = maxRegularVotes + (isWinByTiebreaker ? 1 : 0)
+
         if (winnerSub && scoreMap[winnerSub.user_id]) {
           scoreMap[winnerSub.user_id].wins += 1
-          if (maxVotes >= 4) scoreMap[winnerSub.user_id].bigWins4 += 1
-          else if (maxVotes === 3) scoreMap[winnerSub.user_id].bigWins3 += 1
+          // 決選投票勝利には+1を総得票数に加算
+          if (isWinByTiebreaker) scoreMap[winnerSub.user_id].totalVotes += 1
+          if (displayVotes >= 4) scoreMap[winnerSub.user_id].bigWins4 += 1
+          else if (displayVotes === 3) scoreMap[winnerSub.user_id].bigWins3 += 1
         }
 
         const topicText = topicMap[game.topic_card_id] ?? ''
@@ -143,8 +174,9 @@ export default function TournamentFinished({ tournamentId, participants }: Props
           winnerText,
           winnerPreamble: winnerSub?.preamble ?? null,
           winnerPreamblePosition: (winnerSub?.preamble_position ?? 'above') as 'above' | 'below',
-          votes: maxVotes,
+          votes: displayVotes,
           isTied: hasTie,
+          isWinByTiebreaker,
         })
       }
 
@@ -232,7 +264,7 @@ export default function TournamentFinished({ tournamentId, participants }: Props
           </div>
           <p className="text-sm text-gray-500">
             <span className="text-xl font-bold text-yellow-500">{mvp.wins}</span>勝
-            　{mvp.totalVotes}票
+            　総得票数: {mvp.totalVotes}票
           </p>
           {mvp.isTied && (
             <p className="text-xs text-yellow-500 mt-1">（同点）</p>
@@ -281,6 +313,9 @@ export default function TournamentFinished({ tournamentId, participants }: Props
                 <div className="flex items-center gap-2">
                   {r.isTied && (
                     <span className="text-xs text-gray-400">（同点・投票時間で決定）</span>
+                  )}
+                  {r.isWinByTiebreaker && (
+                    <span className="text-[9px] font-bold text-red-400 bg-red-50 px-1.5 py-0.5 rounded-full">決選</span>
                   )}
                   <span className="text-xs text-gray-400">{r.votes}票</span>
                 </div>

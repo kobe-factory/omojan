@@ -92,7 +92,7 @@ export default function SummaryPage() {
 
     const [{ data: allSubs }, { data: allVotes }] = await Promise.all([
       supabase.from('submissions').select('id, game_id, user_id, hand_card_id, position, preamble, preamble_position').in('game_id', gameIds),
-      supabase.from('votes').select('game_id, submission_id, created_at').in('game_id', gameIds),
+      supabase.from('votes').select('game_id, submission_id, created_at, is_tiebreaker').in('game_id', gameIds),
     ])
 
     const topicIds = (allGames ?? []).map((g) => g.topic_card_id)
@@ -104,11 +104,16 @@ export default function SummaryPage() {
 
     const cardMap = Object.fromEntries((allCards ?? []).map((c) => [c.id, c.text]))
 
-    const voteCount: Record<string, number> = {}
-    const voteTimeSum: Record<string, number> = {}
+    const regularVoteCount: Record<string, number> = {}
+    const regularVoteTimeSum: Record<string, number> = {}
+    const tiebreakerVoteCount: Record<string, number> = {}
     for (const v of allVotes ?? []) {
-      voteCount[v.submission_id] = (voteCount[v.submission_id] ?? 0) + 1
-      voteTimeSum[v.submission_id] = (voteTimeSum[v.submission_id] ?? 0) + new Date(v.created_at).getTime()
+      if (v.is_tiebreaker) {
+        tiebreakerVoteCount[v.submission_id] = (tiebreakerVoteCount[v.submission_id] ?? 0) + 1
+      } else {
+        regularVoteCount[v.submission_id] = (regularVoteCount[v.submission_id] ?? 0) + 1
+        regularVoteTimeSum[v.submission_id] = (regularVoteTimeSum[v.submission_id] ?? 0) + new Date(v.created_at).getTime()
+      }
     }
 
     const overallMap: Record<string, { name: string; totalVotes: number; totalWins: number; totalRoundWins: number; totalBigWins4: number; totalBigWins3: number }> = {}
@@ -130,14 +135,15 @@ export default function SummaryPage() {
       const rounds: RoundSummary[] = []
       for (const game of games) {
         const gameSubs = (allSubs ?? []).filter((s) => s.game_id === game.id)
-        let maxVotes = 0
+        let maxRegularVotes = 0
         let winnerTimeSum = Infinity
         let winnerSub: typeof gameSubs[0] | null = null
         let hasTie = false
+        let isWinByTiebreaker = false
 
         for (const sub of gameSubs) {
-          const count = voteCount[sub.id] ?? 0
-          const timeSum = voteTimeSum[sub.id] ?? 0
+          const count = regularVoteCount[sub.id] ?? 0
+          const timeSum = regularVoteTimeSum[sub.id] ?? 0
           if (scoreMap[sub.user_id]) {
             scoreMap[sub.user_id].totalVotes += count
             scoreMap[sub.user_id].totalVoteTimeSum += timeSum
@@ -145,23 +151,37 @@ export default function SummaryPage() {
           if (overallMap[sub.user_id]) {
             overallMap[sub.user_id].totalVotes += count
           }
-          if (count > maxVotes) {
-            maxVotes = count; winnerSub = sub; winnerTimeSum = timeSum; hasTie = false
-          } else if (count === maxVotes && count > 0) {
+          if (count > maxRegularVotes) {
+            maxRegularVotes = count; winnerSub = sub; winnerTimeSum = timeSum; hasTie = false
+          } else if (count === maxRegularVotes && count > 0) {
             hasTie = true
             if (timeSum < winnerTimeSum) { winnerSub = sub; winnerTimeSum = timeSum }
           }
         }
 
+        if (hasTie) {
+          let maxTbVotes = 0
+          let tbWinner: typeof gameSubs[0] | null = null
+          for (const sub of gameSubs) {
+            const tbCount = tiebreakerVoteCount[sub.id] ?? 0
+            if (tbCount > maxTbVotes) { maxTbVotes = tbCount; tbWinner = sub }
+          }
+          if (tbWinner) { winnerSub = tbWinner; isWinByTiebreaker = true; hasTie = false }
+        }
+
+        const displayVotes = maxRegularVotes + (isWinByTiebreaker ? 1 : 0)
+
         if (winnerSub && scoreMap[winnerSub.user_id]) {
           scoreMap[winnerSub.user_id].wins += 1
-          if (maxVotes >= 4) scoreMap[winnerSub.user_id].bigWins4 += 1
-          else if (maxVotes === 3) scoreMap[winnerSub.user_id].bigWins3 += 1
+          if (isWinByTiebreaker) scoreMap[winnerSub.user_id].totalVotes += 1
+          if (displayVotes >= 4) scoreMap[winnerSub.user_id].bigWins4 += 1
+          else if (displayVotes === 3) scoreMap[winnerSub.user_id].bigWins3 += 1
         }
         if (winnerSub && overallMap[winnerSub.user_id]) {
           overallMap[winnerSub.user_id].totalRoundWins += 1
-          if (maxVotes >= 4) overallMap[winnerSub.user_id].totalBigWins4 += 1
-          else if (maxVotes === 3) overallMap[winnerSub.user_id].totalBigWins3 += 1
+          if (isWinByTiebreaker) overallMap[winnerSub.user_id].totalVotes += 1
+          if (displayVotes >= 4) overallMap[winnerSub.user_id].totalBigWins4 += 1
+          else if (displayVotes === 3) overallMap[winnerSub.user_id].totalBigWins3 += 1
         }
 
         const topicText = cardMap[game.topic_card_id] ?? ''
@@ -171,7 +191,7 @@ export default function SummaryPage() {
           : ''
         const winnerUser = winnerSub ? participants.find((p) => p.id === winnerSub!.user_id) : null
 
-        rounds.push({ roundNumber: game.round_number, topicText, winnerName: winnerUser?.name ?? '???', winnerText, winnerPreamble: winnerSub?.preamble ?? null, winnerPreamblePosition: (winnerSub?.preamble_position ?? 'above') as 'above' | 'below', votes: maxVotes, isTied: hasTie })
+        rounds.push({ roundNumber: game.round_number, topicText, winnerName: winnerUser?.name ?? '???', winnerText, winnerPreamble: winnerSub?.preamble ?? null, winnerPreamblePosition: (winnerSub?.preamble_position ?? 'above') as 'above' | 'below', votes: displayVotes, isTied: hasTie })
       }
 
       const sortedScores = participants
@@ -289,6 +309,7 @@ export default function SummaryPage() {
                     </div>
                     {s.isTied && <span className="text-xs text-gray-400">同点</span>}
                     <span className="text-xs text-gray-400">{s.totalWins}大会優勝</span>
+                    <span className="text-xs text-gray-400">{s.totalRoundWins}勝</span>
                     <span className="text-sm font-bold text-emerald-600">{s.totalVotes}票</span>
                   </div>
                 ))}
