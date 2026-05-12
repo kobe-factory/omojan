@@ -274,8 +274,8 @@ export default function SummaryPage() {
                   <p className="text-2xl font-black text-gray-800">{mvp.userName}</p>
                 </div>
                 <p className="text-sm text-gray-500">
-                  総獲得票数 <span className="text-xl font-bold text-yellow-500">{mvp.totalVotes}</span>票
-                  　{mvp.totalWins}大会優勝
+                  <span className="text-xl font-bold text-yellow-500">{mvp.totalWins}</span>大会優勝
+                  　総得票数: <span className="text-xl font-bold text-emerald-600">{mvp.totalVotes}</span>票
                 </p>
                 {mvp.isTied && <p className="text-xs text-yellow-500 mt-1">（同点）</p>}
               </div>
