@@ -32,6 +32,7 @@ export async function POST(request: Request) {
   // secret_one: ランダムな1回戦のみシークレット / secret_all: 全回戦シークレット(null=全回戦)
   const secretRound = isSecretOne ? Math.floor(Math.random() * resolvedGameCount) + 1 : null
   const impersonationMode = voting_style === 'impersonation'
+  const randomVoting = voting_style === 'random_per_round'
 
   const { data, error } = await supabase
     .from('tournaments')
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
       secret_voting: secretVoting,
       secret_round: secretRound,
       impersonation_mode: impersonationMode,
+      random_voting: randomVoting,
     })
     .select()
     .single()

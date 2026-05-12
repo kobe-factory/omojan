@@ -18,6 +18,7 @@ interface ArchiveGame {
   isRematch: boolean
   isVoided: boolean
   hasTiebreaker: boolean
+  votingMode: string | null
 }
 
 interface ArchiveSubmission {
@@ -41,9 +42,10 @@ interface Props {
   tournamentId: string
   participants: User[]
   impersonationMode?: boolean
+  randomVoting?: boolean
 }
 
-export default function Archive({ tournamentId, participants, impersonationMode = false }: Props) {
+export default function Archive({ tournamentId, participants, impersonationMode = false, randomVoting = false }: Props) {
   const [games, setGames] = useState<ArchiveGame[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedGame, setExpandedGame] = useState<string | null>(null)
@@ -52,7 +54,7 @@ export default function Archive({ tournamentId, participants, impersonationMode 
     async function fetchArchive() {
       const { data: finishedGames } = await supabase
         .from('games')
-        .select('id, round_number, topic_card_id, status, is_rematch')
+        .select('id, round_number, topic_card_id, status, is_rematch, voting_mode')
         .eq('tournament_id', tournamentId)
         .in('status', ['showing_result', 'finished', 'showing_rematch'])
         .order('round_number', { ascending: true })
@@ -166,6 +168,7 @@ export default function Archive({ tournamentId, participants, impersonationMode 
             isRematch: g.is_rematch,
             isVoided,
             hasTiebreaker,
+            votingMode: (g as { voting_mode?: string | null }).voting_mode ?? null,
           }
         })
       )
@@ -216,11 +219,17 @@ export default function Archive({ tournamentId, participants, impersonationMode 
                   {g.isRematch && !g.isVoided && (
                     <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full">再戦</span>
                   )}
+                  {randomVoting && g.votingMode === 'secret' && (
+                    <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">🕵️</span>
+                  )}
+                  {randomVoting && g.votingMode === 'impersonation' && (
+                    <span className="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full">🎭</span>
+                  )}
                 </div>
                 <p className="text-xs text-gray-400 mt-0.5">お題：{g.topicText}</p>
                 {!g.isVoided && winner && (
                   <p className="text-xs text-yellow-600 mt-1">
-                    👑 {impersonationMode && winner.impersonatedUserName ? winner.impersonatedUserName : winner.userName}「{winner.fullText}」
+                    👑 {(randomVoting ? g.votingMode === 'impersonation' : impersonationMode) && winner.impersonatedUserName ? winner.impersonatedUserName : winner.userName}「{winner.fullText}」
                   </p>
                 )}
                 {g.isVoided && (
@@ -276,7 +285,7 @@ export default function Archive({ tournamentId, participants, impersonationMode 
                       <p className="text-xs text-gray-500 italic mt-1">「{s.preamble}」</p>
                     )}
                     <div className="mt-3">
-                      {impersonationMode && s.impersonatedUserName ? (
+                      {(randomVoting ? g.votingMode === 'impersonation' : impersonationMode) && s.impersonatedUserName ? (
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <UserIcon name={s.impersonatedUserName} size="xs" />
                           <p className="text-xs text-gray-600">{s.impersonatedUserName}</p>

@@ -20,6 +20,7 @@ export type Database = {
           secret_voting: boolean
           secret_round: number | null
           impersonation_mode: boolean
+          random_voting: boolean
           status: TournamentStatus
           created_at: string
         }
@@ -36,6 +37,7 @@ export type Database = {
           secret_voting?: boolean
           secret_round?: number | null
           impersonation_mode?: boolean
+          random_voting?: boolean
           status?: TournamentStatus
           created_at?: string
         }
@@ -52,6 +54,7 @@ export type Database = {
           secret_voting?: boolean
           secret_round?: number | null
           impersonation_mode?: boolean
+          random_voting?: boolean
           status?: TournamentStatus
           created_at?: string
         }
@@ -168,6 +171,7 @@ export type Database = {
           status: GameStatus
           topic_card_id: string
           is_rematch: boolean
+          voting_mode: string | null
           created_at: string
         }
         Insert: {
@@ -177,6 +181,7 @@ export type Database = {
           status?: GameStatus
           topic_card_id: string
           is_rematch?: boolean
+          voting_mode?: string | null
           created_at?: string
         }
         Update: {
@@ -186,6 +191,7 @@ export type Database = {
           status?: GameStatus
           topic_card_id?: string
           is_rematch?: boolean
+          voting_mode?: string | null
           created_at?: string
         }
         Relationships: []

@@ -17,6 +17,7 @@ interface TournamentRow {
   secret_voting: boolean
   secret_round: number | null
   impersonation_mode: boolean
+  random_voting: boolean
   productionNumber?: number
   currentGame?: { round_number: number; status: string }
 }
@@ -65,13 +66,13 @@ export default function AdminPage() {
   const [prodDirtyCards, setProdDirtyCards] = useState(String(productionPreset.dirty_cards_per_user))
   const [cardSource, setCardSource] = useState<'new' | 'previous' | 'all'>('new')
   const [hasPastTournaments, setHasPastTournaments] = useState(false)
-  const [votingStyle, setVotingStyle] = useState<'normal' | 'secret_one' | 'secret_all' | 'impersonation'>('normal')
+  const [votingStyle, setVotingStyle] = useState<'normal' | 'secret_one' | 'secret_all' | 'impersonation' | 'random_per_round'>('normal')
 
   const fetchTournaments = useCallback(async () => {
     setListLoading(true)
     const { data } = await supabase
       .from('tournaments')
-      .select('id, token, mode, status, created_at, game_count, cards_per_user, hand_cards_per_player, dirty_cards_per_user, secret_voting, secret_round, impersonation_mode')
+      .select('id, token, mode, status, created_at, game_count, cards_per_user, hand_cards_per_player, dirty_cards_per_user, secret_voting, secret_round, impersonation_mode, random_voting')
       .order('created_at', { ascending: false })
 
     // 本番大会に作成日時昇順で連番を付与
@@ -364,6 +365,7 @@ export default function AdminPage() {
               { value: 'secret_one', label: 'シークレット（1回のみ）', desc: 'ランダムな1回戦のみ作者名を非表示' },
               { value: 'secret_all', label: 'シークレット（全回戦）', desc: '全回戦で作者名を非表示' },
               { value: 'impersonation', label: 'なりすまし', desc: '投稿時に任意のユーザー名で出品できる' },
+              { value: 'random_per_round', label: '🎲 ランダム', desc: '回戦ごとに通常・シークレット・なりすましをランダムで割り振る' },
             ] as const).map((opt) => (
               <button
                 key={opt.value}
@@ -493,13 +495,16 @@ export default function AdminPage() {
                           : STATUS_LABEL[t.status] ?? t.status}
                       </span>
                       {/* 投票モードバッジ */}
-                      {t.impersonation_mode && (
+                      {t.random_voting && (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-orange-100 text-orange-600">🎲 ランダム</span>
+                      )}
+                      {!t.random_voting && t.impersonation_mode && (
                         <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-purple-100 text-purple-600">🎭 なりすまし</span>
                       )}
-                      {t.secret_voting && t.secret_round === null && (
+                      {!t.random_voting && t.secret_voting && t.secret_round === null && (
                         <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500">🕵️ 全回シークレット</span>
                       )}
-                      {t.secret_voting && t.secret_round !== null && (
+                      {!t.random_voting && t.secret_voting && t.secret_round !== null && (
                         <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500">🕵️ 第{t.secret_round}回シークレット</span>
                       )}
                     </div>
@@ -539,7 +544,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.26.3</p>
+        <p className="text-center text-xs text-gray-300 mt-8">v1.27.0</p>
       </div>
     </div>
   )

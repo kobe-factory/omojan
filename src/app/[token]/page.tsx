@@ -13,6 +13,27 @@ import Archive from '@/components/Archive'
 import TournamentFinished from '@/components/TournamentFinished'
 import type { TournamentStatus, GameStatus } from '@/types/database'
 
+const VOTING_MODE_INFO = {
+  normal:        { emoji: '🎯', label: '通常モード',       desc: '作者名が表示されます',           bg: 'bg-sky-50',    border: 'border-sky-300',    text: 'text-sky-700' },
+  secret:        { emoji: '🕵️', label: 'シークレットモード', desc: '作者名は非表示です',             bg: 'bg-gray-50',   border: 'border-gray-300',   text: 'text-gray-700' },
+  impersonation: { emoji: '🎭', label: 'なりすましモード',   desc: '他のユーザーとして投稿できます', bg: 'bg-purple-50', border: 'border-purple-300', text: 'text-purple-700' },
+}
+
+function VotingModeBanner({ mode }: { mode: string }) {
+  const info = VOTING_MODE_INFO[mode as keyof typeof VOTING_MODE_INFO]
+  if (!info) return null
+  return (
+    <div className={`mx-4 mt-3 px-4 py-3 rounded-2xl border-2 ${info.bg} ${info.border} flex items-center gap-3`}>
+      <span className="text-2xl">{info.emoji}</span>
+      <div>
+        <p className={`text-sm font-bold ${info.text}`}>{info.label}</p>
+        <p className="text-xs text-gray-500">{info.desc}</p>
+      </div>
+    </div>
+  )
+}
+
+
 interface Tournament {
   id: string
   token: string
@@ -26,6 +47,7 @@ interface Tournament {
   secret_voting: boolean
   secret_round: number | null
   impersonation_mode: boolean
+  random_voting: boolean
   mode: string
 }
 
@@ -35,6 +57,7 @@ interface Game {
   status: GameStatus
   topic_card_id: string
   is_rematch: boolean
+  voting_mode: string | null
 }
 
 interface User {
@@ -414,11 +437,14 @@ export default function TournamentPage() {
             )}
 
             {activeTab === 'archive' ? (
-              <Archive tournamentId={tournament.id} participants={participants} impersonationMode={tournament.impersonation_mode} />
+              <Archive tournamentId={tournament.id} participants={participants} impersonationMode={tournament.impersonation_mode} randomVoting={tournament.random_voting} />
             ) : currentGame.status === 'waiting_submission' ? (
               <>
+                {tournament.random_voting && currentGame.voting_mode && (
+                  <VotingModeBanner mode={currentGame.voting_mode} />
+                )}
                 <GamePlay
-                  tournament={tournament}
+                  tournament={{ ...tournament, impersonation_mode: tournament.random_voting ? currentGame.voting_mode === 'impersonation' : tournament.impersonation_mode }}
                   token={token}
                   game={currentGame}
                   currentUserId={userId}
@@ -436,8 +462,20 @@ export default function TournamentPage() {
                 />
               </>
             ) : currentGame.status === 'waiting_vote' || currentGame.status === 'waiting_tiebreaker_vote' ? (
+              <>
+                {tournament.random_voting && currentGame.voting_mode && (
+                  <VotingModeBanner mode={currentGame.voting_mode} />
+                )}
               <Voting
-                tournament={{ ...tournament, secret_voting: tournament.secret_voting && (tournament.secret_round === null || tournament.secret_round === currentGame.round_number) }}
+                tournament={{
+                  ...tournament,
+                  secret_voting: tournament.random_voting
+                    ? currentGame.voting_mode === 'secret'
+                    : tournament.secret_voting && (tournament.secret_round === null || tournament.secret_round === currentGame.round_number),
+                  impersonation_mode: tournament.random_voting
+                    ? currentGame.voting_mode === 'impersonation'
+                    : tournament.impersonation_mode,
+                }}
                 token={token}
                 game={currentGame}
                 currentUserId={userId}
@@ -453,6 +491,7 @@ export default function TournamentPage() {
                   else await fetchState()
                 }}
               />
+              </>
             ) : (
               <Results
                 tournament={tournament}
@@ -490,7 +529,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.26.3</p>
+        <p className="text-xs text-gray-300">v1.27.0</p>
       </footer>
 
       {/* 前戦結果モーダル（まだ結果を確認していないユーザー向け） */}

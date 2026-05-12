@@ -67,7 +67,7 @@ export async function POST(
   const { data: tournament } = await supabase
     .from('tournaments')
     .select(
-      'id, status, mode, game_count, cards_per_user, hand_cards_per_player, required_players, dirty_cards_per_user, skip_card_creation',
+      'id, status, mode, game_count, cards_per_user, hand_cards_per_player, required_players, dirty_cards_per_user, skip_card_creation, random_voting',
     )
     .eq('token', token)
     .single()
@@ -109,6 +109,8 @@ export async function POST(
         tournament.id,
         1,
         false,
+        undefined,
+        tournament.random_voting ? randomVotingMode() : null,
       )
       if (gameError)
         return NextResponse.json({ error: gameError }, { status: 500 })
@@ -188,7 +190,10 @@ export async function POST(
     if (dealError)
       return NextResponse.json({ error: dealError }, { status: 500 })
 
-    const { error: gameError } = await createNextGame(tournament.id, 1, false)
+    const { error: gameError } = await createNextGame(
+      tournament.id, 1, false, undefined,
+      tournament.random_voting ? randomVotingMode() : null,
+    )
     if (gameError)
       return NextResponse.json({ error: gameError }, { status: 500 })
 
@@ -218,7 +223,7 @@ export async function POST(
   if (tournament.status === 'playing') {
     const { data: currentGame } = await supabase
       .from('games')
-      .select('id, round_number, status, topic_card_id, is_rematch')
+      .select('id, round_number, status, topic_card_id, is_rematch, voting_mode')
       .eq('tournament_id', tournament.id)
       .order('round_number', { ascending: false })
       .order('created_at', { ascending: false })
@@ -507,12 +512,13 @@ export async function POST(
           .delete()
           .eq('game_id', currentGame.id)
 
-        // 同ラウンドで再戦ゲームを作成（is_rematch=true）
+        // 同ラウンドで再戦ゲームを作成（is_rematch=true、voting_modeは元の回戦を引き継ぐ）
         const { error: gameError } = await createNextGame(
           tournament.id,
           currentGame.round_number,
           true,
           currentGame.topic_card_id,
+          currentGame.voting_mode ?? null,
         )
         if (gameError)
           return NextResponse.json({ error: gameError }, { status: 500 })
@@ -542,6 +548,8 @@ export async function POST(
         tournament.id,
         currentGame.round_number + 1,
         false,
+        undefined,
+        tournament.random_voting ? randomVotingMode() : null,
       )
       if (gameError)
         return NextResponse.json({ error: gameError }, { status: 500 })
@@ -615,11 +623,17 @@ async function dealCards(
   return { error: null }
 }
 
+function randomVotingMode(): 'normal' | 'secret' | 'impersonation' {
+  const modes = ['normal', 'secret', 'impersonation'] as const
+  return modes[Math.floor(Math.random() * modes.length)]
+}
+
 async function createNextGame(
   tournamentId: string,
   roundNumber: number,
   isRematch: boolean,
   excludeTopicCardId?: string,
+  votingMode?: string | null,
 ) {
   const { data: usedTopics } = await supabase
     .from('games')
@@ -666,6 +680,7 @@ async function createNextGame(
     status: 'waiting_submission',
     topic_card_id: topicCard.id,
     is_rematch: isRematch,
+    voting_mode: votingMode ?? null,
   })
 
   if (error) return { error: error.message }
