@@ -29,6 +29,7 @@ interface RoundSummary {
   votes: number
   isTied: boolean
   isWinByTiebreaker: boolean
+  votingMode: string | null
 }
 
 interface Props {
@@ -46,7 +47,7 @@ export default function TournamentFinished({ tournamentId, participants }: Props
     async function fetchData() {
       const { data: games } = await supabase
         .from('games')
-        .select('id, round_number, topic_card_id, status')
+        .select('id, round_number, topic_card_id, status, voting_mode')
         .eq('tournament_id', tournamentId)
         .order('round_number', { ascending: true })
 
@@ -172,6 +173,7 @@ export default function TournamentFinished({ tournamentId, participants }: Props
           votes: displayVotes,
           isTied: hasTie,
           isWinByTiebreaker,
+          votingMode: (game as { voting_mode?: string | null }).voting_mode ?? null,
         })
       }
 
@@ -310,7 +312,15 @@ export default function TournamentFinished({ tournamentId, participants }: Props
           {rounds.map((r) => (
             <div key={r.roundNumber} className="border border-gray-100 rounded-xl p-3">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold text-emerald-600">第{r.roundNumber}回戦</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-emerald-600">第{r.roundNumber}回戦</span>
+                  {r.votingMode === 'secret' && (
+                    <span className="text-[9px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full">🕵️ シークレット</span>
+                  )}
+                  {r.votingMode === 'impersonation' && (
+                    <span className="text-[9px] font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-full">🎭 なりすまし</span>
+                  )}
+                </div>
                 <div className="flex items-center gap-2">
                   {r.isTied && (
                     <span className="text-xs text-gray-400">（同点・投票時間で決定）</span>
