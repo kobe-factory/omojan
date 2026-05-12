@@ -212,6 +212,14 @@ export default function TournamentFinished({ tournamentId, participants }: Props
 
   const mvp = scores[0]
 
+  const rankList = scores.reduce<number[]>((acc, s, i) => {
+    if (i === 0) return [1]
+    const prev = scores[i - 1]
+    const prevRank = acc[i - 1]
+    if (s.wins === prev.wins && s.totalVotes === prev.totalVotes) return [...acc, prevRank]
+    return [...acc, i + 1]
+  }, [])
+
   return (
     <>
     <div className="flex border-b border-gray-200 bg-white sticky top-[77px] z-10">
@@ -254,7 +262,7 @@ export default function TournamentFinished({ tournamentId, participants }: Props
           </div>
           <p className="text-sm text-gray-500">
             <span className="text-xl font-bold text-yellow-500">{mvp.wins}</span>勝
-            　総得票数: {mvp.totalVotes}票
+            　総得票数: <span className="text-xl font-bold text-emerald-600">{mvp.totalVotes}</span>票
           </p>
           {mvp.isTied && (
             <p className="text-xs text-yellow-500 mt-1">（同点）</p>
@@ -266,14 +274,16 @@ export default function TournamentFinished({ tournamentId, participants }: Props
       <div className="bg-white rounded-2xl shadow-sm p-5">
         <h3 className="text-sm font-bold text-gray-700 mb-3">総合順位</h3>
         <div className="space-y-2">
-          {scores.map((s, i) => (
+          {scores.map((s, i) => {
+            const rank = rankList[i]
+            return (
             <div key={s.userId} className={`flex items-center gap-3 px-3 py-2 rounded-xl ${
-              i === 0 ? 'bg-yellow-50' : i === 1 ? 'bg-gray-50' : 'bg-white'
+              rank === 1 ? 'bg-yellow-50' : rank === 2 ? 'bg-gray-50' : 'bg-white'
             }`}>
               <span className={`text-sm font-bold w-6 text-center ${
-                i === 0 ? 'text-yellow-500' : i === 1 ? 'text-gray-400' : 'text-gray-300'
+                rank === 1 ? 'text-yellow-500' : rank === 2 ? 'text-gray-400' : 'text-gray-300'
               }`}>
-                {i + 1}位
+                {rank}位
               </span>
               <div className="flex items-center gap-2 flex-1">
                 <UserIcon name={s.userName} size="xs" />
@@ -285,7 +295,8 @@ export default function TournamentFinished({ tournamentId, participants }: Props
               <span className="text-xs text-gray-400">{s.wins}勝</span>
               <span className="text-sm font-bold text-emerald-600">{s.totalVotes}票</span>
             </div>
-          ))}
+            )
+          })}
         </div>
         {scores.some((s) => s.isTied) && (
           <p className="text-xs text-gray-400 mt-3 text-center">※勝数→得票数で順位を決定</p>

@@ -285,9 +285,19 @@ export default function SummaryPage() {
             <div className="bg-white rounded-2xl shadow-sm p-5">
               <h3 className="text-sm font-bold text-gray-700 mb-3">全体順位</h3>
               <div className="space-y-2">
-                {overallStandings.map((s, i) => (
-                  <div key={s.userId} className={`flex items-center gap-3 px-3 py-2 rounded-xl ${i === 0 ? 'bg-yellow-50' : i === 1 ? 'bg-gray-50' : 'bg-white'}`}>
-                    <span className={`text-sm font-bold w-6 text-center ${i === 0 ? 'text-yellow-500' : i === 1 ? 'text-gray-400' : 'text-gray-300'}`}>{i + 1}位</span>
+                {(() => {
+                  const overallRanks = overallStandings.reduce<number[]>((acc, s, i) => {
+                    if (i === 0) return [1]
+                    const prev = overallStandings[i - 1]
+                    const prevRank = acc[i - 1]
+                    if (s.totalWins === prev.totalWins && s.totalRoundWins === prev.totalRoundWins && s.totalVotes === prev.totalVotes) return [...acc, prevRank]
+                    return [...acc, i + 1]
+                  }, [])
+                  return overallStandings.map((s, i) => {
+                    const rank = overallRanks[i]
+                    return (
+                  <div key={s.userId} className={`flex items-center gap-3 px-3 py-2 rounded-xl ${rank === 1 ? 'bg-yellow-50' : rank === 2 ? 'bg-gray-50' : 'bg-white'}`}>
+                    <span className={`text-sm font-bold w-6 text-center ${rank === 1 ? 'text-yellow-500' : rank === 2 ? 'text-gray-400' : 'text-gray-300'}`}>{rank}位</span>
                     <div className="flex items-center gap-2 flex-1">
                       <UserIcon name={s.userName} size="xs" />
                       <span className="text-sm font-medium text-gray-800">{s.userName}</span>
@@ -297,7 +307,9 @@ export default function SummaryPage() {
                     <span className="text-xs text-gray-400">{s.totalRoundWins}勝</span>
                     <span className="text-sm font-bold text-emerald-600">{s.totalVotes}票</span>
                   </div>
-                ))}
+                    )
+                  })
+                })()}
               </div>
               {overallStandings.some((s) => s.isTied) && (
                 <p className="text-xs text-gray-400 mt-3 text-center">※大会優勝数→回戦勝数→得票数で順位を決定</p>
@@ -336,18 +348,30 @@ export default function SummaryPage() {
                         <div>
                           <p className="text-xs font-bold text-gray-500 mb-2">順位</p>
                           <div className="space-y-1.5">
-                            {t.scores.map((s, i) => (
-                              <div key={s.userId} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${i === 0 ? 'bg-yellow-50' : 'bg-gray-50'}`}>
-                                <span className={`text-xs font-bold w-6 text-center ${i === 0 ? 'text-yellow-500' : 'text-gray-400'}`}>{i + 1}位</span>
-                                <div className="flex items-center gap-1.5 flex-1">
-                                  <UserIcon name={s.userName} size="xs" />
-                                  <span className="text-xs font-medium text-gray-700">{s.userName}</span>
+                            {(() => {
+                              const tRanks = t.scores.reduce<number[]>((acc, s, i) => {
+                                if (i === 0) return [1]
+                                const prev = t.scores[i - 1]
+                                const prevRank = acc[i - 1]
+                                if (s.wins === prev.wins && s.totalVotes === prev.totalVotes) return [...acc, prevRank]
+                                return [...acc, i + 1]
+                              }, [])
+                              return t.scores.map((s, i) => {
+                                const rank = tRanks[i]
+                                return (
+                                <div key={s.userId} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${rank === 1 ? 'bg-yellow-50' : 'bg-gray-50'}`}>
+                                  <span className={`text-xs font-bold w-6 text-center ${rank === 1 ? 'text-yellow-500' : 'text-gray-400'}`}>{rank}位</span>
+                                  <div className="flex items-center gap-1.5 flex-1">
+                                    <UserIcon name={s.userName} size="xs" />
+                                    <span className="text-xs font-medium text-gray-700">{s.userName}</span>
+                                  </div>
+                                  {s.isTied && <span className="text-xs text-gray-400">同点</span>}
+                                  <span className="text-xs text-gray-400">{s.wins}勝</span>
+                                  <span className="text-xs font-bold text-emerald-600">{s.totalVotes}票</span>
                                 </div>
-                                {s.isTied && <span className="text-xs text-gray-400">同点</span>}
-                                <span className="text-xs text-gray-400">{s.wins}勝</span>
-                                <span className="text-xs font-bold text-emerald-600">{s.totalVotes}票</span>
-                              </div>
-                            ))}
+                                )
+                              })
+                            })()}
                           </div>
                         </div>
 
@@ -403,7 +427,7 @@ export default function SummaryPage() {
       </div>
 
       <footer className="text-center py-4">
-        <p className="text-xs text-gray-300">v1.10.1</p>
+        <p className="text-xs text-gray-300">v1.26.3</p>
       </footer>
     </div>
   )
