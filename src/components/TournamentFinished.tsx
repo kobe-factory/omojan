@@ -262,7 +262,7 @@ export default function TournamentFinished({ tournamentId, participants }: Props
           </div>
           <p className="text-sm text-gray-500">
             <span className="text-xl font-bold text-yellow-500">{mvp.wins}</span>勝
-            　総得票数: <span className="text-xl font-bold text-emerald-600">{mvp.totalVotes}</span>票
+            　総得票数 <span className="text-xl font-bold text-emerald-600">{mvp.totalVotes}</span>票
           </p>
           {mvp.isTied && (
             <p className="text-xs text-yellow-500 mt-1">（同点）</p>
