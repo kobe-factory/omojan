@@ -25,8 +25,6 @@ interface TournamentScore {
   userName: string
   totalVotes: number
   wins: number
-  bigWins4: number
-  bigWins3: number
   isTied: boolean
 }
 
@@ -46,8 +44,6 @@ interface OverallStanding {
   totalVotes: number
   totalWins: number
   totalRoundWins: number
-  totalBigWins4: number
-  totalBigWins3: number
   isTied: boolean
 }
 
@@ -116,7 +112,7 @@ export default function SummaryPage() {
       }
     }
 
-    const overallMap: Record<string, { name: string; totalVotes: number; totalWins: number; totalRoundWins: number; totalBigWins4: number; totalBigWins3: number }> = {}
+    const overallMap: Record<string, { name: string; totalVotes: number; totalWins: number; totalRoundWins: number }> = {}
 
     const tournamentSummaries: TournamentSummary[] = finishedTournaments.map((t, idx) => {
       const participants = (allParticipants ?? [])
@@ -126,10 +122,10 @@ export default function SummaryPage() {
 
       const games = (allGames ?? []).filter((g) => g.tournament_id === t.id)
 
-      const scoreMap: Record<string, { totalVotes: number; totalVoteTimeSum: number; wins: number; bigWins4: number; bigWins3: number }> = {}
+      const scoreMap: Record<string, { totalVotes: number; totalVoteTimeSum: number; wins: number }> = {}
       for (const p of participants) {
-        scoreMap[p.id] = { totalVotes: 0, totalVoteTimeSum: 0, wins: 0, bigWins4: 0, bigWins3: 0 }
-        if (!overallMap[p.id]) overallMap[p.id] = { name: p.name, totalVotes: 0, totalWins: 0, totalRoundWins: 0, totalBigWins4: 0, totalBigWins3: 0 }
+        scoreMap[p.id] = { totalVotes: 0, totalVoteTimeSum: 0, wins: 0 }
+        if (!overallMap[p.id]) overallMap[p.id] = { name: p.name, totalVotes: 0, totalWins: 0, totalRoundWins: 0 }
       }
 
       const rounds: RoundSummary[] = []
@@ -174,14 +170,10 @@ export default function SummaryPage() {
         if (winnerSub && scoreMap[winnerSub.user_id]) {
           scoreMap[winnerSub.user_id].wins += 1
           if (isWinByTiebreaker) scoreMap[winnerSub.user_id].totalVotes += 1
-          if (displayVotes >= 4) scoreMap[winnerSub.user_id].bigWins4 += 1
-          else if (displayVotes === 3) scoreMap[winnerSub.user_id].bigWins3 += 1
         }
         if (winnerSub && overallMap[winnerSub.user_id]) {
           overallMap[winnerSub.user_id].totalRoundWins += 1
           if (isWinByTiebreaker) overallMap[winnerSub.user_id].totalVotes += 1
-          if (displayVotes >= 4) overallMap[winnerSub.user_id].totalBigWins4 += 1
-          else if (displayVotes === 3) overallMap[winnerSub.user_id].totalBigWins3 += 1
         }
 
         const topicText = cardMap[game.topic_card_id] ?? ''
@@ -200,25 +192,20 @@ export default function SummaryPage() {
           userName: p.name,
           totalVotes: scoreMap[p.id]?.totalVotes ?? 0,
           wins: scoreMap[p.id]?.wins ?? 0,
-          bigWins4: scoreMap[p.id]?.bigWins4 ?? 0,
-          bigWins3: scoreMap[p.id]?.bigWins3 ?? 0,
           isTied: false,
         }))
         .sort((a, b) => {
           if (b.wins !== a.wins) return b.wins - a.wins
           if (b.totalVotes !== a.totalVotes) return b.totalVotes - a.totalVotes
-          if (b.bigWins4 !== a.bigWins4) return b.bigWins4 - a.bigWins4
-          if (b.bigWins3 !== a.bigWins3) return b.bigWins3 - a.bigWins3
           return 0
         })
 
-      // 大会優勝者（新しいソートルールで上位のプレイヤー）
       if (sortedScores.length > 0 && sortedScores[0].wins > 0 && overallMap[sortedScores[0].userId]) {
         overallMap[sortedScores[0].userId].totalWins += 1
       }
 
       sortedScores.forEach((s, i) => {
-        s.isTied = sortedScores.some((o, j) => j !== i && o.wins === s.wins && o.totalVotes === s.totalVotes && o.bigWins4 === s.bigWins4 && o.bigWins3 === s.bigWins3)
+        s.isTied = sortedScores.some((o, j) => j !== i && o.wins === s.wins && o.totalVotes === s.totalVotes)
       })
 
       return {
@@ -233,18 +220,16 @@ export default function SummaryPage() {
     })
 
     const overall = Object.entries(overallMap)
-      .map(([userId, d]) => ({ userId, userName: d.name, totalVotes: d.totalVotes, totalWins: d.totalWins, totalRoundWins: d.totalRoundWins, totalBigWins4: d.totalBigWins4, totalBigWins3: d.totalBigWins3, isTied: false }))
+      .map(([userId, d]) => ({ userId, userName: d.name, totalVotes: d.totalVotes, totalWins: d.totalWins, totalRoundWins: d.totalRoundWins, isTied: false }))
       .sort((a, b) => {
         if (b.totalWins !== a.totalWins) return b.totalWins - a.totalWins
         if (b.totalRoundWins !== a.totalRoundWins) return b.totalRoundWins - a.totalRoundWins
         if (b.totalVotes !== a.totalVotes) return b.totalVotes - a.totalVotes
-        if (b.totalBigWins4 !== a.totalBigWins4) return b.totalBigWins4 - a.totalBigWins4
-        if (b.totalBigWins3 !== a.totalBigWins3) return b.totalBigWins3 - a.totalBigWins3
         return 0
       })
 
     overall.forEach((s, i) => {
-      s.isTied = overall.some((o, j) => j !== i && o.totalWins === s.totalWins && o.totalRoundWins === s.totalRoundWins && o.totalVotes === s.totalVotes && o.totalBigWins4 === s.totalBigWins4 && o.totalBigWins3 === s.totalBigWins3)
+      s.isTied = overall.some((o, j) => j !== i && o.totalWins === s.totalWins && o.totalRoundWins === s.totalRoundWins && o.totalVotes === s.totalVotes)
     })
 
     setTournaments(tournamentSummaries)
@@ -315,7 +300,7 @@ export default function SummaryPage() {
                 ))}
               </div>
               {overallStandings.some((s) => s.isTied) && (
-                <p className="text-xs text-gray-400 mt-3 text-center">※大会優勝数→回戦勝数→得票数→大勝数で順位を決定</p>
+                <p className="text-xs text-gray-400 mt-3 text-center">※大会優勝数→回戦勝数→得票数で順位を決定</p>
               )}
             </div>
 

@@ -16,8 +16,6 @@ interface PlayerScore {
   totalVotes: number
   totalVoteTimeSum: number
   wins: number
-  bigWins4: number
-  bigWins3: number
   isTied: boolean
 }
 
@@ -92,9 +90,9 @@ export default function TournamentFinished({ tournamentId, participants }: Props
         }
       }
 
-      const scoreMap: Record<string, { totalVotes: number; totalVoteTimeSum: number; wins: number; bigWins4: number; bigWins3: number }> = {}
+      const scoreMap: Record<string, { totalVotes: number; totalVoteTimeSum: number; wins: number }> = {}
       for (const p of participants) {
-        scoreMap[p.id] = { totalVotes: 0, totalVoteTimeSum: 0, wins: 0, bigWins4: 0, bigWins3: 0 }
+        scoreMap[p.id] = { totalVotes: 0, totalVoteTimeSum: 0, wins: 0 }
       }
 
       const roundSummaries: RoundSummary[] = []
@@ -152,10 +150,7 @@ export default function TournamentFinished({ tournamentId, participants }: Props
 
         if (winnerSub && scoreMap[winnerSub.user_id]) {
           scoreMap[winnerSub.user_id].wins += 1
-          // 決選投票勝利には+1を総得票数に加算
           if (isWinByTiebreaker) scoreMap[winnerSub.user_id].totalVotes += 1
-          if (displayVotes >= 4) scoreMap[winnerSub.user_id].bigWins4 += 1
-          else if (displayVotes === 3) scoreMap[winnerSub.user_id].bigWins3 += 1
         }
 
         const topicText = topicMap[game.topic_card_id] ?? ''
@@ -186,22 +181,17 @@ export default function TournamentFinished({ tournamentId, participants }: Props
         totalVotes: scoreMap[p.id]?.totalVotes ?? 0,
         totalVoteTimeSum: scoreMap[p.id]?.totalVoteTimeSum ?? 0,
         wins: scoreMap[p.id]?.wins ?? 0,
-        bigWins4: scoreMap[p.id]?.bigWins4 ?? 0,
-        bigWins3: scoreMap[p.id]?.bigWins3 ?? 0,
         isTied: false,
       }))
 
       const sorted = unsorted.sort((a, b) => {
         if (b.wins !== a.wins) return b.wins - a.wins
         if (b.totalVotes !== a.totalVotes) return b.totalVotes - a.totalVotes
-        if (b.bigWins4 !== a.bigWins4) return b.bigWins4 - a.bigWins4
-        if (b.bigWins3 !== a.bigWins3) return b.bigWins3 - a.bigWins3
         return 0
       })
 
-      // 全項目が同じなら同率
       sorted.forEach((s, i) => {
-        s.isTied = sorted.some((o, j) => j !== i && o.wins === s.wins && o.totalVotes === s.totalVotes && o.bigWins4 === s.bigWins4 && o.bigWins3 === s.bigWins3)
+        s.isTied = sorted.some((o, j) => j !== i && o.wins === s.wins && o.totalVotes === s.totalVotes)
       })
 
       setScores(sorted)
@@ -298,7 +288,7 @@ export default function TournamentFinished({ tournamentId, participants }: Props
           ))}
         </div>
         {scores.some((s) => s.isTied) && (
-          <p className="text-xs text-gray-400 mt-3 text-center">※勝数→得票数→大勝数で順位を決定</p>
+          <p className="text-xs text-gray-400 mt-3 text-center">※勝数→得票数で順位を決定</p>
         )}
       </div>
 
