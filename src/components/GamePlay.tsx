@@ -199,7 +199,7 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
         const info = VOTING_MODE_INFO[game.voting_mode as keyof typeof VOTING_MODE_INFO]
         return (
           <div className={`text-center rounded-2xl py-2 ${info.bg}`}>
-            <p className={`text-xs font-bold leading-none ${info.text}`}>第{game.round_number}回戦</p>
+            <p className="text-xs font-bold leading-none text-emerald-600">第{game.round_number}回戦</p>
             <div className="flex items-center justify-center gap-1 mt-1">
               <span className="text-sm leading-none">{info.emoji}</span>
               <span className={`text-[11px] font-bold leading-none ${info.text}`}>{info.label}</span>
