@@ -37,6 +37,10 @@ interface TournamentSummary {
   participants: User[]
   scores: TournamentScore[]
   rounds: RoundSummary[]
+  randomVoting: boolean
+  impersonationMode: boolean
+  secretVoting: boolean
+  secretRound: number | null
 }
 
 interface OverallStanding {
@@ -61,7 +65,7 @@ export default function SummaryPage() {
   async function fetchAll() {
     const { data: finishedTournaments } = await supabase
       .from('tournaments')
-      .select('id, created_at, token')
+      .select('id, created_at, token, random_voting, impersonation_mode, secret_voting, secret_round')
       .eq('mode', 'production')
       .eq('status', 'finished')
       .order('created_at', { ascending: true })
@@ -217,6 +221,10 @@ export default function SummaryPage() {
         participants,
         scores: sortedScores,
         rounds,
+        randomVoting: (t as { random_voting?: boolean }).random_voting ?? false,
+        impersonationMode: (t as { impersonation_mode?: boolean }).impersonation_mode ?? false,
+        secretVoting: (t as { secret_voting?: boolean }).secret_voting ?? false,
+        secretRound: (t as { secret_round?: number | null }).secret_round ?? null,
       }
     })
 
@@ -304,9 +312,9 @@ export default function SummaryPage() {
                       <span className="text-sm font-medium text-gray-800">{s.userName}</span>
                     </div>
                     {s.isTied && <span className="text-xs text-gray-400">同点</span>}
-                    <span className="text-xs text-gray-400">{s.totalWins}大会優勝</span>
-                    <span className="text-xs text-gray-400">{s.totalRoundWins}勝</span>
-                    <span className="text-sm font-bold text-emerald-600">{s.totalVotes}票</span>
+                    <span className="text-xs text-gray-400"><span className="text-base font-bold text-yellow-500">{s.totalWins}</span>大会優勝</span>
+                    <span className="text-xs text-gray-400"><span className="text-base font-bold text-yellow-500">{s.totalRoundWins}</span>勝</span>
+                    <span className="text-xs font-bold text-emerald-600">{s.totalVotes}票</span>
                   </div>
                     )
                   })
@@ -330,7 +338,21 @@ export default function SummaryPage() {
                       className="w-full p-4 text-left flex items-center justify-between"
                     >
                       <div>
-                        <span className="text-sm font-bold text-gray-700">第{t.tournamentNumber}回大会</span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-bold text-gray-700">第{t.tournamentNumber}回大会</span>
+                          {t.randomVoting && (
+                            <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full">🎲 ランダム</span>
+                          )}
+                          {!t.randomVoting && t.impersonationMode && (
+                            <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-full">🎭 なりすまし</span>
+                          )}
+                          {!t.randomVoting && t.secretVoting && t.secretRound === null && (
+                            <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full">🕵️ 全回シークレット</span>
+                          )}
+                          {!t.randomVoting && t.secretVoting && t.secretRound !== null && (
+                            <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full">🕵️ 第{t.secretRound}回シークレット</span>
+                          )}
+                        </div>
                         <p className="text-xs text-gray-400 mt-0.5">
                           {new Date(t.createdAt).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}
                         </p>
@@ -436,7 +458,7 @@ export default function SummaryPage() {
       </div>
 
       <footer className="text-center py-4">
-        <p className="text-xs text-gray-300">v1.27.2</p>
+        <p className="text-xs text-gray-300">v1.27.3</p>
       </footer>
     </div>
   )
