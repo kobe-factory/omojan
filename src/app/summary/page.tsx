@@ -284,7 +284,8 @@ export default function SummaryPage() {
                 </div>
                 <p className="text-sm text-gray-500">
                   <span className="text-xl font-bold text-yellow-500">{mvp.totalWins}</span>大会優勝
-                  　総得票数 <span className="text-xl font-bold text-emerald-600">{mvp.totalVotes}</span>票
+                  　<span className="text-xl font-bold text-yellow-500">{mvp.totalRoundWins}</span>勝
+                  　総得票数 <span className="text-base font-bold text-emerald-600">{mvp.totalVotes}</span>票
                 </p>
                 {mvp.isTied && <p className="text-xs text-yellow-500 mt-1">（同点）</p>}
               </div>
@@ -458,7 +459,7 @@ export default function SummaryPage() {
       </div>
 
       <footer className="text-center py-4">
-        <p className="text-xs text-gray-300">v1.27.3</p>
+        <p className="text-xs text-gray-300">v1.27.4</p>
       </footer>
     </div>
   )
