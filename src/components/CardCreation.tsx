@@ -21,9 +21,10 @@ interface Props {
   currentUserId: string
   participants: User[]
   onSubmitted: () => Promise<void>
+  allUsers?: User[]
 }
 
-export default function CardCreation({ tournament, token, currentUserId, participants, onSubmitted }: Props) {
+export default function CardCreation({ tournament, token, currentUserId, participants, onSubmitted, allUsers }: Props) {
   const draftKey = `omojan:draft:cards:${tournament.id}:${currentUserId}`
 
   const [texts, setTexts] = useState<string[]>(() => {
@@ -103,6 +104,10 @@ export default function CardCreation({ tournament, token, currentUserId, partici
   const completedUserIds = participants
     .filter((p) => (cardCounts[p.id] ?? 0) >= tournament.cards_per_user)
     .map((p) => p.id)
+
+  const absentUsers = allUsers
+    ? allUsers.filter((u) => !participants.some((p) => p.id === u.id))
+    : undefined
 
   async function handleSubmit() {
     const filled = texts.filter((t) => t.trim() !== '')
@@ -185,8 +190,9 @@ export default function CardCreation({ tournament, token, currentUserId, partici
       <CompletionStatus
         completedUserIds={completedUserIds}
         participants={participants}
-        completedLabel="作成完了"
-        pendingLabel="作成中"
+        completedLabel="作成済み"
+        pendingLabel="未作成"
+        absentUsers={absentUsers}
         nextPhaseText="全員が作成すると、ゲームが始まります"
         allDoneText="全員が完了しました！ゲームが始まります"
       />

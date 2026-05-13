@@ -21,6 +21,13 @@ interface Game {
   id: string
   round_number: number
   topic_card_id: string
+  voting_mode?: string | null
+}
+
+const VOTING_MODE_INFO = {
+  normal:        { emoji: '🎯', label: '通常モード',       desc: '作者名が表示されます',           bg: 'bg-sky-50',    text: 'text-sky-700' },
+  secret:        { emoji: '🕵️', label: 'シークレットモード', desc: '作者名は非表示です',             bg: 'bg-gray-100',  text: 'text-gray-600' },
+  impersonation: { emoji: '🎭', label: 'なりすましモード',   desc: '他のユーザーとして投稿できます', bg: 'bg-purple-50', text: 'text-purple-700' },
 }
 
 interface HandCard {
@@ -188,9 +195,23 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
   return (
     <div className="p-4 space-y-4">
       {/* 回戦表示 */}
-      <p className="text-center text-xs font-medium text-emerald-600 bg-emerald-50 rounded-full py-1">
-        第{game.round_number}回戦
-      </p>
+      {game.voting_mode && VOTING_MODE_INFO[game.voting_mode as keyof typeof VOTING_MODE_INFO] ? (() => {
+        const info = VOTING_MODE_INFO[game.voting_mode as keyof typeof VOTING_MODE_INFO]
+        return (
+          <div className={`text-center rounded-2xl py-2 ${info.bg}`}>
+            <p className={`text-xs font-bold leading-none ${info.text}`}>第{game.round_number}回戦</p>
+            <div className="flex items-center justify-center gap-1 mt-1">
+              <span className="text-sm leading-none">{info.emoji}</span>
+              <span className={`text-[11px] font-bold leading-none ${info.text}`}>{info.label}</span>
+            </div>
+            <p className="text-[9px] text-gray-500 mt-0.5">{info.desc}</p>
+          </div>
+        )
+      })() : (
+        <p className="text-center text-xs font-medium text-emerald-600 bg-emerald-50 rounded-full py-1">
+          第{game.round_number}回戦
+        </p>
+      )}
 
       {/* お題カード */}
       <div className="bg-white rounded-2xl shadow-sm p-5">

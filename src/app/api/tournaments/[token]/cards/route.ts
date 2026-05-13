@@ -14,7 +14,7 @@ export async function POST(
     .eq('token', token)
     .single()
 
-  if (!tournament || tournament.status !== 'creating_cards') {
+  if (!tournament || !['waiting_users', 'creating_cards'].includes(tournament.status)) {
     return NextResponse.json({ error: '札作成フェーズではありません' }, { status: 400 })
   }
 

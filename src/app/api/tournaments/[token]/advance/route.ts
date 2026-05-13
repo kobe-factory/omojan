@@ -136,23 +136,65 @@ export async function POST(
       return NextResponse.json({ advanced: true, newStatus: 'playing' })
     }
 
+    // 全員がすでに札を作成済みか確認
+    const { data: cardRows } = await supabase
+      .from('cards')
+      .select('creator_user_id')
+      .eq('tournament_id', tournament.id)
+
+    const countByUser: Record<string, number> = {}
+    for (const card of cardRows ?? []) {
+      countByUser[card.creator_user_id] = (countByUser[card.creator_user_id] ?? 0) + 1
+    }
+    const allCardsDone = participantIds.every(
+      (id) => (countByUser[id] ?? 0) >= tournament.cards_per_user,
+    )
+
+    if (allCardsDone) {
+      const { error: dealError } = await dealCards(
+        tournament.id,
+        participantIds,
+        tournament.hand_cards_per_player,
+        tournament.dirty_cards_per_user,
+      )
+      if (dealError)
+        return NextResponse.json({ error: dealError }, { status: 500 })
+
+      const { error: gameError } = await createNextGame(
+        tournament.id,
+        1,
+        false,
+        undefined,
+        tournament.random_voting ? randomVotingMode() : null,
+      )
+      if (gameError)
+        return NextResponse.json({ error: gameError }, { status: 500 })
+
+      await supabase
+        .from('tournaments')
+        .update({ status: 'playing' })
+        .eq('id', tournament.id)
+
+      await notifyParticipants(
+        participantIds,
+        triggeringUserId,
+        {
+          headerTitle: '🎨 作品投稿の時間！',
+          headerColor: PHASE_COLORS.playing,
+          headerSub: `第${num}回大会 / 1回戦`,
+          body: '全員の参加と札作成が完了しました！\nおもじゃんを開いて作品を投稿しましょう 🎨',
+          url: LIFF_URL,
+        },
+        tournament.mode,
+      )
+
+      return NextResponse.json({ advanced: true, newStatus: 'playing' })
+    }
+
     await supabase
       .from('tournaments')
       .update({ status: 'creating_cards' })
       .eq('id', tournament.id)
-
-    await notifyParticipants(
-      participantIds,
-      triggeringUserId,
-      {
-        headerTitle: '✍️ お題作成どうぞ！',
-        headerColor: PHASE_COLORS.cards,
-        headerSub: `第${num}回大会`,
-        body: '全員の参加が揃いました！\nおもじゃんを開いてお題を作成してください ✍️',
-        url: LIFF_URL,
-      },
-      tournament.mode,
-    )
 
     return NextResponse.json({ advanced: true, newStatus: 'creating_cards' })
   }

@@ -22,6 +22,13 @@ interface Game {
   round_number: number
   topic_card_id: string
   status: string
+  voting_mode?: string | null
+}
+
+const VOTING_MODE_INFO = {
+  normal:        { emoji: '🎯', label: '通常モード',       desc: '作者名が表示されます'           },
+  secret:        { emoji: '🕵️', label: 'シークレットモード', desc: '作者名は非表示です'             },
+  impersonation: { emoji: '🎭', label: 'なりすましモード',   desc: '他のユーザーとして投稿できます' },
 }
 
 interface Submission {
@@ -205,7 +212,17 @@ export default function Voting({ tournament, token, game, currentUserId, partici
   return (
     <div className="p-4 space-y-4">
       <div className={`rounded-2xl p-4 text-center ${isTiebreaker ? 'bg-red-500' : 'bg-emerald-500'}`}>
-        <p className={`text-xs mb-1 ${isTiebreaker ? 'text-red-100' : 'text-emerald-100'}`}>第{game.round_number}回戦</p>
+        <p className={`text-xs mb-0.5 ${isTiebreaker ? 'text-red-100' : 'text-emerald-100'}`}>第{game.round_number}回戦</p>
+        {game.voting_mode && VOTING_MODE_INFO[game.voting_mode as keyof typeof VOTING_MODE_INFO] && (() => {
+          const info = VOTING_MODE_INFO[game.voting_mode as keyof typeof VOTING_MODE_INFO]
+          return (
+            <div className="flex items-center justify-center gap-1 mb-1">
+              <span className="text-xs leading-none">{info.emoji}</span>
+              <span className={`text-[10px] font-bold leading-none ${isTiebreaker ? 'text-red-100' : 'text-emerald-100'}`}>{info.label}</span>
+              <span className={`text-[9px] leading-none ${isTiebreaker ? 'text-red-200' : 'text-emerald-200'}`}>{info.desc}</span>
+            </div>
+          )
+        })()}
         <h2 className="text-white text-lg font-bold">
           {isTiebreaker ? '⚔️ 決選投票' : '投票'}
         </h2>

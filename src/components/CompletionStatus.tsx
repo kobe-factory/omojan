@@ -13,6 +13,7 @@ interface Props {
   nextPhaseText?: string
   allDoneText?: string
   secret?: boolean
+  absentUsers?: User[]
 }
 
 export default function CompletionStatus({
@@ -23,9 +24,11 @@ export default function CompletionStatus({
   nextPhaseText = '全員完了すると次のフェーズへ進みます',
   allDoneText = '全員が完了しました！次のフェーズへ進みます',
   secret = false,
+  absentUsers,
 }: Props) {
   const completed = participants.filter((p) => completedUserIds.includes(p.id))
   const pending = participants.filter((p) => !completedUserIds.includes(p.id))
+  const absent = absentUsers ?? []
 
   if (secret) {
     const allDone = pending.length === 0
@@ -45,6 +48,18 @@ export default function CompletionStatus({
       </div>
     )
   }
+
+  const allDone = pending.length === 0 && absent.length === 0
+
+  const waitingText = (() => {
+    if (absent.length > 0 && pending.length > 0) {
+      return `${absent.length}名の参加と${pending.length}名の作成を待っています`
+    }
+    if (absent.length > 0) {
+      return `${absent.length}名の参加を待っています`
+    }
+    return `あと${pending.length}名の完了を待っています。${nextPhaseText}`
+  })()
 
   return (
     <div className="bg-gray-50 rounded-2xl p-4 space-y-3">
@@ -76,10 +91,24 @@ export default function CompletionStatus({
         </div>
       )}
 
-      {pending.length > 0 ? (
-        <p className="text-xs text-gray-400">あと{pending.length}名の完了を待っています。{nextPhaseText}</p>
-      ) : (
+      {absent.length > 0 && (
+        <div>
+          <p className="text-xs text-gray-400 mb-1">未参加</p>
+          <div className="flex flex-wrap gap-2">
+            {absent.map((p) => (
+              <span key={p.id} className="flex items-center gap-1.5 bg-white text-gray-200 text-sm px-3 py-1 rounded-full border border-gray-100">
+                <UserIcon name={p.name} size="xs" />
+                {p.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {allDone ? (
         <p className="text-xs text-emerald-600 font-medium">{allDoneText}</p>
+      ) : (
+        <p className="text-xs text-gray-400">{waitingText}</p>
       )}
     </div>
   )

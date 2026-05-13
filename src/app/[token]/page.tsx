@@ -19,19 +19,6 @@ const VOTING_MODE_INFO = {
   impersonation: { emoji: '🎭', label: 'なりすましモード',   desc: '他のユーザーとして投稿できます', bg: 'bg-purple-50', border: 'border-purple-300', text: 'text-purple-700' },
 }
 
-function VotingModeBanner({ mode }: { mode: string }) {
-  const info = VOTING_MODE_INFO[mode as keyof typeof VOTING_MODE_INFO]
-  if (!info) return null
-  return (
-    <div className={`mx-4 mt-3 px-4 py-3 rounded-2xl border-2 ${info.bg} ${info.border} flex items-center gap-3`}>
-      <span className="text-2xl">{info.emoji}</span>
-      <div>
-        <p className={`text-sm font-bold ${info.text}`}>{info.label}</p>
-        <p className="text-xs text-gray-500">{info.desc}</p>
-      </div>
-    </div>
-  )
-}
 
 
 interface Tournament {
@@ -310,6 +297,8 @@ export default function TournamentPage() {
     return { label: '', bg: 'bg-gray-50', text: 'text-gray-400', border: 'border-gray-100' }
   })()
 
+  const userHasJoinedTournament = !!userId && participants.some((p) => p.id === userId)
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* ヘッダー */}
@@ -349,37 +338,59 @@ export default function TournamentPage() {
       <div className="max-w-md mx-auto">
         {/* ユーザー選択フェーズ */}
         {tournament.status === 'waiting_users' && (
-          <UserSelection
-            tournament={tournament}
-            allUsers={allUsers}
-            participants={participants}
-            currentUserId={userId}
-            onJoin={async (uid) => {
-              await fetch(`/api/tournaments/${token}/join`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: uid }),
-              })
-              saveUser(uid)
-              await fetchState()
-              const res = await fetch(`/api/tournaments/${token}/advance`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ triggering_user_id: uid }),
-              })
-              const data = await res.json()
-              if (data.advanced) await fetchState()
-            }}
-            onLeave={async (uid) => {
-              await fetch(`/api/tournaments/${token}/join`, {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: uid }),
-              })
-              clearUser()
-              await fetchState()
-            }}
-          />
+          userHasJoinedTournament && !tournament.skip_card_creation && tournament.cards_per_user > 0
+            ? (
+              <CardCreation
+                tournament={tournament}
+                token={token}
+                currentUserId={userId!}
+                participants={participants}
+                allUsers={allUsers}
+                onSubmitted={async () => {
+                  const res = await fetch(`/api/tournaments/${token}/advance`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ triggering_user_id: userId }),
+                  })
+                  const data = await res.json()
+                  if (data.advanced) await fetchState()
+                  else await fetchState()
+                }}
+              />
+            )
+            : (
+              <UserSelection
+                tournament={tournament}
+                allUsers={allUsers}
+                participants={participants}
+                currentUserId={userId}
+                onJoin={async (uid) => {
+                  await fetch(`/api/tournaments/${token}/join`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: uid }),
+                  })
+                  saveUser(uid)
+                  await fetchState()
+                  const res = await fetch(`/api/tournaments/${token}/advance`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ triggering_user_id: uid }),
+                  })
+                  const data = await res.json()
+                  if (data.advanced) await fetchState()
+                }}
+                onLeave={async (uid) => {
+                  await fetch(`/api/tournaments/${token}/join`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: uid }),
+                  })
+                  clearUser()
+                  await fetchState()
+                }}
+              />
+            )
         )}
 
         {/* 非参加者メッセージ（大会進行中に userId がない場合） */}
@@ -440,9 +451,6 @@ export default function TournamentPage() {
               <Archive tournamentId={tournament.id} participants={participants} impersonationMode={tournament.impersonation_mode} randomVoting={tournament.random_voting} />
             ) : currentGame.status === 'waiting_submission' ? (
               <>
-                {tournament.random_voting && currentGame.voting_mode && (
-                  <VotingModeBanner mode={currentGame.voting_mode} />
-                )}
                 <GamePlay
                   tournament={{ ...tournament, impersonation_mode: tournament.random_voting ? currentGame.voting_mode === 'impersonation' : tournament.impersonation_mode }}
                   token={token}
@@ -463,9 +471,6 @@ export default function TournamentPage() {
               </>
             ) : currentGame.status === 'waiting_vote' || currentGame.status === 'waiting_tiebreaker_vote' ? (
               <>
-                {tournament.random_voting && currentGame.voting_mode && (
-                  <VotingModeBanner mode={currentGame.voting_mode} />
-                )}
               <Voting
                 tournament={{
                   ...tournament,
@@ -534,7 +539,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.27.4</p>
+        <p className="text-xs text-gray-300">v1.28.0</p>
       </footer>
 
       {/* 前戦結果モーダル（まだ結果を確認していないユーザー向け） */}
