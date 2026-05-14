@@ -294,8 +294,8 @@ export default function TournamentFinished({ tournamentId, participants }: Props
               {s.isTied && (
                 <span className="text-xs text-gray-400">同点</span>
               )}
-              <span className="text-xs text-gray-400">{s.wins}勝</span>
-              <span className="text-sm font-bold text-emerald-600">{s.totalVotes}票</span>
+              <span className="text-xs text-gray-400"><span className="text-base font-bold text-yellow-500">{s.wins}</span>勝</span>
+              <span className="text-xs text-gray-400"><span className="text-base font-bold text-emerald-600">{s.totalVotes}</span>票</span>
             </div>
             )
           })}
@@ -314,6 +314,9 @@ export default function TournamentFinished({ tournamentId, participants }: Props
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs font-bold text-emerald-600">第{r.roundNumber}回戦</span>
+                  {r.votingMode === 'normal' && (
+                    <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">🎯 通常モード</span>
+                  )}
                   {r.votingMode === 'secret' && (
                     <span className="text-[9px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full">🕵️ シークレット</span>
                   )}

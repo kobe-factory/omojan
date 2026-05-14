@@ -418,6 +418,9 @@ export default function SummaryPage() {
                                 <div className="flex items-center justify-between mb-1">
                                   <div className="flex items-center gap-1.5">
                                     <span className="text-xs font-bold text-emerald-600">第{r.roundNumber}回戦</span>
+                                    {r.votingMode === 'normal' && (
+                                      <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">🎯 通常モード</span>
+                                    )}
                                     {r.votingMode === 'secret' && (
                                       <span className="text-[9px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full">🕵️ シークレット</span>
                                     )}
