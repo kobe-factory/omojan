@@ -13,6 +13,7 @@ interface User {
 
 interface Tournament {
   id: string
+  game_count: number
   cards_per_user: number
   impersonation_mode: boolean
 }
@@ -192,6 +193,9 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
     await onSubmitted()
   }
 
+  const isLastRound = game.round_number >= tournament.game_count
+  const roundLabel = isLastRound ? '最終戦' : `第${game.round_number}回戦`
+
   return (
     <div className="p-4 space-y-4">
       {/* 回戦表示 */}
@@ -199,7 +203,7 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
         const info = VOTING_MODE_INFO[game.voting_mode as keyof typeof VOTING_MODE_INFO]
         return (
           <div className={`text-center rounded-2xl py-2 ${info.bg}`}>
-            <p className="text-xs font-bold leading-none text-emerald-600">第{game.round_number}回戦</p>
+            <p className="text-xs font-bold leading-none text-emerald-600">{roundLabel}</p>
             <div className="flex items-center justify-center gap-1 mt-1">
               <span className="text-sm leading-none">{info.emoji}</span>
               <span className={`text-[11px] font-bold leading-none ${info.text}`}>{info.label}</span>
@@ -209,7 +213,7 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
         )
       })() : (
         <p className="text-center text-xs font-medium text-emerald-600 bg-emerald-50 rounded-full py-1">
-          第{game.round_number}回戦
+          {roundLabel}
         </p>
       )}
 

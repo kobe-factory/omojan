@@ -160,6 +160,12 @@ export default function Results({ tournament, game, participants, onNext, nextLa
 
   const isLastRound = game.round_number >= tournament.game_count
 
+  const rankList = results.reduce<number[]>((acc, r, i) => {
+    if (i === 0) return [1]
+    if (r.displayVoteCount === results[i - 1].displayVoteCount) return [...acc, acc[i - 1]]
+    return [...acc, i + 1]
+  }, [])
+
   if (loading) {
     return (
       <div className="p-8 text-center">
@@ -174,13 +180,13 @@ export default function Results({ tournament, game, participants, onNext, nextLa
         {isRematch ? (
           <>
             <p className="text-5xl mb-2">⚔️</p>
-            <p className="text-xl font-bold text-red-600">第{game.round_number}回戦 再戦！</p>
+            <p className="text-xl font-bold text-red-600">{isLastRound ? '最終戦' : `第${game.round_number}回戦`} 再戦！</p>
             <p className="text-sm text-gray-500 mt-2">全員同票のためこの回はお流れです</p>
           </>
         ) : (
           <>
             <p className="text-5xl mb-2">🎊</p>
-            <p className="text-xl font-bold text-gray-800">第{game.round_number}回戦 結果発表！</p>
+            <p className="text-xl font-bold text-gray-800">{isLastRound ? '最終戦' : `第${game.round_number}回戦`} 結果発表！</p>
           </>
         )}
       </div>
@@ -204,7 +210,7 @@ export default function Results({ tournament, game, participants, onNext, nextLa
             )}
 
             <div className="flex items-start justify-between gap-2 mb-3">
-              <span className="text-gray-400 text-xs">{isRematch ? '−' : `${i + 1}位`}</span>
+              <span className="text-gray-400 text-xs">{isRematch ? '−' : `${rankList[i]}位`}</span>
               <span className="text-emerald-500 text-sm font-bold">{r.displayVoteCount}票</span>
             </div>
 

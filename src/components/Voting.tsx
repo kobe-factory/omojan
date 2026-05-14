@@ -13,6 +13,7 @@ interface User {
 interface Tournament {
   id: string
   mode: string
+  game_count: number
   secret_voting: boolean
   impersonation_mode: boolean
 }
@@ -56,6 +57,8 @@ interface Props {
 
 export default function Voting({ tournament, token, game, currentUserId, participants, onVoted }: Props) {
   const isTiebreaker = game.status === 'waiting_tiebreaker_vote'
+  const isLastRound = game.round_number >= tournament.game_count
+  const roundLabel = isLastRound ? '最終戦' : `第${game.round_number}回戦`
 
   const shuffleKeyRef = useRef('')
   const shuffledIdsRef = useRef<string[]>([])
@@ -212,7 +215,7 @@ export default function Voting({ tournament, token, game, currentUserId, partici
   return (
     <div className="p-4 space-y-4">
       <div className={`rounded-2xl p-4 text-center ${isTiebreaker ? 'bg-red-500' : 'bg-emerald-500'}`}>
-        <p className={`text-xs font-bold ${game.voting_mode ? 'mb-2' : 'mb-0.5'} ${isTiebreaker ? 'text-red-100' : 'text-emerald-100'}`}>第{game.round_number}回戦</p>
+        <p className={`text-xs font-bold ${game.voting_mode ? 'mb-2' : 'mb-0.5'} ${isTiebreaker ? 'text-red-100' : 'text-emerald-100'}`}>{roundLabel}</p>
         {game.voting_mode && VOTING_MODE_INFO[game.voting_mode as keyof typeof VOTING_MODE_INFO] && (() => {
           const info = VOTING_MODE_INFO[game.voting_mode as keyof typeof VOTING_MODE_INFO]
           return (

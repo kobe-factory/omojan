@@ -256,7 +256,13 @@ export default function Archive({ tournamentId, participants, impersonationMode 
                     ⚔️ 全員同票のためこの回はお流れ・再戦となりました
                   </p>
                 )}
-                {g.submissions.map((s, i) => (
+                {(() => {
+                  const rankList = g.submissions.reduce<number[]>((acc, s, i) => {
+                    if (i === 0) return [1]
+                    if (s.displayVoteCount === g.submissions[i - 1].displayVoteCount) return [...acc, acc[i - 1]]
+                    return [...acc, i + 1]
+                  }, [])
+                  return g.submissions.map((s, i) => (
                   <div
                     key={s.id}
                     className={`rounded-xl p-3 ${
@@ -273,7 +279,7 @@ export default function Archive({ tournamentId, participants, impersonationMode 
                     )}
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-1">
-                        <span className="text-gray-400 text-xs">{g.isVoided ? '−' : `${i + 1}位`}</span>
+                        <span className="text-gray-400 text-xs">{g.isVoided ? '−' : `${rankList[i]}位`}</span>
                       </div>
                       <span className="text-emerald-500 text-xs font-bold">{s.displayVoteCount}票</span>
                     </div>
@@ -323,7 +329,8 @@ export default function Archive({ tournamentId, participants, impersonationMode 
                       )}
                     </div>
                   </div>
-                ))}
+                  ))
+                })()}
               </div>
             )}
           </div>
