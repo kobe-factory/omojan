@@ -212,7 +212,7 @@ export default function Voting({ tournament, token, game, currentUserId, partici
   return (
     <div className="p-4 space-y-4">
       <div className={`rounded-2xl p-4 text-center ${isTiebreaker ? 'bg-red-500' : 'bg-emerald-500'}`}>
-        <p className={`text-xs mb-0.5 ${isTiebreaker ? 'text-red-100' : 'text-emerald-100'}`}>第{game.round_number}回戦</p>
+        <p className={`text-xs font-bold ${game.voting_mode ? 'mb-2' : 'mb-0.5'} ${isTiebreaker ? 'text-red-100' : 'text-emerald-100'}`}>第{game.round_number}回戦</p>
         {game.voting_mode && VOTING_MODE_INFO[game.voting_mode as keyof typeof VOTING_MODE_INFO] && (() => {
           const info = VOTING_MODE_INFO[game.voting_mode as keyof typeof VOTING_MODE_INFO]
           return (
