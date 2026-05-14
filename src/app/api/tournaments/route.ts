@@ -99,18 +99,16 @@ export async function POST(request: Request) {
 
 async function copyCards(newTournamentId: string, source: 'previous' | 'all'): Promise<string | null> {
   // コピー元の本番大会を取得
-  const query = supabase
+  const baseQuery = supabase
     .from('tournaments')
     .select('id')
     .eq('mode', 'production')
     .eq('status', 'finished')
     .order('created_at', { ascending: false })
 
-  if (source === 'previous') {
-    query.limit(1)
-  }
-
-  const { data: sourceTournaments } = await query
+  const { data: sourceTournaments } = source === 'previous'
+    ? await baseQuery.limit(1)
+    : await baseQuery
 
   if (!sourceTournaments || sourceTournaments.length === 0) {
     return '参照できる過去の本番大会がありません'
