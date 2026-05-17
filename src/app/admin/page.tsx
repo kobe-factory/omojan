@@ -64,7 +64,9 @@ export default function AdminPage() {
   const [prodCardsPerUser, setProdCardsPerUser] = useState(String(productionPreset.cards_per_user))
   const [prodHandCards, setProdHandCards] = useState(String(productionPreset.hand_cards_per_player))
   const [prodDirtyCards, setProdDirtyCards] = useState(String(productionPreset.dirty_cards_per_user))
-  const [cardSource, setCardSource] = useState<'new' | 'previous' | 'all'>('new')
+  const [cardSource, setCardSource] = useState<'new' | 'previous' | 'all' | 'unused_submission' | 'unused_complete'>('new')
+  const [unusedCardInfo, setUnusedCardInfo] = useState<{ available: number; required: number } | null>(null)
+  const [checkingCards, setCheckingCards] = useState(false)
   const [hasPastTournaments, setHasPastTournaments] = useState(false)
   const [votingStyle, setVotingStyle] = useState<'normal' | 'secret_one' | 'secret_all' | 'impersonation' | 'random_per_round'>('normal')
 
@@ -123,6 +125,77 @@ export default function AdminPage() {
   useEffect(() => {
     fetchTournaments()
   }, [fetchTournaments])
+
+  useEffect(() => {
+    if (cardSource !== 'unused_submission' && cardSource !== 'unused_complete') {
+      setUnusedCardInfo(null)
+      return
+    }
+    let cancelled = false
+    async function checkUnused() {
+      setCheckingCards(true)
+      try {
+        const { data: sourceTournaments } = await supabase
+          .from('tournaments')
+          .select('id')
+          .eq('mode', 'production')
+          .eq('status', 'finished')
+
+        const handCards = parseInt(prodHandCards) || productionPreset.hand_cards_per_player
+        const gameCount = parseInt(prodGameCount) || productionPreset.game_count
+        const required = handCards * productionPreset.required_players + gameCount
+
+        if (!sourceTournaments || sourceTournaments.length === 0) {
+          if (!cancelled) setUnusedCardInfo({ available: 0, required })
+          return
+        }
+        const sourceIds = sourceTournaments.map((t) => t.id)
+
+        const { data: allCards } = await supabase
+          .from('cards')
+          .select('id')
+          .in('tournament_id', sourceIds)
+
+        if (!allCards || allCards.length === 0) {
+          if (!cancelled) setUnusedCardInfo({ available: 0, required })
+          return
+        }
+
+        const { data: games } = await supabase
+          .from('games')
+          .select('id, topic_card_id')
+          .in('tournament_id', sourceIds)
+        const usedTopicIds = new Set((games ?? []).map((g) => g.topic_card_id))
+        const gameIds = (games ?? []).map((g) => g.id)
+
+        let available = 0
+        if (cardSource === 'unused_submission') {
+          const usedHandIds = new Set<string>()
+          if (gameIds.length > 0) {
+            const { data: subs } = await supabase
+              .from('submissions')
+              .select('hand_card_id')
+              .in('game_id', gameIds)
+            for (const s of subs ?? []) usedHandIds.add(s.hand_card_id)
+          }
+          available = allCards.filter((c) => !usedHandIds.has(c.id) && !usedTopicIds.has(c.id)).length
+        } else {
+          const { data: dealt } = await supabase
+            .from('player_hands')
+            .select('card_id')
+            .in('tournament_id', sourceIds)
+          const dealtIds = new Set((dealt ?? []).map((h) => h.card_id))
+          available = allCards.filter((c) => !dealtIds.has(c.id) && !usedTopicIds.has(c.id)).length
+        }
+
+        if (!cancelled) setUnusedCardInfo({ available, required })
+      } finally {
+        if (!cancelled) setCheckingCards(false)
+      }
+    }
+    checkUnused()
+    return () => { cancelled = true }
+  }, [cardSource, prodHandCards, prodGameCount, productionPreset])
 
   async function handleCreate() {
     setLoading(true)
@@ -286,6 +359,8 @@ export default function AdminPage() {
                   { value: 'new', label: '札を作成する', disabled: false },
                   { value: 'previous', label: '前回大会の札を使用する', disabled: !hasPastTournaments },
                   { value: 'all', label: '全大会の札を使用する', disabled: !hasPastTournaments },
+                  { value: 'unused_submission', label: '全大会の未使用札（作品として未使用）', disabled: !hasPastTournaments },
+                  { value: 'unused_complete', label: '全大会の未使用札（完全に未使用）', disabled: !hasPastTournaments },
                 ] as const
               ).map((opt) => (
                 <label
@@ -306,6 +381,29 @@ export default function AdminPage() {
                   </span>
                 </label>
               ))}
+
+            {/* 未使用札枚数バリデーション */}
+            {(cardSource === 'unused_submission' || cardSource === 'unused_complete') && (
+              <div className={`text-xs rounded-lg px-3 py-2 mt-1 ${
+                checkingCards
+                  ? 'bg-gray-50 text-gray-400'
+                  : unusedCardInfo === null
+                  ? 'bg-gray-50 text-gray-400'
+                  : unusedCardInfo.available >= unusedCardInfo.required
+                  ? 'bg-emerald-50 text-emerald-700'
+                  : 'bg-red-50 text-red-600'
+              }`}>
+                {checkingCards ? '枚数を確認中...' : unusedCardInfo === null ? '' : (
+                  <>
+                    利用可能：<span className="font-bold">{unusedCardInfo.available}枚</span>
+                    　／　必要：<span className="font-bold">{unusedCardInfo.required}枚</span>
+                    {unusedCardInfo.available < unusedCardInfo.required && (
+                      <span className="block mt-1 font-medium">未使用の札が不足しているため発行できません</span>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -396,7 +494,12 @@ export default function AdminPage() {
         )}
         <button
           onClick={handleCreate}
-          disabled={loading || (selectedPreset.mode === 'production' && !!activeProductionTournament)}
+          disabled={
+            loading ||
+            (selectedPreset.mode === 'production' && !!activeProductionTournament) ||
+            ((cardSource === 'unused_submission' || cardSource === 'unused_complete') &&
+              (checkingCards || (unusedCardInfo !== null && unusedCardInfo.available < unusedCardInfo.required)))
+          }
           className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-600 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? '発行中...' : '大会URLを発行する'}
@@ -544,7 +647,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.28.5</p>
+        <p className="text-center text-xs text-gray-300 mt-8">v1.29.0</p>
       </div>
     </div>
   )

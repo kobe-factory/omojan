@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const skipCardCreation = mode === 'production' && (card_source === 'previous' || card_source === 'all')
+  const skipCardCreation = mode === 'production' && (card_source === 'previous' || card_source === 'all' || card_source === 'unused_submission' || card_source === 'unused_complete')
   const token = nanoid(10)
 
   const resolvedGameCount = game_count ?? 5
@@ -97,8 +97,78 @@ export async function POST(request: Request) {
   return NextResponse.json({ token: data.token })
 }
 
-async function copyCards(newTournamentId: string, source: 'previous' | 'all'): Promise<string | null> {
-  // コピー元の本番大会を取得
+async function copyCards(newTournamentId: string, source: 'previous' | 'all' | 'unused_submission' | 'unused_complete'): Promise<string | null> {
+  // 未使用札コピー
+  if (source === 'unused_submission' || source === 'unused_complete') {
+    const { data: sourceTournaments } = await supabase
+      .from('tournaments')
+      .select('id')
+      .eq('mode', 'production')
+      .eq('status', 'finished')
+
+    if (!sourceTournaments || sourceTournaments.length === 0) {
+      return '参照できる過去の本番大会がありません'
+    }
+
+    const sourceIds = sourceTournaments.map((t) => t.id)
+
+    const { data: allCards } = await supabase
+      .from('cards')
+      .select('id, creator_user_id, text, is_dirty')
+      .in('tournament_id', sourceIds)
+
+    if (!allCards || allCards.length === 0) {
+      return '参照元の大会に札がありません'
+    }
+
+    // お題として使用済みのカードIDを取得
+    const { data: games } = await supabase
+      .from('games')
+      .select('id, topic_card_id')
+      .in('tournament_id', sourceIds)
+    const usedTopicIds = new Set((games ?? []).map((g) => g.topic_card_id))
+    const gameIds = (games ?? []).map((g) => g.id)
+
+    let unusedCards: typeof allCards
+
+    if (source === 'unused_submission') {
+      // 手札として作品に使われたカードIDを取得
+      const usedHandIds = new Set<string>()
+      if (gameIds.length > 0) {
+        const { data: usedSubs } = await supabase
+          .from('submissions')
+          .select('hand_card_id')
+          .in('game_id', gameIds)
+        for (const s of usedSubs ?? []) usedHandIds.add(s.hand_card_id)
+      }
+      unusedCards = allCards.filter((c) => !usedHandIds.has(c.id) && !usedTopicIds.has(c.id))
+    } else {
+      // 配布済みのカードIDを取得
+      const { data: dealtHands } = await supabase
+        .from('player_hands')
+        .select('card_id')
+        .in('tournament_id', sourceIds)
+      const dealtCardIds = new Set((dealtHands ?? []).map((h) => h.card_id))
+      unusedCards = allCards.filter((c) => !dealtCardIds.has(c.id) && !usedTopicIds.has(c.id))
+    }
+
+    if (unusedCards.length === 0) {
+      return '未使用の札がありません'
+    }
+
+    const cardRows = unusedCards.map((c) => ({
+      tournament_id: newTournamentId,
+      creator_user_id: c.creator_user_id,
+      text: c.text,
+      is_dirty: c.is_dirty,
+    }))
+
+    const { error } = await supabase.from('cards').insert(cardRows)
+    if (error) return error.message
+    return null
+  }
+
+  // 前回 or 全大会の札をコピー
   const baseQuery = supabase
     .from('tournaments')
     .select('id')

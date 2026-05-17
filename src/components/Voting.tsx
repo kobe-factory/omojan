@@ -186,6 +186,22 @@ export default function Voting({ tournament, token, game, currentUserId, partici
     completedUserIds = votedUserIds
   }
 
+  // シークレット・なりすましの決選投票：作者を除いた投票資格者のみをステータス表示対象にする（0/3 スタート）
+  const isSecretOrImpersonation = tournament.secret_voting || tournament.impersonation_mode
+  const tiebreakerExcludesAuthors = isTiebreaker && tournament.mode === 'production' && isSecretOrImpersonation
+  const statusParticipants = tiebreakerExcludesAuthors
+    ? (() => {
+        const authorIds = new Set(visibleSubmissions.map((s) => s.user_id))
+        return participants.filter((p) => !authorIds.has(p.id))
+      })()
+    : participants
+  const statusCompletedIds = tiebreakerExcludesAuthors
+    ? (() => {
+        const authorIds = new Set(visibleSubmissions.map((s) => s.user_id))
+        return votedUserIds.filter((id) => !authorIds.has(id))
+      })()
+    : completedUserIds
+
   async function handleVote() {
     if (!selectedSubmissionId) return
     setVoting(true)
@@ -319,9 +335,13 @@ export default function Voting({ tournament, token, game, currentUserId, partici
         </button>
       )}
 
+      {tiebreakerExcludesAuthors && (
+        <p className="text-xs text-center text-gray-400">※ 決選作者は投票できません（投票資格者のみ表示）</p>
+      )}
+
       <CompletionStatus
-        completedUserIds={completedUserIds}
-        participants={participants}
+        completedUserIds={statusCompletedIds}
+        participants={statusParticipants}
         completedLabel="投票完了"
         pendingLabel="投票中"
         nextPhaseText={isTiebreaker ? '全員が決選投票すると、結果発表へ進みます' : '全員が投票すると、結果発表へ進みます'}
