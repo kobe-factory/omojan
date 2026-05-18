@@ -459,8 +459,8 @@ export default function TournamentPage() {
         {/* ゲームプレイフェーズ */}
         {tournament.status === 'playing' && currentGame && userId && (
           <>
-            {/* タブ（2回戦以降 or 再戦時） */}
-            {(currentGame.round_number > 1 || currentGame.is_rematch) && (
+            {/* タブ（2回戦以降 or 再戦時 or 流局確認中） */}
+            {(currentGame.round_number > 1 || currentGame.is_rematch || currentGame.status === 'showing_rematch') && (
               <div className="flex border-b border-gray-200 bg-white sticky top-[77px] z-10">
                 <button
                   onClick={() => setActiveTab('game')}
