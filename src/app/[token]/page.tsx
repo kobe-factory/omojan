@@ -281,7 +281,19 @@ export default function TournamentPage() {
     const key = `omojan:rematch_seen:${tournament.id}:round${currentGame.round_number}`
     if (typeof window !== 'undefined' && localStorage.getItem(key)) return
 
-    setRematchNoticeGame(currentGame)
+    // 元の showing_rematch ゲームを取得して結果詳細を表示
+    supabase
+      .from('games')
+      .select('*')
+      .eq('tournament_id', tournament.id)
+      .eq('round_number', currentGame.round_number)
+      .eq('status', 'showing_rematch')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .then(({ data }) => {
+        if (data && data.length > 0) setRematchNoticeGame(data[0] as Game)
+        else setRematchNoticeGame(currentGame)
+      })
   }, [tournament?.id, currentGame?.id, currentGame?.status, currentGame?.is_rematch, userId])
 
   if (loading) {
@@ -447,8 +459,8 @@ export default function TournamentPage() {
         {/* ゲームプレイフェーズ */}
         {tournament.status === 'playing' && currentGame && userId && (
           <>
-            {/* タブ（2回戦以降） */}
-            {currentGame.round_number > 1 && (
+            {/* タブ（2回戦以降 or 再戦時） */}
+            {(currentGame.round_number > 1 || currentGame.is_rematch) && (
               <div className="flex border-b border-gray-200 bg-white sticky top-[77px] z-10">
                 <button
                   onClick={() => setActiveTab('game')}
@@ -561,7 +573,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.29.1</p>
+        <p className="text-xs text-gray-300">v1.29.2</p>
       </footer>
 
       {/* 前戦結果モーダル（まだ結果を確認していないユーザー向け） */}
@@ -596,26 +608,27 @@ export default function TournamentPage() {
 
       {/* 再戦通知モーダル（showing_rematch を見ていなかったユーザー向け） */}
       {rematchNoticeGame && userId && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm text-center shadow-xl">
-            <p className="text-5xl mb-3">⚔️</p>
-            <p className="text-xl font-bold text-red-600 mb-2">
-              {rematchNoticeGame.round_number >= (tournament?.game_count ?? 0) ? '最終戦' : `第${rematchNoticeGame.round_number}回戦`} 再戦！
-            </p>
-            <p className="text-sm text-gray-500 mb-6">
-              全員同票のためこの回はお流れです。<br />同じお題で再戦となります。
-            </p>
-            <button
-              onClick={() => {
-                if (tournament) {
+        <div className="fixed inset-0 bg-black/60 z-50 overflow-y-auto">
+          <div className="min-h-full flex items-start justify-center p-4 pt-8">
+            <div className="bg-gray-50 rounded-2xl w-full max-w-md overflow-hidden">
+              <Results
+                tournament={{
+                  ...tournament,
+                  impersonation_mode: tournament.random_voting
+                    ? rematchNoticeGame.voting_mode === 'impersonation'
+                    : tournament.impersonation_mode,
+                }}
+                token={token}
+                game={rematchNoticeGame}
+                currentUserId={userId}
+                participants={participants}
+                nextLabel="再戦へ"
+                onNext={async () => {
                   localStorage.setItem(`omojan:rematch_seen:${tournament.id}:round${rematchNoticeGame.round_number}`, '1')
-                }
-                setRematchNoticeGame(null)
-              }}
-              className="w-full py-3 bg-red-500 text-white font-bold rounded-xl hover:bg-red-600 active:scale-95 transition-all"
-            >
-              再戦へ
-            </button>
+                  setRematchNoticeGame(null)
+                }}
+              />
+            </div>
           </div>
         </div>
       )}
