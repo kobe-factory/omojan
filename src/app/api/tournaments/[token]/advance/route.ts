@@ -548,12 +548,6 @@ export async function POST(
             .eq('tournament_id', tournament.id)
         }
 
-        // 投稿を削除（再投稿のため）
-        await supabase
-          .from('submissions')
-          .delete()
-          .eq('game_id', currentGame.id)
-
         // 同ラウンドで再戦ゲームを作成（is_rematch=true、voting_modeは元の回戦を引き継ぐ）
         const { error: gameError } = await createNextGame(
           tournament.id,
