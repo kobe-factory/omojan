@@ -66,6 +66,7 @@ export default function TournamentPage() {
   const [notFound, setNotFound] = useState(false)
   const [tournamentNumber, setTournamentNumber] = useState<number | null>(null)
   const [prevResultGame, setPrevResultGame] = useState<Game | null>(null)
+  const [rematchNoticeGame, setRematchNoticeGame] = useState<Game | null>(null)
 
   const [lineUserId, setLineUserId] = useState<string | null>(null)
 
@@ -261,6 +262,27 @@ export default function TournamentPage() {
     const game = currentGame
     Promise.resolve().then(() => setPrevResultGame(game))
   }, [tournament, currentGame, userId])
+
+  // showing_rematch を見ているユーザーは「再戦を認知済み」としてマーク
+  useEffect(() => {
+    if (!tournament || !currentGame) return
+    if (currentGame.status !== 'showing_rematch') return
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`omojan:rematch_seen:${tournament.id}:round${currentGame.round_number}`, '1')
+    }
+  }, [tournament?.id, currentGame?.id, currentGame?.status])
+
+  // 再戦ゲームに遷移したとき、未確認なら再戦モーダルを表示
+  useEffect(() => {
+    if (!tournament || !currentGame) return
+    if (!currentGame.is_rematch || currentGame.status !== 'waiting_submission') return
+    if (!userId) return
+
+    const key = `omojan:rematch_seen:${tournament.id}:round${currentGame.round_number}`
+    if (typeof window !== 'undefined' && localStorage.getItem(key)) return
+
+    setRematchNoticeGame(currentGame)
+  }, [tournament?.id, currentGame?.id, currentGame?.status, currentGame?.is_rematch, userId])
 
   if (loading) {
     return (
@@ -539,7 +561,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.29.0</p>
+        <p className="text-xs text-gray-300">v1.29.1</p>
       </footer>
 
       {/* 前戦結果モーダル（まだ結果を確認していないユーザー向け） */}
@@ -568,6 +590,32 @@ export default function TournamentPage() {
                 }}
               />
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 再戦通知モーダル（showing_rematch を見ていなかったユーザー向け） */}
+      {rematchNoticeGame && userId && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm text-center shadow-xl">
+            <p className="text-5xl mb-3">⚔️</p>
+            <p className="text-xl font-bold text-red-600 mb-2">
+              {rematchNoticeGame.round_number >= (tournament?.game_count ?? 0) ? '最終戦' : `第${rematchNoticeGame.round_number}回戦`} 再戦！
+            </p>
+            <p className="text-sm text-gray-500 mb-6">
+              全員同票のためこの回はお流れです。<br />同じお題で再戦となります。
+            </p>
+            <button
+              onClick={() => {
+                if (tournament) {
+                  localStorage.setItem(`omojan:rematch_seen:${tournament.id}:round${rematchNoticeGame.round_number}`, '1')
+                }
+                setRematchNoticeGame(null)
+              }}
+              className="w-full py-3 bg-red-500 text-white font-bold rounded-xl hover:bg-red-600 active:scale-95 transition-all"
+            >
+              再戦へ
+            </button>
           </div>
         </div>
       )}
