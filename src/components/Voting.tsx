@@ -259,7 +259,7 @@ export default function Voting({ tournament, token, game, currentUserId, partici
           {isSolo
             ? 'テストモード：決選投票フローの確認です'
             : currentUserIsExcluded
-            ? '決選投票中。作者は投票できません。'
+            ? '🏆 あなたの作品が決選に残っています！作者は投票できません。'
             : '同票！上位2作品で決選投票です'}
         </div>
       )}
