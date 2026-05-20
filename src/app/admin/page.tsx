@@ -4,6 +4,13 @@ import { useState, useEffect, useCallback } from 'react'
 import { GAME_PRESETS, DEFAULT_PRESET, type GamePreset } from '@/config/game'
 import { supabase } from '@/lib/supabase'
 
+interface GameRow {
+  round_number: number
+  is_rematch: boolean
+  status: string
+  voting_mode: string | null
+}
+
 interface TournamentRow {
   id: string
   token: string
@@ -20,6 +27,7 @@ interface TournamentRow {
   random_voting: boolean
   productionNumber?: number
   currentGame?: { round_number: number; status: string }
+  allGames?: GameRow[]
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -87,20 +95,31 @@ export default function AdminPage() {
       productionNumberMap[t.id] = i + 1
     })
 
-    // playing状態の大会の最新ゲームを一括取得
-    const playingIds = rows.filter((t) => t.status === 'playing').map((t) => t.id)
+    // 全大会のゲームを一括取得（voting_mode確認のため）
+    const allIds = rows.map((t) => t.id)
     const gameMap: Record<string, { round_number: number; status: string }> = {}
-    if (playingIds.length > 0) {
+    const allGamesMap: Record<string, GameRow[]> = {}
+    if (allIds.length > 0) {
       const { data: games } = await supabase
         .from('games')
-        .select('tournament_id, round_number, status')
-        .in('tournament_id', playingIds)
-        .order('round_number', { ascending: false })
-        .order('created_at', { ascending: false })
+        .select('tournament_id, round_number, is_rematch, status, voting_mode')
+        .in('tournament_id', allIds)
+        .order('round_number', { ascending: true })
+        .order('created_at', { ascending: true })
       for (const g of games ?? []) {
-        if (!gameMap[g.tournament_id]) {
+        // 最新ゲーム（currentGame用）は別途抽出
+        const cur = gameMap[g.tournament_id]
+        if (!cur || g.round_number > cur.round_number) {
           gameMap[g.tournament_id] = { round_number: g.round_number, status: g.status }
         }
+        // 全ゲームリスト
+        if (!allGamesMap[g.tournament_id]) allGamesMap[g.tournament_id] = []
+        allGamesMap[g.tournament_id].push({
+          round_number: g.round_number,
+          is_rematch: g.is_rematch,
+          status: g.status,
+          voting_mode: g.voting_mode,
+        })
       }
     }
 
@@ -108,6 +127,7 @@ export default function AdminPage() {
       ...t,
       productionNumber: productionNumberMap[t.id],
       currentGame: gameMap[t.id],
+      allGames: allGamesMap[t.id] ?? [],
     }))
     setTournaments(mapped)
 
@@ -630,6 +650,29 @@ export default function AdminPage() {
                       </span>
                     </div>
                   )}
+                  {t.allGames && t.allGames.length > 0 && (
+                    <div className="mb-2">
+                      <p className="text-xs text-gray-400 mb-1">ゲーム一覧</p>
+                      <div className="space-y-0.5">
+                        {t.allGames.map((g, i) => {
+                          const modeEmoji = g.voting_mode === 'impersonation' ? '🎭' : g.voting_mode === 'secret' ? '🕵️' : g.voting_mode === 'normal' ? '🎯' : '—'
+                          const modeLabel = g.voting_mode === 'impersonation' ? 'なりすまし' : g.voting_mode === 'secret' ? 'シークレット' : g.voting_mode === 'normal' ? '通常' : 'なし'
+                          const isActive = g.status !== 'finished'
+                          return (
+                            <div key={i} className={`flex items-center gap-2 text-xs px-2 py-0.5 rounded ${isActive ? 'bg-emerald-50' : 'bg-gray-50'}`}>
+                              <span className={`font-medium ${isActive ? 'text-emerald-700' : 'text-gray-500'}`}>
+                                {g.is_rematch ? `↩ ${g.round_number}回戦 再戦` : `${g.round_number}回戦`}
+                              </span>
+                              <span className={`${g.voting_mode === 'impersonation' ? 'text-purple-600 font-bold' : 'text-gray-500'}`}>
+                                {modeEmoji} {modeLabel}
+                              </span>
+                              <span className="text-gray-300 ml-auto">{GAME_STATUS_LABEL[g.status] ?? g.status}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <p className="text-xs font-mono text-gray-400 truncate flex-1">
                       /{t.token}
@@ -647,7 +690,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.29.6</p>
+        <p className="text-center text-xs text-gray-300 mt-8">v1.29.7</p>
       </div>
     </div>
   )
