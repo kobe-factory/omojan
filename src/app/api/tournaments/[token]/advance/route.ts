@@ -548,13 +548,19 @@ export async function POST(
             .eq('tournament_id', tournament.id)
         }
 
-        // 同ラウンドで再戦ゲームを作成（is_rematch=true、voting_modeは元の回戦を引き継ぐ）
+        // 流局ゲームを finished に更新
+        await supabase
+          .from('games')
+          .update({ status: 'finished' })
+          .eq('id', currentGame.id)
+
+        // 同ラウンドで再戦ゲームを作成（is_rematch=true、voting_modeは毎回ランダム選択）
         const { error: gameError } = await createNextGame(
           tournament.id,
           currentGame.round_number,
           true,
           currentGame.topic_card_id,
-          currentGame.voting_mode ?? null,
+          tournament.random_voting ? randomVotingMode() : null,
         )
         if (gameError)
           return NextResponse.json({ error: gameError }, { status: 500 })
