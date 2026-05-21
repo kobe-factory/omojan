@@ -65,9 +65,16 @@ export default function Archive({ tournamentId, participants, impersonationMode 
         return
       }
 
+      // 流局判定: 同じround_numberで再戦(is_rematch=true)が存在する回戦は流局
+      const rematchRoundSet = new Set(
+        finishedGames.filter((g) => g.is_rematch).map((g) => g.round_number)
+      )
+
       const result: ArchiveGame[] = await Promise.all(
         finishedGames.map(async (g) => {
-          const isVoided = g.status === 'showing_rematch'
+          const isVoided =
+            g.status === 'showing_rematch' ||
+            (!g.is_rematch && rematchRoundSet.has(g.round_number))
 
           const [{ data: topicCard }, { data: subs }, { data: votes }] = await Promise.all([
             supabase.from('cards').select('text').eq('id', g.topic_card_id).single(),

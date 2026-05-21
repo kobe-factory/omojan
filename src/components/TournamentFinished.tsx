@@ -30,6 +30,8 @@ interface RoundSummary {
   isTied: boolean
   isWinByTiebreaker: boolean
   votingMode: string | null
+  isRematch: boolean
+  isVoided: boolean
 }
 
 interface Props {
@@ -47,9 +49,10 @@ export default function TournamentFinished({ tournamentId, participants }: Props
     async function fetchData() {
       const { data: games } = await supabase
         .from('games')
-        .select('id, round_number, topic_card_id, status, voting_mode')
+        .select('id, round_number, topic_card_id, status, is_rematch, voting_mode')
         .eq('tournament_id', tournamentId)
         .order('round_number', { ascending: true })
+        .order('created_at', { ascending: true })
 
       if (!games || games.length === 0) {
         setLoading(false)
@@ -98,7 +101,16 @@ export default function TournamentFinished({ tournamentId, participants }: Props
 
       const roundSummaries: RoundSummary[] = []
 
+      // 流局判定: 同じround_numberで再戦(is_rematch=true)が存在する回戦は流局
+      const rematchRounds = new Set(
+        (games ?? []).filter((g) => g.is_rematch).map((g) => g.round_number)
+      )
+
       for (const game of games) {
+        const isVoided =
+          game.status === 'showing_rematch' ||
+          (!game.is_rematch && rematchRounds.has(game.round_number))
+
         const gameSubs = (allSubs ?? []).filter((s) => s.game_id === game.id)
         let maxRegularVotes = 0
         let winnerTimeSum = Infinity
@@ -106,53 +118,55 @@ export default function TournamentFinished({ tournamentId, participants }: Props
         let hasTie = false
         let isWinByTiebreaker = false
 
-        // 通常投票で集計
-        for (const sub of gameSubs) {
-          const count = regularVoteCount[sub.id] ?? 0
-          const timeSum = regularVoteTimeSum[sub.id] ?? 0
-          if (scoreMap[sub.user_id]) {
-            scoreMap[sub.user_id].totalVotes += count
-            scoreMap[sub.user_id].totalVoteTimeSum += timeSum
-          }
-          if (count > maxRegularVotes) {
-            maxRegularVotes = count
-            winnerSub = sub
-            winnerTimeSum = timeSum
-            hasTie = false
-          } else if (count === maxRegularVotes && count > 0) {
-            hasTie = true
-            if (timeSum < winnerTimeSum) {
+        if (!isVoided) {
+          // 通常投票で集計（流局ゲームはスコア計算から除外）
+          for (const sub of gameSubs) {
+            const count = regularVoteCount[sub.id] ?? 0
+            const timeSum = regularVoteTimeSum[sub.id] ?? 0
+            if (scoreMap[sub.user_id]) {
+              scoreMap[sub.user_id].totalVotes += count
+              scoreMap[sub.user_id].totalVoteTimeSum += timeSum
+            }
+            if (count > maxRegularVotes) {
+              maxRegularVotes = count
               winnerSub = sub
               winnerTimeSum = timeSum
+              hasTie = false
+            } else if (count === maxRegularVotes && count > 0) {
+              hasTie = true
+              if (timeSum < winnerTimeSum) {
+                winnerSub = sub
+                winnerTimeSum = timeSum
+              }
             }
           }
-        }
 
-        // 同票の場合は決選投票で勝者を決定
-        if (hasTie) {
-          let maxTbVotes = 0
-          let tbWinner: typeof gameSubs[0] | null = null
-          for (const sub of gameSubs) {
-            const tbCount = tiebreakerVoteCount[sub.id] ?? 0
-            if (tbCount > maxTbVotes) {
-              maxTbVotes = tbCount
-              tbWinner = sub
+          // 同票の場合は決選投票で勝者を決定
+          if (hasTie) {
+            let maxTbVotes = 0
+            let tbWinner: typeof gameSubs[0] | null = null
+            for (const sub of gameSubs) {
+              const tbCount = tiebreakerVoteCount[sub.id] ?? 0
+              if (tbCount > maxTbVotes) {
+                maxTbVotes = tbCount
+                tbWinner = sub
+              }
+            }
+            if (tbWinner) {
+              winnerSub = tbWinner
+              isWinByTiebreaker = true
+              hasTie = false
             }
           }
-          if (tbWinner) {
-            winnerSub = tbWinner
-            isWinByTiebreaker = true
-            hasTie = false
+
+          if (winnerSub && scoreMap[winnerSub.user_id]) {
+            scoreMap[winnerSub.user_id].wins += 1
+            if (isWinByTiebreaker) scoreMap[winnerSub.user_id].totalVotes += 1
           }
         }
 
         // 表示票数: 通常最多票 + 決選投票の場合+1
         const displayVotes = maxRegularVotes + (isWinByTiebreaker ? 1 : 0)
-
-        if (winnerSub && scoreMap[winnerSub.user_id]) {
-          scoreMap[winnerSub.user_id].wins += 1
-          if (isWinByTiebreaker) scoreMap[winnerSub.user_id].totalVotes += 1
-        }
 
         const topicText = topicMap[game.topic_card_id] ?? ''
         const handText = winnerSub ? (handMap[winnerSub.hand_card_id] ?? '') : ''
@@ -173,7 +187,9 @@ export default function TournamentFinished({ tournamentId, participants }: Props
           votes: displayVotes,
           isTied: hasTie,
           isWinByTiebreaker,
-          votingMode: (game as { voting_mode?: string | null }).voting_mode ?? null,
+          votingMode: game.voting_mode ?? null,
+          isRematch: game.is_rematch,
+          isVoided,
         })
       }
 
@@ -309,11 +325,14 @@ export default function TournamentFinished({ tournamentId, participants }: Props
       <div className="bg-white rounded-2xl shadow-sm p-5">
         <h3 className="text-sm font-bold text-gray-700 mb-3">回戦別MVP</h3>
         <div className="space-y-3">
-          {rounds.map((r) => (
-            <div key={r.roundNumber} className="border border-gray-100 rounded-xl p-3">
+          {rounds.filter((r) => !r.isVoided).map((r) => (
+            <div key={`${r.roundNumber}-${r.isRematch}`} className="border border-gray-100 rounded-xl p-3">
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs font-bold text-emerald-600">第{r.roundNumber}回戦</span>
+                  {r.isRematch && (
+                    <span className="text-[9px] font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full">再戦</span>
+                  )}
                   {r.votingMode === 'normal' && (
                     <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">🎯 通常モード</span>
                   )}
