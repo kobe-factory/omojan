@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/lease-emp-mac-kohei-sakai/repos/private/omojan add src/components/Results.tsx src/components/Archive.tsx src/components/GamePlay.tsx src/components/Voting.tsx src/app/layout.tsx src/app/admin/page.tsx src/app/\\\\[token\\\\]/page.tsx CLAUDE.md)",
+      "Bash(git -C /Users/lease-emp-mac-kohei-sakai/repos/private/omojan commit -m ' *)",
+      "Bash(git -C /Users/lease-emp-mac-kohei-sakai/repos/private/omojan add src/components/Voting.tsx src/app/api/tournaments/route.ts src/app/admin/page.tsx src/app/layout.tsx src/app/\\\\[token\\\\]/page.tsx CLAUDE.md)"
+    ]
+  }
+}
