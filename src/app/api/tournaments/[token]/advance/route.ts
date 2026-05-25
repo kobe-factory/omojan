@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 import { sendLinePush, type LinePushPayload } from '@/lib/line-push'
 
 const LIFF_URL = `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID}`
@@ -613,7 +614,17 @@ async function dealCards(
   handCardsPerPlayer: number,
   dirtyCardsPerUser: number,
 ) {
-  const { data: allCards } = await supabase
+  // 冪等性チェック：既に配布済みの場合はスキップ
+  const { count: existingCount } = await supabaseAdmin
+    .from('player_hands')
+    .select('*', { count: 'exact', head: true })
+    .eq('tournament_id', tournamentId)
+
+  if (existingCount !== null && existingCount > 0) {
+    return { error: null }
+  }
+
+  const { data: allCards } = await supabaseAdmin
     .from('cards')
     .select('id, is_dirty')
     .eq('tournament_id', tournamentId)
@@ -641,7 +652,7 @@ async function dealCards(
     }
   }
 
-  const { error } = await supabase.from('player_hands').insert(handRows)
+  const { error } = await supabaseAdmin.from('player_hands').insert(handRows)
   if (error) return { error: error.message }
 
   return { error: null }
@@ -659,21 +670,21 @@ async function createNextGame(
   excludeTopicCardId?: string,
   votingMode?: string | null,
 ) {
-  const { data: usedTopics } = await supabase
+  const { data: usedTopics } = await supabaseAdmin
     .from('games')
     .select('topic_card_id')
     .eq('tournament_id', tournamentId)
 
   const usedTopicIds = new Set(usedTopics?.map((g) => g.topic_card_id) ?? [])
 
-  const { data: handCardIds } = await supabase
+  const { data: handCardIds } = await supabaseAdmin
     .from('player_hands')
     .select('card_id')
     .eq('tournament_id', tournamentId)
 
   const handCardIdSet = new Set(handCardIds?.map((h) => h.card_id) ?? [])
 
-  const { data: allCards } = await supabase
+  const { data: allCards } = await supabaseAdmin
     .from('cards')
     .select('id, is_dirty')
     .eq('tournament_id', tournamentId)
@@ -698,7 +709,7 @@ async function createNextGame(
     topicCard = fallbackPool[Math.floor(Math.random() * fallbackPool.length)]
   }
 
-  const { error } = await supabase.from('games').insert({
+  const { error } = await supabaseAdmin.from('games').insert({
     tournament_id: tournamentId,
     round_number: roundNumber,
     status: 'waiting_submission',
