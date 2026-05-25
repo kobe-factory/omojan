@@ -620,36 +620,18 @@ async function dealCards(
 
   if (!allCards) return { error: 'カードが見つかりません' }
 
-  const dirtyCards = allCards.filter((c) => c.is_dirty)
-  const regularCards = allCards.filter((c) => !c.is_dirty)
-
-  const shuffledDirty = [...dirtyCards].sort(() => Math.random() - 0.5)
-  const shuffledRegular = [...regularCards].sort(() => Math.random() - 0.5)
+  const dirtyPool = [...allCards.filter((c) => c.is_dirty)].sort(() => Math.random() - 0.5)
+  const regularPool = [...allCards.filter((c) => !c.is_dirty)].sort(() => Math.random() - 0.5)
 
   const handRows = []
 
   for (let i = 0; i < participantIds.length; i++) {
-    const playerDirty = shuffledDirty.slice(
-      i * dirtyCardsPerUser,
-      (i + 1) * dirtyCardsPerUser,
-    )
-    for (const card of playerDirty) {
-      handRows.push({
-        tournament_id: tournamentId,
-        user_id: participantIds[i],
-        card_id: card.id,
-        is_used: false,
-      })
-    }
-  }
+    // dirty カードを最大 dirtyCardsPerUser 枚配布（不足分は regular で補填）
+    const playerDirty = dirtyPool.splice(0, Math.min(dirtyCardsPerUser, dirtyPool.length))
+    const regularNeeded = handCardsPerPlayer - playerDirty.length
+    const playerRegular = regularPool.splice(0, Math.min(regularNeeded, regularPool.length))
 
-  const regularPerPlayer = handCardsPerPlayer - dirtyCardsPerUser
-  for (let i = 0; i < participantIds.length; i++) {
-    const playerRegular = shuffledRegular.slice(
-      i * regularPerPlayer,
-      (i + 1) * regularPerPlayer,
-    )
-    for (const card of playerRegular) {
+    for (const card of [...playerDirty, ...playerRegular]) {
       handRows.push({
         tournament_id: tournamentId,
         user_id: participantIds[i],

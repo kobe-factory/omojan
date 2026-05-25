@@ -43,7 +43,7 @@ const GAME_STATUS_LABEL: Record<string, string> = {
   waiting_tiebreaker_vote: '決選投票中',
   showing_result: '結果発表中',
   showing_rematch: '再戦準備中',
-  finished: '次回戦準備中',
+  finished: '終了',
 }
 
 const MODE_LABEL: Record<string, string> = {
@@ -690,7 +690,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.29.8</p>
+        <p className="text-center text-xs text-gray-300 mt-8">v1.29.9</p>
       </div>
     </div>
   )
