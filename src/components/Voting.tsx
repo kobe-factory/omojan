@@ -112,11 +112,14 @@ export default function Voting({ tournament, token, game, currentUserId, partici
       const phaseVotes = votes.filter((v) => v.is_tiebreaker === isTiebreaker)
       setVotedUserIds(phaseVotes.map((v) => v.voter_user_id))
 
-      // 自分の投票済み作品を復元
+      // 自分の投票済み作品を復元（フェーズ切り替え時は必ずリセット）
       const myVote = phaseVotes.find((v) => v.voter_user_id === currentUserId)
       if (myVote) {
         setVoted(true)
         setSelectedSubmissionId(myVote.submission_id)
+      } else {
+        setVoted(false)
+        setSelectedSubmissionId(null)
       }
 
       // 手札テキストとユーザー名を取得
