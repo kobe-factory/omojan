@@ -323,6 +323,30 @@ export async function POST(
 
     // waiting_vote → tiebreaker or rematch or showing_result
     if (currentGame.status === 'waiting_vote') {
+      // ソロモード：ラウンド数に応じてフローを切り替えてテスト（投票チェック不要）
+      // 再戦ゲーム or 1,4,7...回戦 → 通常結果
+      // 2,5,8...回戦 → 決選投票 or 連打ゲーム（tiebreaker_modeに依存）
+      // 3,6,9...回戦 → 流局
+      if (tournament.mode === 'solo') {
+        let soloStatus: 'showing_result' | 'waiting_tiebreaker_vote' | 'waiting_button_mash' | 'showing_rematch'
+        if (currentGame.is_rematch || currentGame.round_number % 3 === 1) {
+          soloStatus = 'showing_result'
+        } else if (currentGame.round_number % 3 === 2) {
+          soloStatus = tournament.tiebreaker_mode === 'button_mash'
+            ? 'waiting_button_mash'
+            : 'waiting_tiebreaker_vote'
+        } else {
+          soloStatus = 'showing_rematch'
+        }
+        const { error: soloUpdateError } = await supabase
+          .from('games')
+          .update({ status: soloStatus })
+          .eq('id', currentGame.id)
+        if (soloUpdateError) return NextResponse.json({ error: soloUpdateError.message }, { status: 500 })
+        return NextResponse.json({ advanced: true, newGameStatus: soloStatus })
+      }
+
+      // 本番モード：全員の投票完了を確認してから集計
       const { data: votes } = await supabase
         .from('votes')
         .select('voter_user_id, submission_id')
@@ -349,29 +373,6 @@ export async function POST(
       const tiedAtTopIds = Object.entries(voteCount)
         .filter(([, c]) => c === maxVotes)
         .map(([id]) => id)
-
-      // ソロモード：ラウンド数に応じてフローを切り替えてテスト
-      // 再戦ゲーム or 1,4,7...回戦 → 通常結果
-      // 2,5,8...回戦 → 決選投票 or 連打ゲーム（tiebreaker_modeに依存）
-      // 3,6,9...回戦 → 流局
-      if (tournament.mode === 'solo') {
-        let soloStatus: 'showing_result' | 'waiting_tiebreaker_vote' | 'waiting_button_mash' | 'showing_rematch'
-        if (currentGame.is_rematch || currentGame.round_number % 3 === 1) {
-          soloStatus = 'showing_result'
-        } else if (currentGame.round_number % 3 === 2) {
-          soloStatus = tournament.tiebreaker_mode === 'button_mash'
-            ? 'waiting_button_mash'
-            : 'waiting_tiebreaker_vote'
-        } else {
-          soloStatus = 'showing_rematch'
-        }
-        const { error: soloUpdateError } = await supabase
-          .from('games')
-          .update({ status: soloStatus })
-          .eq('id', currentGame.id)
-        if (soloUpdateError) return NextResponse.json({ error: soloUpdateError.message }, { status: 500 })
-        return NextResponse.json({ advanced: true, newGameStatus: soloStatus })
-      }
 
       const num = await getTournamentNumber(tournament.id)
 
