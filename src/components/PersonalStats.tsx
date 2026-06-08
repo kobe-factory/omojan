@@ -84,7 +84,7 @@ const TOOLTIPS: Record<string, string> = {
   '前口上使用率': '作品投稿時に前口上（コメント）を入力した回の割合です。前口上でどれだけ場を盛り上げているかの指標です。',
   '最高得票数': '1回戦で獲得した最多票数の自己ベストです。その回戦で何票集めることができたか。',
   '多数派投票率': '自分が投じた票のうち、最終的にMVPになった作品に投票していた割合です。自分がMVPを取ったゲームは自分の作品に投票できないため集計から除外しています。高いほど「みんなと同じ感覚を持っている」＝多数派。低いほど個性派・天邪鬼！野球の打率と同じ形式（.xxx）で表示されます。',
-  '孤独投票数': '自分だけが票を入れたのに落選した回数です。誰にも理解されなかった孤高の美学の記録…！',
+  '孤独投票数': '自分だけが票を入れたのに落選した回数です。多いほど不名誉なワーストランキング！誰にも理解されなかった孤高の美学（？）の記録…',
   '自作札使用率': '自分が出場した回戦のうち、自分が作った札を自分の作品に使った回の割合です。自己プロデュース力の指標？',
   '前口上平均文字数': '前口上を使ったときの平均文字数です。長い前口上で場を盛り上げるタイプか、短く刺すタイプか。',
 }
@@ -97,32 +97,36 @@ interface RankingRowProps {
   formatValue: (v: number) => string
   colorClass?: string
   filter?: (s: UserStats) => boolean
-  ascending?: boolean  // trueなら小さい値が上位（完封数など）
+  ascending?: boolean
+  isWorst?: boolean  // trueならワーストランキング（多いほど不名誉な1位）
 }
 
-function RankingRow({ label, tooltipKey, stats, getValue, formatValue, colorClass = 'text-emerald-600', filter, ascending }: RankingRowProps) {
+function RankingRow({ label, tooltipKey, stats, getValue, formatValue, colorClass = 'text-emerald-600', filter, ascending, isWorst }: RankingRowProps) {
   const filtered = filter ? stats.filter(filter) : stats
   const sorted = [...filtered].sort((a, b) => ascending ? getValue(a) - getValue(b) : getValue(b) - getValue(a))
   return (
-    <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-      <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center">
-        <p className="text-xs font-bold text-gray-600 flex-1">{label}</p>
+    <div className={`bg-white rounded-xl overflow-hidden border ${isWorst ? 'border-red-100' : 'border-gray-100'}`}>
+      <div className={`px-3 py-2 border-b flex items-center ${isWorst ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100'}`}>
+        <p className={`text-xs font-bold flex-1 ${isWorst ? 'text-red-500' : 'text-gray-600'}`}>{label}</p>
         {(tooltipKey ?? label) && <TooltipIcon title={tooltipKey ?? label} description={TOOLTIPS[tooltipKey ?? label] ?? ''} />}
       </div>
       <div className="divide-y divide-gray-50">
         {sorted.map((s, i) => {
           const rank = i === 0 ? 1 : getValue(s) === getValue(sorted[i - 1]) ? getRank(filtered, s.userId, getValue) : i + 1
           const isFirst = rank === 1
+          const firstBg = isWorst ? 'bg-red-50' : 'bg-yellow-50'
+          const firstIcon = isWorst ? '💀' : '👑'
+          const firstColor = isWorst ? 'text-red-500' : 'text-yellow-600'
           return (
-            <div key={s.userId} className={`flex items-center justify-between px-3 py-2 ${isFirst ? 'bg-yellow-50' : ''}`}>
+            <div key={s.userId} className={`flex items-center justify-between px-3 py-2 ${isFirst ? firstBg : ''}`}>
               <div className="flex items-center gap-2">
                 <span className="text-xs w-6 text-center font-bold text-gray-400">
-                  {isFirst ? '👑' : `${rank}位`}
+                  {isFirst ? firstIcon : `${rank}位`}
                 </span>
                 <UserIcon name={s.userName} size="xs" />
                 <span className="text-xs text-gray-700">{s.userName}</span>
               </div>
-              <span className={`text-sm font-bold ${isFirst ? 'text-yellow-600' : colorClass}`}>
+              <span className={`text-sm font-bold ${isFirst ? firstColor : colorClass}`}>
                 {formatValue(getValue(s))}
               </span>
             </div>
@@ -250,14 +254,6 @@ export default function PersonalStats() {
             colorClass="text-teal-600"
             filter={(s) => s.gamesParticipated > 0}
           />
-          <RankingRow
-            label="ズル滑り数"
-            stats={stats}
-            getValue={(s) => s.shutoutCount}
-            formatValue={(v) => `${v}回`}
-            colorClass="text-gray-500"
-            filter={(s) => s.gamesParticipated > 0}
-          />
           <div className="pt-1 pb-0.5">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide px-1">個性ランキング</p>
           </div>
@@ -269,13 +265,25 @@ export default function PersonalStats() {
             colorClass="text-indigo-600"
             filter={(s) => s.votesCastCount > 0}
           />
+          <div className="pt-1 pb-0.5">
+            <p className="text-[10px] font-bold text-red-400 uppercase tracking-wide px-1">💀 ワーストランキング（多いほど不名誉）</p>
+          </div>
+          <RankingRow
+            label="ズル滑り数"
+            stats={stats}
+            getValue={(s) => s.shutoutCount}
+            formatValue={(v) => `${v}回`}
+            colorClass="text-red-400"
+            filter={(s) => s.gamesParticipated > 0}
+            isWorst={true}
+          />
           <RankingRow
             label="孤独投票数"
             stats={stats}
             getValue={(s) => s.loneVoteCount}
             formatValue={(v) => `${v}回`}
-            colorClass="text-pink-600"
-            ascending={true}
+            colorClass="text-red-400"
+            isWorst={true}
           />
           <RankingRow
             label="自作札使用率"
@@ -516,7 +524,8 @@ export default function PersonalStats() {
                             <TooltipIcon title="孤独投票数" description={TOOLTIPS['孤独投票数']} />
                           </div>
                           <div className="flex items-center gap-1">
-                            <span className="text-sm font-bold text-pink-600">{s.loneVoteCount}回</span>
+                            <span className="text-sm font-bold text-red-500">{s.loneVoteCount}回</span>
+                            <span className="text-[10px] text-red-400">💀ワースト</span>
                           </div>
                         </div>
                         {s.preambleCount > 0 && (
