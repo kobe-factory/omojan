@@ -298,6 +298,20 @@ export default function TournamentPage() {
       })
   }, [tournament?.id, currentGame?.id, currentGame?.status, currentGame?.is_rematch, userId])
 
+  // ソロモード: waiting_vote になったら自動で advance を呼ぶ（投票フェーズをスキップ）
+  useEffect(() => {
+    if (!tournament || !currentGame) return
+    if (tournament.mode !== 'solo') return
+    if (currentGame.status !== 'waiting_vote') return
+    fetch(`/api/tournaments/${token}/advance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ triggering_user_id: userId }),
+    }).then((r) => r.json()).then((data) => {
+      if (data.advanced) fetchState()
+    })
+  }, [tournament?.mode, currentGame?.id, currentGame?.status])  // eslint-disable-line react-hooks/exhaustive-deps
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -593,7 +607,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.30.4</p>
+        <p className="text-xs text-gray-300">v1.30.5</p>
       </footer>
 
       {/* 前戦結果モーダル（まだ結果を確認していないユーザー向け） */}
