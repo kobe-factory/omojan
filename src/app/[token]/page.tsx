@@ -169,10 +169,16 @@ export default function TournamentPage() {
 
       if (!hasTriedAdvance.current) {
         hasTriedAdvance.current = true
-        const res = await fetch(`/api/tournaments/${token}/advance`, { method: 'POST' })
-        const data = await res.json()
-        if (data.advanced) {
-          await fetchState()
+        // ソロモードでは waiting_submission→waiting_vote→next と複数段階あるため
+        // 進めなくなるまでループして advance を試みる
+        for (let i = 0; i < 5; i++) {
+          const res = await fetch(`/api/tournaments/${token}/advance`, { method: 'POST' })
+          const data = await res.json()
+          if (data.advanced) {
+            await fetchState()
+          } else {
+            break
+          }
         }
       }
     }
@@ -297,20 +303,6 @@ export default function TournamentPage() {
         else setRematchNoticeGame(currentGame)
       })
   }, [tournament?.id, currentGame?.id, currentGame?.status, currentGame?.is_rematch, userId])
-
-  // ソロモード: waiting_vote になったら自動で advance を呼ぶ（投票フェーズをスキップ）
-  useEffect(() => {
-    if (!tournament || !currentGame) return
-    if (tournament.mode !== 'solo') return
-    if (currentGame.status !== 'waiting_vote') return
-    fetch(`/api/tournaments/${token}/advance`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ triggering_user_id: userId }),
-    }).then((r) => r.json()).then((data) => {
-      if (data.advanced) fetchState()
-    })
-  }, [tournament?.mode, currentGame?.id, currentGame?.status])  // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (
@@ -607,7 +599,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.30.5</p>
+        <p className="text-xs text-gray-300">v1.30.6</p>
       </footer>
 
       {/* 前戦結果モーダル（まだ結果を確認していないユーザー向け） */}
