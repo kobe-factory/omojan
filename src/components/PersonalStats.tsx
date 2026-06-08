@@ -55,7 +55,7 @@ function TooltipIcon({ title, description }: { title: string; description: strin
     <>
       <button
         onPointerDown={(e) => { e.stopPropagation(); setOpen(true) }}
-        className="ml-1 w-4 h-4 rounded-full bg-gray-200 text-gray-500 text-[9px] font-bold flex items-center justify-center flex-shrink-0"
+        className="ml-1 w-6 h-6 rounded-full bg-gray-200 text-gray-500 text-[9px] font-bold flex items-center justify-center flex-shrink-0"
       >
         ?
       </button>
