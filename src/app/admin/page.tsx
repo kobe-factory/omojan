@@ -52,58 +52,6 @@ const MODE_LABEL: Record<string, string> = {
   production: '本番',
 }
 
-function ForceRegenSection({
-  disabled,
-  onResult,
-  onLoading,
-}: {
-  disabled: boolean
-  onResult: (msg: string) => void
-  onLoading: (v: boolean) => void
-}) {
-  const [show, setShow] = useState(false)
-
-  if (!show) {
-    return (
-      <button
-        onClick={() => setShow(true)}
-        className="mt-3 w-full text-[10px] text-gray-300 hover:text-gray-400"
-      >
-        強制再生成
-      </button>
-    )
-  }
-
-  return (
-    <div className="mt-3 border-t border-gray-100 pt-3 space-y-2">
-      <p className="text-[10px] text-gray-400 text-center">APIコストが発生します。本当に再生成しますか？</p>
-      <div className="flex gap-2">
-        <button
-          onClick={() => setShow(false)}
-          className="flex-1 py-2 bg-gray-100 text-gray-500 font-bold rounded-xl text-xs"
-        >
-          キャンセル
-        </button>
-        <button
-          onClick={async () => {
-            onLoading(true)
-            onResult('')
-            const res = await fetch('/api/ai/generate-comments?force=true', { method: 'POST' })
-            const data = await res.json()
-            if (data.success) onResult(`✅ ${data.generated}名分の総評を強制再生成しました`)
-            else onResult('❌ 生成に失敗しました')
-            onLoading(false)
-            setShow(false)
-          }}
-          disabled={disabled}
-          className="flex-1 py-2 bg-red-500 text-white font-bold rounded-xl text-xs disabled:opacity-50"
-        >
-          強制再生成する
-        </button>
-      </div>
-    </div>
-  )
-}
 
 export default function AdminPage() {
   const [selectedPreset, setSelectedPreset] = useState<GamePreset>(DEFAULT_PRESET)
@@ -121,6 +69,8 @@ export default function AdminPage() {
   const [notified, setNotified] = useState(false)
   const [generatingComments, setGeneratingComments] = useState(false)
   const [commentGenResult, setCommentGenResult] = useState<string | null>(null)
+  const [forceRegenTapCount, setForceRegenTapCount] = useState(0)
+  const [showForceRegen, setShowForceRegen] = useState(false)
 
   const productionPreset = GAME_PRESETS.find((p) => p.mode === 'production')!
   const [prodGameCount, setProdGameCount] = useState(String(productionPreset.game_count))
@@ -779,7 +729,19 @@ export default function AdminPage() {
 
         {/* AI総評 手動生成 */}
         <div className="bg-white rounded-2xl shadow-sm p-5 mt-4">
-          <h2 className="text-sm font-bold text-gray-700 mb-3">🤖 AI個人総評</h2>
+          <h2
+            className="text-sm font-bold text-gray-700 mb-3 select-none"
+            onClick={() => {
+              const next = forceRegenTapCount + 1
+              setForceRegenTapCount(next)
+              if (next >= 5) {
+                setShowForceRegen(true)
+                setForceRegenTapCount(0)
+              }
+            }}
+          >
+            🤖 AI個人総評
+          </h2>
           <p className="text-xs text-gray-400 mb-3">
             大会終了時に自動生成されますが、手動でも実行できます。<br />
             新しい大会が終了済みの場合のみ再生成されます。
@@ -804,10 +766,38 @@ export default function AdminPage() {
           {commentGenResult && (
             <p className="text-xs text-gray-500 mt-2 text-center">{commentGenResult}</p>
           )}
-          <ForceRegenSection disabled={generatingComments} onResult={setCommentGenResult} onLoading={setGeneratingComments} />
+          {showForceRegen && (
+            <div className="mt-3 border-t border-gray-100 pt-3 space-y-2">
+              <p className="text-[10px] text-gray-400 text-center">APIコストが発生します。本当に再生成しますか？</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowForceRegen(false)}
+                  className="flex-1 py-2 bg-gray-100 text-gray-500 font-bold rounded-xl text-xs"
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={async () => {
+                    setGeneratingComments(true)
+                    setCommentGenResult(null)
+                    const res = await fetch('/api/ai/generate-comments?force=true', { method: 'POST' })
+                    const data = await res.json()
+                    if (data.success) setCommentGenResult(`✅ ${data.generated}名分の総評を強制再生成しました`)
+                    else setCommentGenResult('❌ 生成に失敗しました')
+                    setGeneratingComments(false)
+                    setShowForceRegen(false)
+                  }}
+                  disabled={generatingComments}
+                  className="flex-1 py-2 bg-red-500 text-white font-bold rounded-xl text-xs disabled:opacity-50"
+                >
+                  強制再生成する
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.35.2</p>
+        <p className="text-center text-xs text-gray-300 mt-8">v1.35.3</p>
       </div>
     </div>
   )
