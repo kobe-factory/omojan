@@ -8,6 +8,7 @@ import UserSelection from '@/components/UserSelection'
 import CardCreation from '@/components/CardCreation'
 import GamePlay from '@/components/GamePlay'
 import Voting from '@/components/Voting'
+import ButtonMash from '@/components/ButtonMash'
 import Results from '@/components/Results'
 import Archive from '@/components/Archive'
 import TournamentFinished from '@/components/TournamentFinished'
@@ -35,6 +36,7 @@ interface Tournament {
   secret_round: number | null
   impersonation_mode: boolean
   random_voting: boolean
+  tiebreaker_mode: string
   mode: string
 }
 
@@ -325,6 +327,7 @@ export default function TournamentPage() {
       if (currentGame.status === 'waiting_submission') return { label: '作品投稿中', bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-200' }
       if (currentGame.status === 'waiting_vote') return { label: '投票中', bg: 'bg-violet-50', text: 'text-violet-600', border: 'border-violet-100' }
       if (currentGame.status === 'waiting_tiebreaker_vote') return { label: '決選投票中', bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-100' }
+      if (currentGame.status === 'waiting_button_mash') return { label: '連打決戦中', bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-100' }
       if (currentGame.status === 'showing_rematch') return { label: '再戦', bg: 'bg-orange-50', text: 'text-orange-600', border: 'border-orange-200' }
       return { label: '結果発表', bg: 'bg-yellow-50', text: 'text-yellow-600', border: 'border-yellow-200' }
     }
@@ -503,6 +506,23 @@ export default function TournamentPage() {
                   }}
                 />
               </>
+            ) : currentGame.status === 'waiting_button_mash' ? (
+              <ButtonMash
+                token={token}
+                game={currentGame}
+                currentUserId={userId}
+                participants={participants}
+                onCompleted={async () => {
+                  const res = await fetch(`/api/tournaments/${token}/advance`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ triggering_user_id: userId }),
+                  })
+                  const data = await res.json()
+                  if (data.advanced) await fetchState()
+                  else await fetchState()
+                }}
+              />
             ) : currentGame.status === 'waiting_vote' || currentGame.status === 'waiting_tiebreaker_vote' ? (
               <>
               <Voting
@@ -573,7 +593,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.29.11</p>
+        <p className="text-xs text-gray-300">v1.30.0</p>
       </footer>
 
       {/* 前戦結果モーダル（まだ結果を確認していないユーザー向け） */}

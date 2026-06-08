@@ -77,6 +77,7 @@ export default function AdminPage() {
   const [checkingCards, setCheckingCards] = useState(false)
   const [hasPastTournaments, setHasPastTournaments] = useState(false)
   const [votingStyle, setVotingStyle] = useState<'normal' | 'secret_one' | 'secret_all' | 'impersonation' | 'random_per_round'>('normal')
+  const [tiebreakerMode, setTiebreakerMode] = useState<'vote' | 'button_mash'>('vote')
 
   const fetchTournaments = useCallback(async () => {
     setListLoading(true)
@@ -233,6 +234,7 @@ export default function AdminPage() {
           dirty_cards_per_user: selectedPreset.mode === 'production' ? (parseInt(prodDirtyCards) || 0) : selectedPreset.dirty_cards_per_user,
           card_source: selectedPreset.mode === 'production' ? cardSource : 'new',
           voting_style: votingStyle,
+          tiebreaker_mode: tiebreakerMode,
         }),
       })
       const data = await res.json()
@@ -507,6 +509,36 @@ export default function AdminPage() {
           </div>
         </div>
 
+        {/* 決戦方法選択 */}
+        <div className="mb-4">
+          <p className="text-sm text-gray-700 font-medium mb-2">決戦方法（同票2作品時）</p>
+          <div className="space-y-2">
+            {([
+              { value: 'vote', label: '決選投票', desc: '参加者（作者除く）が同票2作品に再投票して決める' },
+              { value: 'button_mash', label: '⚡ 連打ゲーム', desc: '決戦2名が3秒間の連打数を競う。+1票廃止' },
+            ] as const).map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setTiebreakerMode(opt.value)}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all ${
+                  tiebreakerMode === opt.value ? 'border-red-500 bg-red-50' : 'border-gray-200 bg-white'
+                }`}
+              >
+                <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+                  tiebreakerMode === opt.value ? 'border-red-500' : 'border-gray-300'
+                }`}>
+                  {tiebreakerMode === opt.value && <div className="w-2.5 h-2.5 rounded-full bg-red-500" />}
+                </div>
+                <div>
+                  <p className={`text-sm font-medium ${tiebreakerMode === opt.value ? 'text-red-700' : 'text-gray-700'}`}>{opt.label}</p>
+                  <p className="text-xs text-gray-400">{opt.desc}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {activeProductionTournament && selectedPreset.mode === 'production' && (
           <p className="text-xs text-red-400 text-center mb-3">
             本番大会が進行中のため、新たに発行できません
@@ -690,7 +722,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.29.11</p>
+        <p className="text-center text-xs text-gray-300 mt-8">v1.30.0</p>
       </div>
     </div>
   )

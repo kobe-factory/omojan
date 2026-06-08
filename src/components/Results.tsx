@@ -40,6 +40,14 @@ interface ResultItem {
   tbVoterNames: string[]
   isWinner: boolean
   decidedByTiebreaker: boolean
+  decidedByButtonMash: boolean
+  buttonMashTapCount: number | null
+}
+
+interface ButtonMashResult {
+  user_id: string
+  tap_count: number
+  mash_round: number
 }
 
 interface Props {
@@ -60,10 +68,11 @@ export default function Results({ tournament, game, participants, onNext, nextLa
 
   useEffect(() => {
     async function fetchResults() {
-      const [{ data: topicCard }, { data: subs }, { data: votes }] = await Promise.all([
+      const [{ data: topicCard }, { data: subs }, { data: votes }, { data: mashResults }] = await Promise.all([
         supabase.from('cards').select('text').eq('id', game.topic_card_id).single(),
         supabase.from('submissions').select('id, user_id, hand_card_id, position, preamble, preamble_position, impersonated_user_id').eq('game_id', game.id),
         supabase.from('votes').select('submission_id, voter_user_id, is_tiebreaker').eq('game_id', game.id),
+        supabase.from('button_mash_results').select('user_id, tap_count, mash_round').eq('game_id', game.id).order('mash_round', { ascending: false }),
       ])
 
       const topicText = topicCard?.text ?? ''
@@ -71,6 +80,14 @@ export default function Results({ tournament, game, participants, onNext, nextLa
       const initialVotes = allVotes.filter((v) => !v.is_tiebreaker)
       const tiebreakerVotes = allVotes.filter((v) => v.is_tiebreaker)
       const hasTiebreaker = tiebreakerVotes.length > 0
+
+      // 連打ゲーム結果：最終ラウンドの結果を使う
+      const typedMashResults = (mashResults ?? []) as ButtonMashResult[]
+      const latestMashRound = typedMashResults.length > 0
+        ? Math.max(...typedMashResults.map((r) => r.mash_round))
+        : 0
+      const latestMashResults = typedMashResults.filter((r) => r.mash_round === latestMashRound)
+      const hasButtonMash = latestMashResults.length >= 2
 
       const initVoteCount: Record<string, number> = {}
       const initVoterNames: Record<string, string[]> = {}
@@ -114,6 +131,8 @@ export default function Results({ tournament, game, participants, onNext, nextLa
             tbVoterNames: tbVoterNames[s.id] ?? [],
             isWinner: false,
             decidedByTiebreaker: false,
+            decidedByButtonMash: false,
+            buttonMashTapCount: latestMashResults.find((r) => r.user_id === s.user_id)?.tap_count ?? null,
           }
         })
       )
@@ -121,7 +140,17 @@ export default function Results({ tournament, game, participants, onNext, nextLa
       const sorted = items.sort((a, b) => b.voteCount - a.voteCount)
 
       if (!isRematch) {
-        if (hasTiebreaker) {
+        if (hasButtonMash) {
+          // 連打ゲームで決定：最多タップ数のユーザーが勝者
+          const maxTaps = Math.max(...latestMashResults.map((r) => r.tap_count), 0)
+          const winnerUserId = latestMashResults.find((r) => r.tap_count === maxTaps)?.user_id
+          sorted.forEach((item) => {
+            if (item.userId === winnerUserId) {
+              item.isWinner = true
+              item.decidedByButtonMash = true
+            }
+          })
+        } else if (hasTiebreaker) {
           const maxTb = Math.max(...items.map((i) => i.tbVoteCount), 0)
           sorted.forEach((item) => {
             if (maxTb > 0 && item.tbVoteCount === maxTb) {
@@ -206,6 +235,9 @@ export default function Results({ tournament, game, participants, onNext, nextLa
                 {r.decidedByTiebreaker && (
                   <span className="text-red-500 text-xs ml-1">（決選投票で決定）</span>
                 )}
+                {r.decidedByButtonMash && (
+                  <span className="text-red-500 text-xs ml-1">（連打決戦で決定）</span>
+                )}
               </div>
             )}
 
@@ -258,6 +290,12 @@ export default function Results({ tournament, game, participants, onNext, nextLa
                       <span className="text-[10px] text-red-400">{name}</span>
                     </div>
                   ))}
+                </div>
+              )}
+              {r.buttonMashTapCount !== null && (
+                <div className="flex items-center justify-end gap-1.5 mt-1.5 pt-1.5 border-t border-gray-100">
+                  <span className="text-[9px] font-bold text-red-400 bg-red-50 px-1.5 py-0.5 rounded-full">連打</span>
+                  <span className="text-[10px] text-red-500 font-bold">{r.buttonMashTapCount} 回</span>
                 </div>
               )}
             </div>

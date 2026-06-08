@@ -6,7 +6,7 @@ import { nanoid } from 'nanoid'
 const LIFF_URL = `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID}`
 
 export async function POST(request: Request) {
-  const { mode, required_players, game_count, cards_per_user, hand_cards_per_player, dirty_cards_per_user, card_source, voting_style } = await request.json()
+  const { mode, required_players, game_count, cards_per_user, hand_cards_per_player, dirty_cards_per_user, card_source, voting_style, tiebreaker_mode } = await request.json()
 
   if (mode === 'production') {
     const { data: active } = await supabase
@@ -49,6 +49,7 @@ export async function POST(request: Request) {
       secret_round: secretRound,
       impersonation_mode: impersonationMode,
       random_voting: randomVoting,
+      tiebreaker_mode: tiebreaker_mode ?? 'vote',
     })
     .select()
     .single()

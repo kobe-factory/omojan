@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import UserIcon from './UserIcon'
 import Archive from './Archive'
+import PersonalStats from './PersonalStats'
 
 interface User {
   id: string
@@ -29,6 +30,7 @@ interface RoundSummary {
   votes: number
   isTied: boolean
   isWinByTiebreaker: boolean
+  isWinByButtonMash: boolean
   votingMode: string | null
   isRematch: boolean
   isVoided: boolean
@@ -43,7 +45,7 @@ export default function TournamentFinished({ tournamentId, participants }: Props
   const [scores, setScores] = useState<PlayerScore[]>([])
   const [rounds, setRounds] = useState<RoundSummary[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'result' | 'archive'>('result')
+  const [activeTab, setActiveTab] = useState<'result' | 'stats' | 'archive'>('result')
 
   useEffect(() => {
     async function fetchData() {
@@ -61,10 +63,24 @@ export default function TournamentFinished({ tournamentId, participants }: Props
 
       const gameIds = games.map((g) => g.id)
 
-      const [{ data: allVotes }, { data: allSubs }] = await Promise.all([
+      const [{ data: allVotes }, { data: allSubs }, { data: allMashResults }] = await Promise.all([
         supabase.from('votes').select('game_id, submission_id, created_at, is_tiebreaker').in('game_id', gameIds),
         supabase.from('submissions').select('id, game_id, user_id, hand_card_id, position, preamble, preamble_position').in('game_id', gameIds),
+        supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round').in('game_id', gameIds),
       ])
+
+      // ゲーム別の連打結果（最終ラウンドのみ）
+      const mashResults = allMashResults ?? []
+      const mashWinnerByGame: Record<string, string> = {}
+      for (const gameId of gameIds) {
+        const results = mashResults.filter((r) => r.game_id === gameId)
+        if (results.length < 2) continue
+        const latestRound = Math.max(...results.map((r) => r.mash_round))
+        const latest = results.filter((r) => r.mash_round === latestRound)
+        const maxTaps = Math.max(...latest.map((r) => r.tap_count))
+        const winners = latest.filter((r) => r.tap_count === maxTaps)
+        if (winners.length === 1) mashWinnerByGame[gameId] = winners[0].user_id
+      }
 
       const topicIds = games.map((g) => g.topic_card_id)
       const { data: topicCards } = await supabase
@@ -117,6 +133,7 @@ export default function TournamentFinished({ tournamentId, participants }: Props
         let winnerSub: typeof gameSubs[0] | null = null
         let hasTie = false
         let isWinByTiebreaker = false
+        let isWinByButtonMash = false
 
         if (!isVoided) {
           // 通常投票で集計（流局ゲームはスコア計算から除外）
@@ -141,26 +158,39 @@ export default function TournamentFinished({ tournamentId, participants }: Props
             }
           }
 
-          // 同票の場合は決選投票で勝者を決定
+          // 同票の場合は連打ゲームまたは決選投票で勝者を決定
           if (hasTie) {
-            let maxTbVotes = 0
-            let tbWinner: typeof gameSubs[0] | null = null
-            for (const sub of gameSubs) {
-              const tbCount = tiebreakerVoteCount[sub.id] ?? 0
-              if (tbCount > maxTbVotes) {
-                maxTbVotes = tbCount
-                tbWinner = sub
+            // 連打ゲームで決まった場合
+            const mashWinnerUserId = mashWinnerByGame[game.id]
+            if (mashWinnerUserId) {
+              const mashWinnerSub = gameSubs.find((s) => s.user_id === mashWinnerUserId)
+              if (mashWinnerSub) {
+                winnerSub = mashWinnerSub
+                isWinByButtonMash = true
+                hasTie = false
               }
-            }
-            if (tbWinner) {
-              winnerSub = tbWinner
-              isWinByTiebreaker = true
-              hasTie = false
+            } else {
+              // 決選投票で決まった場合
+              let maxTbVotes = 0
+              let tbWinner: typeof gameSubs[0] | null = null
+              for (const sub of gameSubs) {
+                const tbCount = tiebreakerVoteCount[sub.id] ?? 0
+                if (tbCount > maxTbVotes) {
+                  maxTbVotes = tbCount
+                  tbWinner = sub
+                }
+              }
+              if (tbWinner) {
+                winnerSub = tbWinner
+                isWinByTiebreaker = true
+                hasTie = false
+              }
             }
           }
 
           if (winnerSub && scoreMap[winnerSub.user_id]) {
             scoreMap[winnerSub.user_id].wins += 1
+            // 連打ゲーム勝利は+1票なし、決選投票勝利は+1票
             if (isWinByTiebreaker) scoreMap[winnerSub.user_id].totalVotes += 1
           }
         }
@@ -187,6 +217,7 @@ export default function TournamentFinished({ tournamentId, participants }: Props
           votes: displayVotes,
           isTied: hasTie,
           isWinByTiebreaker,
+          isWinByButtonMash,
           votingMode: game.voting_mode ?? null,
           isRematch: game.is_rematch,
           isVoided,
@@ -241,26 +272,27 @@ export default function TournamentFinished({ tournamentId, participants }: Props
   return (
     <>
     <div className="flex border-b border-gray-200 bg-white sticky top-[77px] z-10">
-      <button
-        onClick={() => setActiveTab('result')}
-        className={`flex-1 py-3 text-sm font-medium transition-colors ${
-          activeTab === 'result' ? 'text-emerald-500 border-b-2 border-emerald-500' : 'text-gray-400'
-        }`}
-      >
-        大会結果
-      </button>
-      <button
-        onClick={() => setActiveTab('archive')}
-        className={`flex-1 py-3 text-sm font-medium transition-colors ${
-          activeTab === 'archive' ? 'text-emerald-500 border-b-2 border-emerald-500' : 'text-gray-400'
-        }`}
-      >
-        過去結果
-      </button>
+      {([
+        { key: 'result', label: '大会結果' },
+        { key: 'stats', label: '個人成績' },
+        { key: 'archive', label: '過去結果' },
+      ] as const).map((tab) => (
+        <button
+          key={tab.key}
+          onClick={() => setActiveTab(tab.key)}
+          className={`flex-1 py-3 text-sm font-medium transition-colors ${
+            activeTab === tab.key ? 'text-emerald-500 border-b-2 border-emerald-500' : 'text-gray-400'
+          }`}
+        >
+          {tab.label}
+        </button>
+      ))}
     </div>
 
     {activeTab === 'archive' ? (
       <Archive tournamentId={tournamentId} participants={participants} />
+    ) : activeTab === 'stats' ? (
+      <PersonalStats />
     ) : (
     <div className="p-4 space-y-4 pb-10">
       {/* 大会終了ヘッダー */}
@@ -349,6 +381,9 @@ export default function TournamentFinished({ tournamentId, participants }: Props
                   )}
                   {r.isWinByTiebreaker && (
                     <span className="text-[9px] font-bold text-red-400 bg-red-50 px-1.5 py-0.5 rounded-full">決選</span>
+                  )}
+                  {r.isWinByButtonMash && (
+                    <span className="text-[9px] font-bold text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full">⚡連打</span>
                   )}
                   <span className="text-xs text-gray-400">{r.votes}票</span>
                 </div>

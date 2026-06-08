@@ -1,6 +1,7 @@
 export type TournamentStatus = 'waiting_users' | 'creating_cards' | 'playing' | 'finished'
 export type TournamentMode = 'solo' | 'test' | 'production'
-export type GameStatus = 'waiting_submission' | 'waiting_vote' | 'waiting_tiebreaker_vote' | 'showing_result' | 'showing_rematch' | 'finished'
+export type GameStatus = 'waiting_submission' | 'waiting_vote' | 'waiting_tiebreaker_vote' | 'waiting_button_mash' | 'showing_result' | 'showing_rematch' | 'finished'
+export type TiebreakerMode = 'vote' | 'button_mash'
 export type CardPosition = 'before' | 'after'
 
 export type Database = {
@@ -21,6 +22,7 @@ export type Database = {
           secret_round: number | null
           impersonation_mode: boolean
           random_voting: boolean
+          tiebreaker_mode: TiebreakerMode
           status: TournamentStatus
           created_at: string
         }
@@ -38,6 +40,7 @@ export type Database = {
           secret_round?: number | null
           impersonation_mode?: boolean
           random_voting?: boolean
+          tiebreaker_mode?: TiebreakerMode
           status?: TournamentStatus
           created_at?: string
         }
@@ -55,6 +58,7 @@ export type Database = {
           secret_round?: number | null
           impersonation_mode?: boolean
           random_voting?: boolean
+          tiebreaker_mode?: TiebreakerMode
           status?: TournamentStatus
           created_at?: string
         }
@@ -256,6 +260,33 @@ export type Database = {
           submission_id?: string
           is_tiebreaker?: boolean
           created_at?: string
+        }
+        Relationships: []
+      }
+      button_mash_results: {
+        Row: {
+          id: string
+          game_id: string
+          user_id: string
+          tap_count: number
+          mash_round: number
+          completed_at: string
+        }
+        Insert: {
+          id?: string
+          game_id: string
+          user_id: string
+          tap_count: number
+          mash_round?: number
+          completed_at?: string
+        }
+        Update: {
+          id?: string
+          game_id?: string
+          user_id?: string
+          tap_count?: number
+          mash_round?: number
+          completed_at?: string
         }
         Relationships: []
       }

@@ -68,7 +68,7 @@ export async function POST(
   const { data: tournament } = await supabase
     .from('tournaments')
     .select(
-      'id, status, mode, game_count, cards_per_user, hand_cards_per_player, required_players, dirty_cards_per_user, skip_card_creation, random_voting',
+      'id, status, mode, game_count, cards_per_user, hand_cards_per_player, required_players, dirty_cards_per_user, skip_card_creation, random_voting, tiebreaker_mode',
     )
     .eq('token', token)
     .single()
@@ -399,6 +399,33 @@ export async function POST(
       }
 
       if (tiedAtTopIds.length === 2) {
+        if (tournament.tiebreaker_mode === 'button_mash') {
+          // 2作品同票 → 連打ゲーム
+          const { error: toBMError } = await supabase
+            .from('games')
+            .update({ status: 'waiting_button_mash' })
+            .eq('id', currentGame.id)
+          if (toBMError) return NextResponse.json({ error: toBMError.message }, { status: 500 })
+
+          await notifyParticipants(
+            participantIds,
+            triggeringUserId,
+            {
+              headerTitle: '⚔️ 連打決戦です！',
+              headerColor: PHASE_COLORS.tiebreaker,
+              headerSub: `第${num}回大会 / ${currentGame.round_number}回戦`,
+              body: '同票のため連打ゲームで決戦です！\nおもじゃんを開いてボタンを連打しましょう ⚔️',
+              url: LIFF_URL,
+            },
+            tournament.mode,
+          )
+
+          return NextResponse.json({
+            advanced: true,
+            newGameStatus: 'waiting_button_mash',
+          })
+        }
+
         // 2作品同票 → 決選投票
         const { error: toTiebreakerError } = await supabase
           .from('games')
@@ -520,6 +547,90 @@ export async function POST(
         advanced: true,
         newGameStatus: 'showing_result',
       })
+    }
+
+    // waiting_button_mash → 両者完了で showing_result（同点なら mash_round をインクリメント）
+    if (currentGame.status === 'waiting_button_mash') {
+      // 初回投票で同票の2作品のauthorを特定
+      const { data: initialVotes } = await supabase
+        .from('votes')
+        .select('submission_id')
+        .eq('game_id', currentGame.id)
+        .eq('is_tiebreaker', false)
+
+      const initCount: Record<string, number> = {}
+      for (const v of initialVotes ?? []) {
+        initCount[v.submission_id] = (initCount[v.submission_id] ?? 0) + 1
+      }
+      const maxInit = Math.max(...Object.values(initCount), 0)
+      const tiedSubIds = Object.entries(initCount)
+        .filter(([, c]) => c === maxInit)
+        .map(([id]) => id)
+
+      const { data: tiedSubs } = await supabase
+        .from('submissions')
+        .select('user_id')
+        .in('id', tiedSubIds)
+      const tiebreakerUserIds = (tiedSubs ?? []).map((s) => s.user_id)
+
+      // 現在の最大 mash_round を取得
+      const { data: existingResults } = await supabase
+        .from('button_mash_results')
+        .select('user_id, tap_count, mash_round')
+        .eq('game_id', currentGame.id)
+        .order('mash_round', { ascending: false })
+
+      const currentMashRound = existingResults && existingResults.length > 0
+        ? existingResults[0].mash_round
+        : 1
+
+      // 現在のラウンドで両者が完了しているか確認
+      const currentRoundResults = (existingResults ?? []).filter(
+        (r) => r.mash_round === currentMashRound,
+      )
+      const completedUserIds = new Set(currentRoundResults.map((r) => r.user_id))
+      const allCompleted = tiebreakerUserIds.every((id) => completedUserIds.has(id))
+
+      if (!allCompleted) {
+        const waiting = tiebreakerUserIds.filter((id) => !completedUserIds.has(id))
+        return NextResponse.json({ waiting: true, waitingUserIds: waiting })
+      }
+
+      // 両者完了 → 勝敗判定
+      const countMap: Record<string, number> = {}
+      for (const r of currentRoundResults) {
+        countMap[r.user_id] = r.tap_count
+      }
+      const counts = Object.values(countMap)
+      const isTie = counts.length >= 2 && counts[0] === counts[1]
+
+      if (isTie) {
+        // 同点 → mash_round をインクリメントして継続
+        return NextResponse.json({ waiting: true, isTie: true, nextMashRound: currentMashRound + 1 })
+      }
+
+      // 決着 → showing_result へ
+      const { error: toResultError } = await supabase
+        .from('games')
+        .update({ status: 'showing_result' })
+        .eq('id', currentGame.id)
+      if (toResultError) return NextResponse.json({ error: toResultError.message }, { status: 500 })
+
+      const num = await getTournamentNumber(tournament.id)
+      await notifyParticipants(
+        participantIds,
+        triggeringUserId,
+        {
+          headerTitle: '🏆 結果発表！',
+          headerColor: PHASE_COLORS.result,
+          headerSub: `第${num}回大会 / ${currentGame.round_number}回戦`,
+          body: '連打決戦が完了しました！\nおもじゃんを開いて結果を確認しましょう 🏆',
+          url: LIFF_URL,
+        },
+        tournament.mode,
+      )
+
+      return NextResponse.json({ advanced: true, newGameStatus: 'showing_result' })
     }
 
     // showing_result or showing_rematch → confirm_result で次へ

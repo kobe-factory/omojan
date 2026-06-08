@@ -1,0 +1,195 @@
+import { NextResponse } from 'next/server'
+import { supabase } from '@/lib/supabase'
+
+export interface UserStats {
+  userId: string
+  userName: string
+  // 作成札採用率
+  cardUsageRate: number    // 0.000〜1.000 形式
+  cardsCreated: number
+  cardsUsed: number
+  // ヒット数（票数別）
+  singles: number    // 1票
+  doubles: number    // 2票
+  triples: number    // 3票
+  homeRuns: number   // 4票以上
+  totalHits: number
+  // MVP回数（その回戦で1位）
+  mvpCount: number
+  // 投票的中率
+  voteAccuracy: number  // 0.000〜1.000
+  voteCastCount: number
+  voteHitCount: number
+  // 連打ゲーム勝率
+  buttonMashWins: number
+  buttonMashGames: number
+  buttonMashWinRate: number
+}
+
+export async function GET() {
+  // 全ユーザー取得
+  const { data: users } = await supabase.from('users').select('id, name')
+  if (!users || users.length === 0) {
+    return NextResponse.json({ stats: [] })
+  }
+
+  // 全データを一括取得
+  const [
+    { data: allCards },
+    { data: allSubmissions },
+    { data: allVotes },
+    { data: allGames },
+    { data: allMashResults },
+  ] = await Promise.all([
+    supabase.from('cards').select('id, creator_user_id, tournament_id'),
+    supabase.from('submissions').select('id, user_id, hand_card_id, game_id'),
+    supabase.from('votes').select('voter_user_id, submission_id, game_id, is_tiebreaker'),
+    supabase.from('games').select('id, status').eq('status', 'finished'),
+    supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round'),
+  ])
+
+  const cards = allCards ?? []
+  const submissions = allSubmissions ?? []
+  const votes = allVotes ?? []
+  const finishedGames = new Set((allGames ?? []).map((g) => g.id))
+  const mashResults = allMashResults ?? []
+
+  // 作品別の得票数（初回投票のみ）
+  const voteCountBySubmission: Record<string, number> = {}
+  const initialVotes = votes.filter((v) => !v.is_tiebreaker)
+  for (const v of initialVotes) {
+    voteCountBySubmission[v.submission_id] = (voteCountBySubmission[v.submission_id] ?? 0) + 1
+  }
+
+  // ゲーム別の勝者submissionId（最多票）
+  const winnerByGame: Record<string, string> = {}
+  const submissionsByGame: Record<string, { id: string; userId: string }[]> = {}
+  for (const s of submissions) {
+    if (!submissionsByGame[s.game_id]) submissionsByGame[s.game_id] = []
+    submissionsByGame[s.game_id].push({ id: s.id, userId: s.user_id })
+  }
+
+  for (const gameId of Object.keys(submissionsByGame)) {
+    if (!finishedGames.has(gameId)) continue
+    const gameSubs = submissionsByGame[gameId]
+    let maxVotes = 0
+    let winnerId = ''
+
+    // 連打ゲームで決まったゲームかチェック
+    const gameMashResults = mashResults.filter((r) => r.game_id === gameId)
+    if (gameMashResults.length >= 2) {
+      const latestRound = Math.max(...gameMashResults.map((r) => r.mash_round))
+      const latestMash = gameMashResults.filter((r) => r.mash_round === latestRound)
+      const maxTaps = Math.max(...latestMash.map((r) => r.tap_count))
+      const mashWinner = latestMash.find((r) => r.tap_count === maxTaps)
+      if (mashWinner) {
+        const winnerSub = gameSubs.find((s) => s.userId === mashWinner.user_id)
+        if (winnerSub) winnerByGame[gameId] = winnerSub.id
+      }
+      continue
+    }
+
+    // 決選投票があればそちらで決定
+    const tbVotesForGame = votes.filter((v) => v.game_id === gameId && v.is_tiebreaker)
+    if (tbVotesForGame.length > 0) {
+      const tbCount: Record<string, number> = {}
+      for (const v of tbVotesForGame) {
+        tbCount[v.submission_id] = (tbCount[v.submission_id] ?? 0) + 1
+      }
+      const maxTb = Math.max(...Object.values(tbCount), 0)
+      const tbWinner = Object.entries(tbCount).find(([, c]) => c === maxTb)
+      if (tbWinner) winnerByGame[gameId] = tbWinner[0]
+      continue
+    }
+
+    // 通常投票
+    for (const sub of gameSubs) {
+      const cnt = voteCountBySubmission[sub.id] ?? 0
+      if (cnt > maxVotes) {
+        maxVotes = cnt
+        winnerId = sub.id
+      }
+    }
+    if (maxVotes > 0) {
+      const topCount = gameSubs.filter((s) => (voteCountBySubmission[s.id] ?? 0) === maxVotes).length
+      if (topCount === 1) winnerByGame[gameId] = winnerId
+    }
+  }
+
+  // 連打ゲームの最終ラウンド勝者をゲーム別に集計
+  const mashWinnerByGame: Record<string, string> = {}
+  const mashParticipantsByGame: Record<string, string[]> = {}
+  const gameIds = [...new Set(mashResults.map((r) => r.game_id))]
+  for (const gameId of gameIds) {
+    const results = mashResults.filter((r) => r.game_id === gameId)
+    const latestRound = Math.max(...results.map((r) => r.mash_round))
+    const latest = results.filter((r) => r.mash_round === latestRound)
+    mashParticipantsByGame[gameId] = latest.map((r) => r.user_id)
+    const maxTaps = Math.max(...latest.map((r) => r.tap_count))
+    const winner = latest.find((r) => r.tap_count === maxTaps)
+    if (winner && latest.filter((r) => r.tap_count === maxTaps).length === 1) {
+      mashWinnerByGame[gameId] = winner.user_id
+    }
+  }
+
+  const stats: UserStats[] = users.map((user) => {
+    // 作成札採用率
+    const myCards = cards.filter((c) => c.creator_user_id === user.id)
+    const myCardIds = new Set(myCards.map((c) => c.id))
+    const cardsUsed = submissions.filter((s) => myCardIds.has(s.hand_card_id)).length
+    const cardsCreated = myCards.length
+    const cardUsageRate = cardsCreated > 0 ? cardsUsed / cardsCreated : 0
+
+    // ヒット数（自分の作品への初回投票）
+    const mySubmissions = submissions.filter((s) => s.user_id === user.id)
+    let singles = 0, doubles = 0, triples = 0, homeRuns = 0
+    for (const sub of mySubmissions) {
+      if (!finishedGames.has(sub.game_id)) continue
+      const cnt = voteCountBySubmission[sub.id] ?? 0
+      if (cnt === 1) singles++
+      else if (cnt === 2) doubles++
+      else if (cnt === 3) triples++
+      else if (cnt >= 4) homeRuns++
+    }
+    const totalHits = singles + doubles + triples + homeRuns
+
+    // MVP回数
+    const mvpCount = mySubmissions.filter((s) => winnerByGame[s.game_id] === s.id).length
+
+    // 投票的中率（自分が投じた票が最終的に勝者の作品だった割合）
+    const myVotes = initialVotes.filter((v) => v.voter_user_id === user.id && finishedGames.has(v.game_id))
+    const voteHitCount = myVotes.filter((v) => winnerByGame[v.game_id] === v.submission_id).length
+    const voteCastCount = myVotes.length
+    const voteAccuracy = voteCastCount > 0 ? voteHitCount / voteCastCount : 0
+
+    // 連打ゲーム勝率
+    const myMashGames = Object.keys(mashParticipantsByGame).filter((gId) =>
+      (mashParticipantsByGame[gId] ?? []).includes(user.id),
+    )
+    const buttonMashGames = myMashGames.length
+    const buttonMashWins = myMashGames.filter((gId) => mashWinnerByGame[gId] === user.id).length
+    const buttonMashWinRate = buttonMashGames > 0 ? buttonMashWins / buttonMashGames : 0
+
+    return {
+      userId: user.id,
+      userName: user.name,
+      cardUsageRate,
+      cardsCreated,
+      cardsUsed,
+      singles,
+      doubles,
+      triples,
+      homeRuns,
+      totalHits,
+      mvpCount,
+      voteAccuracy,
+      voteCastCount,
+      voteHitCount,
+      buttonMashWins,
+      buttonMashGames,
+      buttonMashWinRate,
+    }
+  })
+
+  return NextResponse.json({ stats })
+}
