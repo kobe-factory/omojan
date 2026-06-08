@@ -81,6 +81,26 @@ export default function ButtonMash({
   const isContestant = tiebreakerUserIds.includes(currentUserId)
   const opponentId = tiebreakerUserIds.find((id) => id !== currentUserId) ?? null
 
+  // マウント時に自分の結果が既に保存済みなら自動でadvanceを呼ぶ（リロード対応）
+  useEffect(() => {
+    if (!isContestant) return
+    fetch(`/api/tournaments/${token}/button-mash?game_id=${game.id}`)
+      .then((r) => r.json())
+      .then(async (json) => {
+        const allResults: ButtonMashResult[] = json.results ?? []
+        const latestRound = allResults.length > 0 ? Math.max(...allResults.map((r) => r.mash_round)) : 1
+        const myResult = allResults.find((r) => r.user_id === currentUserId && r.mash_round === latestRound)
+        if (myResult) {
+          savedMashRoundRef.current = latestRound
+          setFinished(true)
+          setTapCount(myResult.tap_count)
+          setMashRound(latestRound)
+          await onCompleted()
+        }
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isContestant])
+
   // 参加者向けポーリング（相手の完了を検知）
   useEffect(() => {
     if (!isContestant || !opponentId) return
