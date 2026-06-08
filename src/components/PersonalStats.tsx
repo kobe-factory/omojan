@@ -84,7 +84,7 @@ const TOOLTIPS: Record<string, string> = {
   '前口上使用率': '作品投稿時に前口上（コメント）を入力した回の割合です。前口上でどれだけ場を盛り上げているかの指標です。',
   '最高得票数': '1回戦で獲得した最多票数の自己ベストです。その回戦で何票集めることができたか。',
   '多数派投票率': '自分が投じた票のうち、最終的にMVPになった作品に投票していた割合です。自分がMVPを取ったゲームは自分の作品に投票できないため集計から除外しています。高いほど「みんなと同じ感覚を持っている」＝多数派。低いほど個性派・天邪鬼！野球の打率と同じ形式（.xxx）で表示されます。',
-  '孤独投票数': '自分だけが票を入れたのに落選した回数です。多いほど不名誉なワーストランキング！誰にも理解されなかった孤高の美学（？）の記録…',
+  '独りぼっち票': '自分だけが票を入れたのに落選した回数です。多いほど不名誉なワーストランキング！誰にも理解されなかった孤高の美学（？）の記録…',
   '自作札使用率': '自分が出場した回戦のうち、自分が作った札を自分の作品に使った回の割合です。自己プロデュース力の指標？',
   '前口上平均文字数': '前口上を使ったときの平均文字数です。長い前口上で場を盛り上げるタイプか、短く刺すタイプか。',
 }
@@ -278,7 +278,7 @@ export default function PersonalStats() {
             isWorst={true}
           />
           <RankingRow
-            label="孤独投票数"
+            label="独りぼっち票"
             stats={stats}
             getValue={(s) => s.loneVoteCount}
             formatValue={(v) => `${v}回`}
@@ -520,8 +520,8 @@ export default function PersonalStats() {
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center">
-                            <span className="text-xs text-gray-500">孤独投票数</span>
-                            <TooltipIcon title="孤独投票数" description={TOOLTIPS['孤独投票数']} />
+                            <span className="text-xs text-gray-500">独りぼっち票</span>
+                            <TooltipIcon title="独りぼっち票" description={TOOLTIPS['独りぼっち票']} />
                           </div>
                           <div className="flex items-center gap-1">
                             <span className="text-sm font-bold text-red-500">{s.loneVoteCount}回</span>

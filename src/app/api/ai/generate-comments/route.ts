@@ -453,7 +453,7 @@ function formatStats(s: CompactStats): string {
     `1B${s.singles}/2B${s.doubles}/3B${s.triples}/HR${s.homeRuns}`,
     `ズル滑り${s.shutoutCount}回(${fmt(s.shutoutRate)})`,
     `前口上${s.preambleCount}回(使用率${fmt(s.preambleUsageRate)})`,
-    `孤独投票${s.loneVoteCount}回`,
+    `独りぼっち票${s.loneVoteCount}回`,
     `作成札採用率${fmt(s.cardUsageRate)}`,
   ].join(' | ')
 }
@@ -482,7 +482,7 @@ async function generateAllComments(
     `HR数: ${rankAmong(u => u.overall.homeRuns, true)}`,
     `ズル滑り数(多いほど不名誉・ズル滑りが多いほど悪い成績・不名誉ランキング1位が最悪): ${rankAmong(u => u.overall.shutoutCount, true)}`,
     `前口上使用率: ${rankAmong(u => u.overall.preambleUsageRate, true)}`,
-    `孤独投票数(多いほど不名誉・ワーストランキング1位が最悪): ${rankAmong(u => u.overall.loneVoteCount, true)}`,
+    `独りぼっち票(多いほど不名誉・ワーストランキング1位が最悪): ${rankAmong(u => u.overall.loneVoteCount, true)}`,
   ].join('\n')
 
   const playerSection = users
@@ -571,7 +571,7 @@ async function generateAllComments(
 - HR数: 1作品で4票以上獲得した回数。ほぼ全員が認めた神作品の数
 - ズル滑り数: 投票が行われた回戦で1票も入らなかった回数。【多いほど不名誉・多いほど悪い成績】。ランキングは多いほど上位（不名誉な1位）。「ズル滑りが多い＝すべってばかりで誰にも評価されなかった」という意味
 - 前口上使用率: 作品投稿時に前口上を入力した回の割合。場を盛り上げる貢献度の指標
-- 孤独投票数: 自分だけが票を入れたのに落選した回数。【多いほど不名誉・ワーストランキング】誰にも共感されなかった回が多いほど悪い評価
+- 独りぼっち票: 自分だけが票を入れたのに落選した回数。【多いほど不名誉・ワーストランキング】誰にも共感されなかった回が多いほど悪い評価
 
 【通算成績ランキング（相対評価の参考に使うこと）】
 ${relativeRankings}
