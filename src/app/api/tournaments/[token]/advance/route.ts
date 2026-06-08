@@ -295,6 +295,23 @@ export async function POST(
         return NextResponse.json({ waiting: true, waitingUserIds: waiting })
       }
 
+      // ソロモード：waiting_vote をスキップして直接次フェーズへ
+      if (tournament.mode === 'solo') {
+        let soloStatus: 'showing_result' | 'waiting_tiebreaker_vote' | 'waiting_button_mash' | 'showing_rematch'
+        if (currentGame.is_rematch || currentGame.round_number % 3 === 1) {
+          soloStatus = 'showing_result'
+        } else if (currentGame.round_number % 3 === 2) {
+          soloStatus = tournament.tiebreaker_mode === 'button_mash'
+            ? 'waiting_button_mash'
+            : 'waiting_tiebreaker_vote'
+        } else {
+          soloStatus = 'showing_rematch'
+        }
+        const { error: soloErr } = await supabase.from('games').update({ status: soloStatus }).eq('id', currentGame.id)
+        if (soloErr) return NextResponse.json({ error: soloErr.message }, { status: 500 })
+        return NextResponse.json({ advanced: true, newGameStatus: soloStatus })
+      }
+
       const { error: toVoteError } = await supabase
         .from('games')
         .update({ status: 'waiting_vote' })
