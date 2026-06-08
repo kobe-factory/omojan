@@ -36,6 +36,13 @@ export interface UserStats {
   preambleCount: number    // 前口上使用回数
   preambleUsageRate: number // 前口上使用率
   maxVotesInGame: number   // 1ゲームでの最高得票数
+  // 個性指標
+  majorityVoteRate: number  // 多数派投票率 = MVP作品に投票した回数 / 投票総数
+  votesCastCount: number    // 投票総数
+  loneVoteCount: number     // 孤独投票数（自分だけ投票したが落選）
+  selfCardUsageRate: number // 自作札使用率 = 自作札で出場した回数 / 出場数
+  selfCardUsedCount: number // 自作札使用回数
+  avgPreambleLength: number // 前口上平均文字数（使用時のみ）
 }
 
 export async function GET() {
@@ -238,6 +245,33 @@ export async function GET() {
       .filter((s) => validGameIds.has(s.game_id))
       .reduce((max, sub) => Math.max(max, voteCountBySubmission[sub.id] ?? 0), 0)
 
+    // 個性指標
+    const myVotesCast = initialVotes.filter((v) => v.voter_user_id === user.id && validGameIds.has(v.game_id))
+    // 自分がMVPだったゲームは多数派投票率の集計から除外（自分の作品に投票できないため不公平）
+    const myWinGameIds = new Set(
+      mySubmissions.filter((s) => (winnersByGame[s.game_id] ?? []).includes(s.id)).map((s) => s.game_id)
+    )
+    const fairVotesCast = myVotesCast.filter((v) => !myWinGameIds.has(v.game_id))
+    const votesCastCount = fairVotesCast.length
+    const majorityVotes = fairVotesCast.filter((v) => (winnersByGame[v.game_id] ?? []).includes(v.submission_id))
+    const majorityVoteRate = votesCastCount > 0 ? majorityVotes.length / votesCastCount : 0
+
+    const loneVoteCount = myVotesCast.filter(
+      (v) => (voteCountBySubmission[v.submission_id] ?? 0) === 1 && !(winnersByGame[v.game_id] ?? []).includes(v.submission_id)
+    ).length
+
+    const selfCardUsedCount = mySubmissions.filter(
+      (s) => validGameIds.has(s.game_id) && myCardIds.has(s.hand_card_id)
+    ).length
+    const selfCardUsageRate = gamesParticipated > 0 ? selfCardUsedCount / gamesParticipated : 0
+
+    const preambledSubs = mySubmissions.filter(
+      (s) => validGameIds.has(s.game_id) && s.preamble && (s.preamble as string).trim().length > 0
+    )
+    const avgPreambleLength = preambledSubs.length > 0
+      ? Math.round(preambledSubs.reduce((sum, s) => sum + (s.preamble as string).trim().length, 0) / preambledSubs.length)
+      : 0
+
     return {
       userId: user.id,
       userName: user.name,
@@ -266,6 +300,12 @@ export async function GET() {
       preambleCount,
       preambleUsageRate,
       maxVotesInGame,
+      majorityVoteRate,
+      votesCastCount,
+      loneVoteCount,
+      selfCardUsageRate,
+      selfCardUsedCount,
+      avgPreambleLength,
     }
   })
 

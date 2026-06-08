@@ -83,6 +83,10 @@ const TOOLTIPS: Record<string, string> = {
   '完封率': '投票が行われた回戦のうち、0票だった回の割合です。完封王は不名誉な称号…',
   '前口上使用率': '作品投稿時に前口上（コメント）を入力した回の割合です。前口上でどれだけ場を盛り上げているかの指標です。',
   '最高得票数': '1回戦で獲得した最多票数の自己ベストです。その回戦で何票集めることができたか。',
+  '多数派投票率': '自分が投じた票のうち、最終的にMVPになった作品に投票していた割合です。自分がMVPを取ったゲームは自分の作品に投票できないため集計から除外しています。高いほど「みんなと同じ感覚を持っている」＝多数派。低いほど個性派・天邪鬼！野球の打率と同じ形式（.xxx）で表示されます。',
+  '孤独投票数': '自分だけが票を入れたのに落選した回数です。誰にも理解されなかった孤高の美学の記録…！',
+  '自作札使用率': '自分が出場した回戦のうち、自分が作った札を自分の作品に使った回の割合です。自己プロデュース力の指標？',
+  '前口上平均文字数': '前口上を使ったときの平均文字数です。長い前口上で場を盛り上げるタイプか、短く刺すタイプか。',
 }
 
 interface RankingRowProps {
@@ -243,6 +247,41 @@ export default function PersonalStats() {
             colorClass="text-gray-500"
             ascending={true}
             filter={(s) => s.gamesParticipated > 0}
+          />
+          <div className="pt-1 pb-0.5">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide px-1">個性ランキング</p>
+          </div>
+          <RankingRow
+            label="多数派投票率"
+            stats={stats}
+            getValue={(s) => s.majorityVoteRate}
+            formatValue={(v) => formatRate(v)}
+            colorClass="text-indigo-600"
+            filter={(s) => s.votesCastCount > 0}
+          />
+          <RankingRow
+            label="孤独投票数"
+            stats={stats}
+            getValue={(s) => s.loneVoteCount}
+            formatValue={(v) => `${v}回`}
+            colorClass="text-pink-600"
+            ascending={true}
+          />
+          <RankingRow
+            label="自作札使用率"
+            stats={stats}
+            getValue={(s) => s.selfCardUsageRate}
+            formatValue={(v) => formatRate(v)}
+            colorClass="text-violet-600"
+            filter={(s) => s.gamesParticipated > 0}
+          />
+          <RankingRow
+            label="前口上平均文字数"
+            stats={stats}
+            getValue={(s) => s.avgPreambleLength}
+            formatValue={(v) => `${v}文字`}
+            colorClass="text-teal-600"
+            filter={(s) => s.preambleCount > 0}
           />
           {hasMashData && (
             <>
@@ -423,6 +462,55 @@ export default function PersonalStats() {
                             <span className="text-xs text-gray-400">({formatRate(s.shutoutRate)})</span>
                           </div>
                         </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <span className="text-xs text-gray-500">自作札使用率</span>
+                            <TooltipIcon title="自作札使用率" description={TOOLTIPS['自作札使用率']} />
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm font-bold text-violet-600">{formatRate(s.selfCardUsageRate)}</span>
+                            <span className="text-xs text-gray-400">({s.selfCardUsedCount}/{s.gamesParticipated}戦)</span>
+                            <span className="text-xs text-gray-400">({rankLabel(getRank(stats.filter(x => x.gamesParticipated > 0), s.userId, (x) => x.selfCardUsageRate))})</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {/* 個性指標 */}
+                    {s.votesCastCount > 0 && (
+                      <div className="bg-indigo-50 rounded-xl px-3 py-2.5 space-y-2">
+                        <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wide">個性指標</p>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <span className="text-xs text-gray-500">多数派投票率</span>
+                            <TooltipIcon title="多数派投票率" description={TOOLTIPS['多数派投票率']} />
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm font-bold text-indigo-600">{formatRate(s.majorityVoteRate)}</span>
+                            <span className="text-xs text-gray-400">({s.votesCastCount}票投じた)</span>
+                            <span className="text-xs text-gray-400">({rankLabel(getRank(stats.filter(x => x.votesCastCount > 0), s.userId, (x) => x.majorityVoteRate))})</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <span className="text-xs text-gray-500">孤独投票数</span>
+                            <TooltipIcon title="孤独投票数" description={TOOLTIPS['孤独投票数']} />
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm font-bold text-pink-600">{s.loneVoteCount}回</span>
+                          </div>
+                        </div>
+                        {s.preambleCount > 0 && (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center">
+                              <span className="text-xs text-gray-500">前口上平均文字数</span>
+                              <TooltipIcon title="前口上平均文字数" description={TOOLTIPS['前口上平均文字数']} />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-sm font-bold text-teal-600">{s.avgPreambleLength}文字</span>
+                              <span className="text-xs text-gray-400">({s.preambleCount}回使用)</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
