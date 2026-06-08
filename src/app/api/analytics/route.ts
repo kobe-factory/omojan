@@ -24,6 +24,10 @@ export interface UserStats {
   buttonMashWins: number
   buttonMashGames: number
   buttonMashWinRate: number
+  // 連打回数
+  bestTapCount: number     // 最高連打数（1セッション）
+  avgTapCount: number      // 平均連打数
+  totalTapSessions: number // 出場セッション数
 }
 
 export async function GET() {
@@ -188,6 +192,14 @@ export async function GET() {
     const buttonMashWins = myMashGames.filter((gId) => mashWinnerByGame[gId] === user.id).length
     const buttonMashWinRate = buttonMashGames > 0 ? buttonMashWins / buttonMashGames : 0
 
+    // 連打回数（自分が出場した全セッション）
+    const myTapRecords = mashResults.filter((r) => r.user_id === user.id)
+    const totalTapSessions = myTapRecords.length
+    const bestTapCount = totalTapSessions > 0 ? Math.max(...myTapRecords.map((r) => r.tap_count)) : 0
+    const avgTapCount = totalTapSessions > 0
+      ? Math.round(myTapRecords.reduce((sum, r) => sum + r.tap_count, 0) / totalTapSessions)
+      : 0
+
     return {
       userId: user.id,
       userName: user.name,
@@ -206,6 +218,9 @@ export async function GET() {
       buttonMashWins,
       buttonMashGames,
       buttonMashWinRate,
+      bestTapCount,
+      avgTapCount,
+      totalTapSessions,
     }
   })
 

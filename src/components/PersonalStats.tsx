@@ -24,24 +24,83 @@ function getRank(stats: UserStats[], userId: string, getValue: (s: UserStats) =>
   return rank
 }
 
+// ツールチップモーダル
+function TooltipModal({ title, description, onClose }: { title: string; description: string; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl p-5 max-w-xs w-full shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="font-bold text-gray-800 text-sm mb-2">{title}</p>
+        <p className="text-xs text-gray-600 leading-relaxed">{description}</p>
+        <button
+          onClick={onClose}
+          className="mt-4 w-full py-2 bg-gray-100 rounded-xl text-xs font-bold text-gray-600"
+        >
+          閉じる
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ツールチップアイコン
+function TooltipIcon({ title, description }: { title: string; description: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <button
+        onPointerDown={(e) => { e.stopPropagation(); setOpen(true) }}
+        className="ml-1 w-4 h-4 rounded-full bg-gray-200 text-gray-500 text-[9px] font-bold flex items-center justify-center flex-shrink-0"
+      >
+        ?
+      </button>
+      {open && <TooltipModal title={title} description={description} onClose={() => setOpen(false)} />}
+    </>
+  )
+}
+
+const TOOLTIPS: Record<string, string> = {
+  'MVP回数': 'その回戦で最も多く票を獲得した作品を出した回数です。同票の場合は決選（決選投票・連打ゲーム）で勝った場合も含みます。',
+  '作成札採用率': '自分が作成した札が、誰かの手札として配られた回数 ÷ 作成した札の総枚数です。野球の打率と同じ形式（.xxx）で表示されます。',
+  'ホームラン数': '1つの作品で4票以上を獲得した回数です。全員（または大多数）が自分の作品に投票した神回です。',
+  '総ヒット数': '1票以上を獲得した作品の総数です。1B〜HRの合計値です。',
+  '投票的中率': '自分が投票した作品がその回戦の最多得票作品だった割合です。審美眼の指標です。',
+  '連打ゲーム勝率': '連打ゲームに出場した回数のうち、勝利した割合です。',
+  '連打最高記録': '3秒間の連打ゲームで出した自己最高タップ数です。',
+  '連打平均': '連打ゲームに出場した全セッションの平均タップ数です。',
+  '1B（シングル）': '1票を獲得した作品の数です。票を入れてもらえた！という基本ヒットです。',
+  '2B（ダブル）': '2票を獲得した作品の数です。半数以上に評価されたことを意味します（5人中2票）。',
+  '3B（トリプル）': '3票以上を獲得した作品の数です。かなりの高評価！',
+  'HR（ホームラン）': '4票以上を獲得した作品の数です。ほぼ全員が認めた神作品！',
+}
+
 interface RankingRowProps {
   label: string
+  tooltipKey?: string
   stats: UserStats[]
   getValue: (s: UserStats) => number
   formatValue: (v: number) => string
   colorClass?: string
+  filter?: (s: UserStats) => boolean
 }
 
-function RankingRow({ label, stats, getValue, formatValue, colorClass = 'text-emerald-600' }: RankingRowProps) {
-  const sorted = [...stats].sort((a, b) => getValue(b) - getValue(a))
+function RankingRow({ label, tooltipKey, stats, getValue, formatValue, colorClass = 'text-emerald-600', filter }: RankingRowProps) {
+  const filtered = filter ? stats.filter(filter) : stats
+  const sorted = [...filtered].sort((a, b) => getValue(b) - getValue(a))
   return (
     <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-      <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
-        <p className="text-xs font-bold text-gray-600">{label}</p>
+      <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center">
+        <p className="text-xs font-bold text-gray-600 flex-1">{label}</p>
+        {(tooltipKey ?? label) && <TooltipIcon title={tooltipKey ?? label} description={TOOLTIPS[tooltipKey ?? label] ?? ''} />}
       </div>
       <div className="divide-y divide-gray-50">
         {sorted.map((s, i) => {
-          const rank = i === 0 ? 1 : getValue(s) === getValue(sorted[i - 1]) ? getRank(stats, s.userId, getValue) : i + 1
+          const rank = i === 0 ? 1 : getValue(s) === getValue(sorted[i - 1]) ? getRank(filtered, s.userId, getValue) : i + 1
           const isFirst = rank === 1
           return (
             <div key={s.userId} className={`flex items-center justify-between px-3 py-2 ${isFirst ? 'bg-yellow-50' : ''}`}>
@@ -139,13 +198,34 @@ export default function PersonalStats() {
             colorClass="text-purple-600"
           />
           {hasMashData && (
-            <RankingRow
-              label="連打ゲーム勝率"
-              stats={stats}
-              getValue={(s) => s.buttonMashWinRate}
-              formatValue={(v) => formatRate(v)}
-              colorClass="text-orange-600"
-            />
+            <>
+              <RankingRow
+                label="連打ゲーム勝率"
+                stats={stats}
+                getValue={(s) => s.buttonMashWinRate}
+                formatValue={(v) => formatRate(v)}
+                colorClass="text-orange-600"
+                filter={(s) => s.buttonMashGames > 0}
+              />
+              <RankingRow
+                label="連打最高記録"
+                tooltipKey="連打最高記録"
+                stats={stats}
+                getValue={(s) => s.bestTapCount}
+                formatValue={(v) => `${v}回`}
+                colorClass="text-orange-500"
+                filter={(s) => s.totalTapSessions > 0}
+              />
+              <RankingRow
+                label="連打平均"
+                tooltipKey="連打平均"
+                stats={stats}
+                getValue={(s) => s.avgTapCount}
+                formatValue={(v) => `${v}回`}
+                colorClass="text-orange-400"
+                filter={(s) => s.totalTapSessions > 0}
+              />
+            </>
           )}
         </div>
       )}
@@ -176,7 +256,10 @@ export default function PersonalStats() {
                   <div className="border-t border-gray-100 px-4 py-3 space-y-3">
                     {/* MVP */}
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-500">MVP回数</span>
+                      <div className="flex items-center">
+                        <span className="text-xs text-gray-500">MVP回数</span>
+                        <TooltipIcon title="MVP回数" description={TOOLTIPS['MVP回数']} />
+                      </div>
                       <div className="flex items-center gap-1">
                         <span className="text-sm font-bold text-yellow-600">{s.mvpCount}回</span>
                         <span className="text-xs text-gray-400">({rankLabel(mvpRank)})</span>
@@ -185,7 +268,10 @@ export default function PersonalStats() {
 
                     {/* 作成札採用率 */}
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-500">作成札採用率</span>
+                      <div className="flex items-center">
+                        <span className="text-xs text-gray-500">作成札採用率</span>
+                        <TooltipIcon title="作成札採用率" description={TOOLTIPS['作成札採用率']} />
+                      </div>
                       <div className="flex items-center gap-1">
                         <span className="text-sm font-bold text-blue-600">{formatRate(s.cardUsageRate)}</span>
                         <span className="text-xs text-gray-400">({s.cardsUsed}/{s.cardsCreated}枚)</span>
@@ -195,16 +281,21 @@ export default function PersonalStats() {
 
                     {/* ヒット数 */}
                     <div>
-                      <p className="text-xs text-gray-500 mb-1.5">ヒット内訳</p>
+                      <div className="flex items-center mb-1.5">
+                        <p className="text-xs text-gray-500">ヒット内訳</p>
+                      </div>
                       <div className="grid grid-cols-4 gap-1.5">
                         {[
-                          { label: '1B', value: s.singles, color: 'bg-emerald-50 text-emerald-700' },
-                          { label: '2B', value: s.doubles, color: 'bg-blue-50 text-blue-700' },
-                          { label: '3B', value: s.triples, color: 'bg-purple-50 text-purple-700' },
-                          { label: 'HR', value: s.homeRuns, color: 'bg-red-50 text-red-700' },
+                          { label: '1B', tooltipKey: '1B（シングル）', value: s.singles, color: 'bg-emerald-50 text-emerald-700' },
+                          { label: '2B', tooltipKey: '2B（ダブル）', value: s.doubles, color: 'bg-blue-50 text-blue-700' },
+                          { label: '3B', tooltipKey: '3B（トリプル）', value: s.triples, color: 'bg-purple-50 text-purple-700' },
+                          { label: 'HR', tooltipKey: 'HR（ホームラン）', value: s.homeRuns, color: 'bg-red-50 text-red-700' },
                         ].map((h) => (
-                          <div key={h.label} className={`rounded-lg p-2 text-center ${h.color}`}>
-                            <p className="text-[10px] font-bold">{h.label}</p>
+                          <div key={h.label} className={`rounded-lg p-2 text-center ${h.color} relative`}>
+                            <div className="flex items-center justify-center gap-0.5">
+                              <p className="text-[10px] font-bold">{h.label}</p>
+                              <TooltipIcon title={h.tooltipKey} description={TOOLTIPS[h.tooltipKey] ?? ''} />
+                            </div>
                             <p className="text-base font-black">{h.value}</p>
                           </div>
                         ))}
@@ -217,7 +308,10 @@ export default function PersonalStats() {
 
                     {/* 投票的中率 */}
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-500">投票的中率</span>
+                      <div className="flex items-center">
+                        <span className="text-xs text-gray-500">投票的中率</span>
+                        <TooltipIcon title="投票的中率" description={TOOLTIPS['投票的中率']} />
+                      </div>
                       <div className="flex items-center gap-1">
                         <span className="text-sm font-bold text-purple-600">{formatRate(s.voteAccuracy)}</span>
                         <span className="text-xs text-gray-400">({s.voteHitCount}/{s.voteCastCount}票)</span>
@@ -225,21 +319,50 @@ export default function PersonalStats() {
                       </div>
                     </div>
 
-                    {/* 連打ゲーム（データがある場合のみ） */}
+                    {/* 連打ゲーム */}
                     {hasMashData && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-500">連打ゲーム勝率</span>
-                        <div className="flex items-center gap-1">
-                          <span className="text-sm font-bold text-orange-600">
-                            {s.buttonMashGames > 0 ? formatRate(s.buttonMashWinRate) : '—'}
-                          </span>
-                          {s.buttonMashGames > 0 && (
-                            <>
-                              <span className="text-xs text-gray-400">({s.buttonMashWins}/{s.buttonMashGames}戦)</span>
-                              <span className="text-xs text-gray-400">({rankLabel(getRank(stats, s.userId, (x) => x.buttonMashWinRate))})</span>
-                            </>
-                          )}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <span className="text-xs text-gray-500">連打勝率</span>
+                            <TooltipIcon title="連打ゲーム勝率" description={TOOLTIPS['連打ゲーム勝率']} />
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm font-bold text-orange-600">
+                              {s.buttonMashGames > 0 ? formatRate(s.buttonMashWinRate) : '—'}
+                            </span>
+                            {s.buttonMashGames > 0 && (
+                              <>
+                                <span className="text-xs text-gray-400">({s.buttonMashWins}/{s.buttonMashGames}戦)</span>
+                                <span className="text-xs text-gray-400">({rankLabel(getRank(stats.filter((x) => x.buttonMashGames > 0), s.userId, (x) => x.buttonMashWinRate))})</span>
+                              </>
+                            )}
+                          </div>
                         </div>
+                        {s.totalTapSessions > 0 && (
+                          <div className="bg-orange-50 rounded-xl px-3 py-2 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center">
+                                <span className="text-[11px] text-orange-700">最高連打数</span>
+                                <TooltipIcon title="連打最高記録" description={TOOLTIPS['連打最高記録']} />
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-sm font-bold text-orange-600">{s.bestTapCount}回</span>
+                                <span className="text-xs text-orange-400">({rankLabel(getRank(stats.filter((x) => x.totalTapSessions > 0), s.userId, (x) => x.bestTapCount))})</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center">
+                                <span className="text-[11px] text-orange-700">平均連打数</span>
+                                <TooltipIcon title="連打平均" description={TOOLTIPS['連打平均']} />
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-sm font-bold text-orange-500">{s.avgTapCount}回</span>
+                                <span className="text-xs text-orange-400">({rankLabel(getRank(stats.filter((x) => x.totalTapSessions > 0), s.userId, (x) => x.avgTapCount))})</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
