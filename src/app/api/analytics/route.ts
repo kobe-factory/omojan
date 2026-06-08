@@ -33,7 +33,25 @@ export async function GET() {
     return NextResponse.json({ stats: [] })
   }
 
-  // 全データを一括取得
+  // 本番大会のみ対象
+  const { data: prodTournaments } = await supabase
+    .from('tournaments')
+    .select('id')
+    .eq('mode', 'production')
+  const prodTournamentIds = (prodTournaments ?? []).map((t) => t.id)
+  if (prodTournamentIds.length === 0) {
+    return NextResponse.json({ stats: users.map((u) => ({ userId: u.id, userName: u.name, cardUsageRate: 0, cardsCreated: 0, cardsUsed: 0, singles: 0, doubles: 0, triples: 0, homeRuns: 0, totalHits: 0, mvpCount: 0, voteAccuracy: 0, voteCastCount: 0, voteHitCount: 0, buttonMashWins: 0, buttonMashGames: 0, buttonMashWinRate: 0 })) })
+  }
+
+  // 本番大会の終了済みゲームIDを先に取得
+  const { data: prodGames } = await supabase
+    .from('games')
+    .select('id')
+    .in('tournament_id', prodTournamentIds)
+    .eq('status', 'finished')
+  const prodGameIds = (prodGames ?? []).map((g) => g.id)
+
+  // 本番大会のデータのみ一括取得
   const [
     { data: allCards },
     { data: allSubmissions },
@@ -41,11 +59,11 @@ export async function GET() {
     { data: allGames },
     { data: allMashResults },
   ] = await Promise.all([
-    supabase.from('cards').select('id, creator_user_id, tournament_id'),
-    supabase.from('submissions').select('id, user_id, hand_card_id, game_id'),
-    supabase.from('votes').select('voter_user_id, submission_id, game_id, is_tiebreaker'),
-    supabase.from('games').select('id, status').eq('status', 'finished'),
-    supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round'),
+    supabase.from('cards').select('id, creator_user_id, tournament_id').in('tournament_id', prodTournamentIds),
+    prodGameIds.length > 0 ? supabase.from('submissions').select('id, user_id, hand_card_id, game_id').in('game_id', prodGameIds) : Promise.resolve({ data: [] }),
+    prodGameIds.length > 0 ? supabase.from('votes').select('voter_user_id, submission_id, game_id, is_tiebreaker').in('game_id', prodGameIds) : Promise.resolve({ data: [] }),
+    prodGameIds.length > 0 ? supabase.from('games').select('id, status').in('id', prodGameIds) : Promise.resolve({ data: [] }),
+    prodGameIds.length > 0 ? supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round').in('game_id', prodGameIds) : Promise.resolve({ data: [] }),
   ])
 
   const cards = allCards ?? []

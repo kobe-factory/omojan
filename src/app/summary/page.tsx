@@ -20,6 +20,7 @@ interface RoundSummary {
   votes: number
   isTied: boolean
   votingMode: string | null
+  isWinByButtonMash: boolean
 }
 
 interface TournamentScore {
@@ -93,10 +94,23 @@ export default function SummaryPage() {
 
     const gameIds = (allGames ?? []).map((g) => g.id)
 
-    const [{ data: allSubs }, { data: allVotes }] = await Promise.all([
+    const [{ data: allSubs }, { data: allVotes }, { data: allMashResults }] = await Promise.all([
       supabase.from('submissions').select('id, game_id, user_id, hand_card_id, position, preamble, preamble_position').in('game_id', gameIds),
       supabase.from('votes').select('game_id, submission_id, created_at, is_tiebreaker').in('game_id', gameIds),
+      supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round').in('game_id', gameIds),
     ])
+
+    // ゲーム別の連打ゲーム勝者を集計
+    const mashWinnerByGame: Record<string, string> = {}
+    const mashGameIds = [...new Set((allMashResults ?? []).map((r) => r.game_id))]
+    for (const gameId of mashGameIds) {
+      const results = (allMashResults ?? []).filter((r) => r.game_id === gameId)
+      const latestRound = Math.max(...results.map((r) => r.mash_round))
+      const latest = results.filter((r) => r.mash_round === latestRound)
+      const maxTaps = Math.max(...latest.map((r) => r.tap_count))
+      const winners = latest.filter((r) => r.tap_count === maxTaps)
+      if (winners.length === 1) mashWinnerByGame[gameId] = winners[0].user_id
+    }
 
     const topicIds = (allGames ?? []).map((g) => g.topic_card_id)
     const handIds = (allSubs ?? []).map((s) => s.hand_card_id)
@@ -162,7 +176,15 @@ export default function SummaryPage() {
           }
         }
 
-        if (hasTie) {
+        // 連打ゲームで決まった場合は勝者を上書き
+        let isWinByButtonMash = false
+        const mashWinnerUserId = mashWinnerByGame[game.id]
+        if (hasTie && mashWinnerUserId) {
+          const mashWinnerSub = gameSubs.find((s) => s.user_id === mashWinnerUserId)
+          if (mashWinnerSub) { winnerSub = mashWinnerSub; isWinByButtonMash = true; hasTie = false }
+        }
+
+        if (!isWinByButtonMash && hasTie) {
           let maxTbVotes = 0
           let tbWinner: typeof gameSubs[0] | null = null
           for (const sub of gameSubs) {
@@ -190,7 +212,7 @@ export default function SummaryPage() {
           : ''
         const winnerUser = winnerSub ? participants.find((p) => p.id === winnerSub!.user_id) : null
 
-        rounds.push({ roundNumber: game.round_number, topicText, winnerName: winnerUser?.name ?? '???', winnerText, winnerPreamble: winnerSub?.preamble ?? null, winnerPreamblePosition: (winnerSub?.preamble_position ?? 'above') as 'above' | 'below', votes: displayVotes, isTied: hasTie, votingMode: (game as { voting_mode?: string | null }).voting_mode ?? null })
+        rounds.push({ roundNumber: game.round_number, topicText, winnerName: winnerUser?.name ?? '???', winnerText, winnerPreamble: winnerSub?.preamble ?? null, winnerPreamblePosition: (winnerSub?.preamble_position ?? 'above') as 'above' | 'below', votes: displayVotes, isTied: hasTie, votingMode: (game as { voting_mode?: string | null }).voting_mode ?? null, isWinByButtonMash })
       }
 
       const sortedScores = participants
@@ -450,6 +472,9 @@ export default function SummaryPage() {
                                   </div>
                                   <div className="flex items-center gap-2">
                                     {r.isTied && <span className="text-xs text-gray-400">（同点・投票時間で決定）</span>}
+                                    {r.isWinByButtonMash && (
+                                      <span className="text-[9px] font-bold text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full">⚡連打</span>
+                                    )}
                                     <span className="text-xs text-gray-400">{r.votes}票</span>
                                   </div>
                                 </div>
@@ -482,7 +507,7 @@ export default function SummaryPage() {
       </div>}
 
       <footer className="text-center py-4">
-        <p className="text-xs text-gray-300">v1.30.7</p>
+        <p className="text-xs text-gray-300">v1.31.0</p>
       </footer>
     </div>
   )
