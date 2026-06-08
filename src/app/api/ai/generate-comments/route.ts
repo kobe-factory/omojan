@@ -25,6 +25,7 @@ interface UserCommentInput {
   overall: CompactStats
   last: CompactStats | null
   lastTournamentNumber: number | null
+  cardTexts: string[]
 }
 
 // GET: 保存済みコメントを返す
@@ -74,7 +75,7 @@ export async function POST() {
   // 集計データ取得
   const { data: allCards } = await supabase
     .from('cards')
-    .select('id, creator_user_id, tournament_id')
+    .select('id, creator_user_id, tournament_id, text')
     .in('tournament_id', allTournamentIds)
 
   const gameIdsAll = [...validGameIds]
@@ -98,12 +99,16 @@ export async function POST() {
   const submissions = allSubs ?? []
   const votes = allVotes ?? []
   const mashResults = allMashResults ?? []
+  const cards = allCards ?? []
 
   const userInputs: UserCommentInput[] = users.map((user) => {
-    const overall = computeStats(user.id, allCards ?? [], submissions, votes, mashResults, validGameIds)
+    const overall = computeStats(user.id, cards, submissions, votes, mashResults, validGameIds)
     const last = gameIdsLast.length > 0
-      ? computeStats(user.id, allCards ?? [], submissions, votes, mashResults, lastTournamentValidGameIds)
+      ? computeStats(user.id, cards, submissions, votes, mashResults, lastTournamentValidGameIds)
       : null
+    const cardTexts = cards
+      .filter((c) => c.creator_user_id === user.id)
+      .map((c) => c.text)
 
     return {
       userId: user.id,
@@ -111,6 +116,7 @@ export async function POST() {
       overall,
       last,
       lastTournamentNumber,
+      cardTexts,
     }
   })
 
@@ -127,6 +133,8 @@ export async function POST() {
         user_id: item.userId,
         overall_comment: item.overallComment,
         last_tournament_comment: item.lastComment,
+        card_analysis_comment: item.cardAnalysisComment,
+        nickname: item.nickname,
         last_tournament_id: lastTournamentId,
         tournament_count: tournamentCount,
         generated_at: new Date().toISOString(),
@@ -164,7 +172,7 @@ async function computeValidGameIds(tournamentIds: string[]): Promise<Set<string>
 
 function computeStats(
   userId: string,
-  cards: { id: string; creator_user_id: string; tournament_id: string }[],
+  cards: { id: string; creator_user_id: string; tournament_id: string; text: string }[],
   submissions: { id: string; user_id: string; hand_card_id: string; game_id: string; preamble: string | null }[],
   votes: { voter_user_id: string; submission_id: string; game_id: string; is_tiebreaker: boolean }[],
   mashResults: { game_id: string; user_id: string; tap_count: number; mash_round: number }[],
@@ -262,6 +270,8 @@ function computeStats(
     (v) => (voteCountBySub[v.submission_id] ?? 0) === 1 && !(winnersByGame[v.game_id] ?? []).includes(v.submission_id)
   ).length
 
+  void fairVotesCast
+
   return {
     gamesParticipated,
     mvpCount,
@@ -296,7 +306,7 @@ function formatStats(s: CompactStats): string {
 
 async function generateAllComments(
   users: UserCommentInput[],
-): Promise<{ userId: string; overallComment: string; lastComment: string }[] | null> {
+): Promise<{ userId: string; overallComment: string; lastComment: string; cardAnalysisComment: string; nickname: string }[] | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
     console.error('ANTHROPIC_API_KEY が設定されていません')
@@ -309,30 +319,37 @@ async function generateAllComments(
       const lastLine = u.last && u.lastTournamentNumber
         ? `【${u.userName}】第${u.lastTournamentNumber}回大会: ${formatStats(u.last)}`
         : `【${u.userName}】前回大会: データなし`
-      return `${overallLine}\n${lastLine}`
+      const cardLine = u.cardTexts.length > 0
+        ? `【${u.userName}】作成した札（全${u.cardTexts.length}枚）: 「${u.cardTexts.join('」「')}」`
+        : `【${u.userName}】作成した札: なし`
+      return `${overallLine}\n${lastLine}\n${cardLine}`
     })
     .join('\n\n')
 
   const prompt = `あなたは「おもじゃん」というワードバトルゲームの毒舌実況解説者です。
-以下のプレイヤーの成績データを見て、それぞれ2種類の総評コメントを書いてください。
+以下のプレイヤーの成績データと作成した札の一覧を見て、それぞれ4種類のコメントを書いてください。
 
 ルール：
 - 各コメントは100文字以内（厳守）
 - 面白く、辛辣に、友人への毒舌トークで書く
-- 具体的な数字に触れつつ、ポジネガ両面を突っ込む
+- 具体的な数字や単語に触れつつ、ポジネガ両面を突っ込む
 - 日本語のみ（絵文字可）
+- card_analysis_commentは作成した札の内容・傾向・テーマ（下ネタ率・食べ物ネタ・哲学系など）を分析して辛辣にコメント
+- nicknameは成績と札の傾向を総合した称号（例：「下ネタ帝王」「孤高の天才」「永遠の完封王」など）。10文字以内
 - JSONのみ返す（説明不要）
 
-成績データ：
+成績データ・作成した札：
 ${playerSection}
 
 以下のJSON形式で返してください：
 {
   "users": [
     {
-      "user_id": "${users[0]?.userId ?? ''}",
+      "user_id": "ここにuuid",
       "overall_comment": "...",
-      "last_comment": "..."
+      "last_comment": "...",
+      "card_analysis_comment": "...",
+      "nickname": "..."
     }
   ]
 }
@@ -349,7 +366,7 @@ user_idはそれぞれ: ${users.map((u) => `${u.userName}=${u.userId}`).join(', 
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2048,
+        max_tokens: 4096,
         messages: [{ role: 'user', content: prompt }],
       }),
     })
@@ -370,13 +387,15 @@ user_idはそれぞれ: ${users.map((u) => `${u.userName}=${u.userId}`).join(', 
     }
 
     const parsed = JSON.parse(match[0]) as {
-      users: { user_id: string; overall_comment: string; last_comment: string }[]
+      users: { user_id: string; overall_comment: string; last_comment: string; card_analysis_comment: string; nickname: string }[]
     }
 
     return parsed.users.map((u) => ({
       userId: u.user_id,
       overallComment: u.overall_comment ?? '',
       lastComment: u.last_comment ?? '',
+      cardAnalysisComment: u.card_analysis_comment ?? '',
+      nickname: u.nickname ?? '',
     }))
   } catch (e) {
     console.error('generateAllComments エラー:', e)

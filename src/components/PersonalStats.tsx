@@ -137,6 +137,8 @@ interface AiComment {
   user_id: string
   overall_comment: string | null
   last_tournament_comment: string | null
+  card_analysis_comment: string | null
+  nickname: string | null
 }
 
 export default function PersonalStats() {
@@ -339,8 +341,17 @@ export default function PersonalStats() {
                 >
                   <div className="flex items-center gap-2">
                     <UserIcon name={s.userName} size="sm" />
-                    <span className="font-bold text-gray-800 text-sm">{s.userName}</span>
-                    {mvpRank === 1 && <span className="text-xs">👑 MVP</span>}
+                    <div className="flex flex-col items-start">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-gray-800 text-sm">{s.userName}</span>
+                        {mvpRank === 1 && <span className="text-xs">👑</span>}
+                      </div>
+                      {aiComment?.nickname && (
+                        <span className="text-[10px] text-purple-500 font-bold bg-purple-50 px-1.5 py-0.5 rounded-full leading-tight">
+                          {aiComment.nickname}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-gray-400">{s.mvpCount}勝</span>
@@ -525,8 +536,8 @@ export default function PersonalStats() {
                     )}
 
                     {/* AI総評 */}
-                    {aiComment && (aiComment.overall_comment || aiComment.last_tournament_comment) && (
-                      <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-3 space-y-2">
+                    {aiComment && (aiComment.overall_comment || aiComment.last_tournament_comment || aiComment.card_analysis_comment) && (
+                      <div className="bg-linear-to-br from-purple-50 to-indigo-50 rounded-xl p-3 space-y-2">
                         <p className="text-[10px] font-bold text-purple-400 uppercase tracking-wide">🤖 AI総評</p>
                         {aiComment.overall_comment && (
                           <div>
@@ -538,6 +549,12 @@ export default function PersonalStats() {
                           <div>
                             <p className="text-[10px] text-purple-400 mb-0.5">前回大会</p>
                             <p className="text-xs text-gray-700 leading-relaxed">{aiComment.last_tournament_comment}</p>
+                          </div>
+                        )}
+                        {aiComment.card_analysis_comment && (
+                          <div>
+                            <p className="text-[10px] text-purple-400 mb-0.5">🃏 作成した札の傾向</p>
+                            <p className="text-xs text-gray-700 leading-relaxed">{aiComment.card_analysis_comment}</p>
                           </div>
                         )}
                       </div>
