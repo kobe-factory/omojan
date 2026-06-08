@@ -16,10 +16,10 @@ export interface UserStats {
   totalHits: number
   // MVP回数（その回戦で1位）
   mvpCount: number
-  // 投票的中率
-  voteAccuracy: number  // 0.000〜1.000
-  voteCastCount: number
-  voteHitCount: number
+  // 平均得票数（1回戦あたり平均票数）
+  avgVotesPerGame: number
+  totalVotesReceived: number
+  gamesParticipated: number
   // 連打ゲーム勝率
   buttonMashWins: number
   buttonMashGames: number
@@ -44,36 +44,42 @@ export async function GET() {
     .eq('mode', 'production')
   const prodTournamentIds = (prodTournaments ?? []).map((t) => t.id)
   if (prodTournamentIds.length === 0) {
-    return NextResponse.json({ stats: users.map((u) => ({ userId: u.id, userName: u.name, cardUsageRate: 0, cardsCreated: 0, cardsUsed: 0, singles: 0, doubles: 0, triples: 0, homeRuns: 0, totalHits: 0, mvpCount: 0, voteAccuracy: 0, voteCastCount: 0, voteHitCount: 0, buttonMashWins: 0, buttonMashGames: 0, buttonMashWinRate: 0 })) })
+    return NextResponse.json({ stats: users.map((u) => ({ userId: u.id, userName: u.name, cardUsageRate: 0, cardsCreated: 0, cardsUsed: 0, singles: 0, doubles: 0, triples: 0, homeRuns: 0, totalHits: 0, mvpCount: 0, avgVotesPerGame: 0, totalVotesReceived: 0, gamesParticipated: 0, buttonMashWins: 0, buttonMashGames: 0, buttonMashWinRate: 0, bestTapCount: 0, avgTapCount: 0, totalTapSessions: 0 })) })
   }
 
-  // 本番大会の終了済みゲームIDを先に取得
+  // 本番大会の全ゲームIDを取得（status問わず。summary pageと同じ集計範囲にする）
   const { data: prodGames } = await supabase
     .from('games')
-    .select('id')
+    .select('id, is_rematch, round_number')
     .in('tournament_id', prodTournamentIds)
-    .eq('status', 'finished')
   const prodGameIds = (prodGames ?? []).map((g) => g.id)
+
+  // 流局で再戦になった回戦のround_numberを特定して流局ゲームを除外（summaryと同ロジック）
+  const rematchRoundNumbers = new Set(
+    (prodGames ?? []).filter((g) => g.is_rematch).map((g) => g.round_number),
+  )
+  const validGameIds = new Set(
+    (prodGames ?? [])
+      .filter((g) => !(g.is_rematch === false && rematchRoundNumbers.has(g.round_number)))
+      .map((g) => g.id),
+  )
 
   // 本番大会のデータのみ一括取得
   const [
     { data: allCards },
     { data: allSubmissions },
     { data: allVotes },
-    { data: allGames },
     { data: allMashResults },
   ] = await Promise.all([
     supabase.from('cards').select('id, creator_user_id, tournament_id').in('tournament_id', prodTournamentIds),
     prodGameIds.length > 0 ? supabase.from('submissions').select('id, user_id, hand_card_id, game_id').in('game_id', prodGameIds) : Promise.resolve({ data: [] }),
     prodGameIds.length > 0 ? supabase.from('votes').select('voter_user_id, submission_id, game_id, is_tiebreaker').in('game_id', prodGameIds) : Promise.resolve({ data: [] }),
-    prodGameIds.length > 0 ? supabase.from('games').select('id, status').in('id', prodGameIds) : Promise.resolve({ data: [] }),
     prodGameIds.length > 0 ? supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round').in('game_id', prodGameIds) : Promise.resolve({ data: [] }),
   ])
 
   const cards = allCards ?? []
   const submissions = allSubmissions ?? []
   const votes = allVotes ?? []
-  const finishedGames = new Set((allGames ?? []).map((g) => g.id))
   const mashResults = allMashResults ?? []
 
   // 作品別の得票数（初回投票のみ）
@@ -92,7 +98,7 @@ export async function GET() {
   }
 
   for (const gameId of Object.keys(submissionsByGame)) {
-    if (!finishedGames.has(gameId)) continue
+    if (!validGameIds.has(gameId)) continue
     const gameSubs = submissionsByGame[gameId]
     let maxVotes = 0
     let winnerId = ''
@@ -166,7 +172,7 @@ export async function GET() {
     const mySubmissions = submissions.filter((s) => s.user_id === user.id)
     let singles = 0, doubles = 0, triples = 0, homeRuns = 0
     for (const sub of mySubmissions) {
-      if (!finishedGames.has(sub.game_id)) continue
+      if (!validGameIds.has(sub.game_id)) continue
       const cnt = voteCountBySubmission[sub.id] ?? 0
       if (cnt === 1) singles++
       else if (cnt === 2) doubles++
@@ -178,11 +184,12 @@ export async function GET() {
     // MVP回数
     const mvpCount = mySubmissions.filter((s) => winnerByGame[s.game_id] === s.id).length
 
-    // 投票的中率（自分が投じた票が最終的に勝者の作品だった割合）
-    const myVotes = initialVotes.filter((v) => v.voter_user_id === user.id && finishedGames.has(v.game_id))
-    const voteHitCount = myVotes.filter((v) => winnerByGame[v.game_id] === v.submission_id).length
-    const voteCastCount = myVotes.length
-    const voteAccuracy = voteCastCount > 0 ? voteHitCount / voteCastCount : 0
+    // 平均得票数（validなゲームでの作品への初回投票合計 / 出場ゲーム数）
+    const gamesParticipated = mySubmissions.filter((s) => validGameIds.has(s.game_id)).length
+    const totalVotesReceived = mySubmissions
+      .filter((s) => validGameIds.has(s.game_id))
+      .reduce((sum, sub) => sum + (voteCountBySubmission[sub.id] ?? 0), 0)
+    const avgVotesPerGame = gamesParticipated > 0 ? totalVotesReceived / gamesParticipated : 0
 
     // 連打ゲーム勝率
     const myMashGames = Object.keys(mashParticipantsByGame).filter((gId) =>
@@ -212,9 +219,9 @@ export async function GET() {
       homeRuns,
       totalHits,
       mvpCount,
-      voteAccuracy,
-      voteCastCount,
-      voteHitCount,
+      avgVotesPerGame,
+      totalVotesReceived,
+      gamesParticipated,
       buttonMashWins,
       buttonMashGames,
       buttonMashWinRate,

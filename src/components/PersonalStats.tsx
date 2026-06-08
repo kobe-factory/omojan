@@ -69,7 +69,7 @@ const TOOLTIPS: Record<string, string> = {
   '作成札採用率': '自分が作成した札が、誰かの手札として配られた回数 ÷ 作成した札の総枚数です。野球の打率と同じ形式（.xxx）で表示されます。',
   'ホームラン数': '1つの作品で4票以上を獲得した回数です。全員（または大多数）が自分の作品に投票した神回です。',
   '総ヒット数': '1票以上を獲得した作品の総数です。1B〜HRの合計値です。',
-  '投票的中率': '自分が投票した作品がその回戦の最多得票作品だった割合です。審美眼の指標です。',
+  '平均得票数': '出場した1回戦あたり、自分の作品が平均何票を獲得したかです。高いほど安定した評価を受けていることを意味します。',
   '連打ゲーム勝率': '連打ゲームに出場した回数のうち、勝利した割合です。',
   '連打最高記録': '3秒間の連打ゲームで出した自己最高タップ数です。',
   '連打平均': '連打ゲームに出場した全セッションの平均タップ数です。',
@@ -191,10 +191,10 @@ export default function PersonalStats() {
             colorClass="text-emerald-600"
           />
           <RankingRow
-            label="投票的中率"
+            label="平均得票数"
             stats={stats}
-            getValue={(s) => s.voteAccuracy}
-            formatValue={(v) => formatRate(v)}
+            getValue={(s) => s.avgVotesPerGame}
+            formatValue={(v) => v.toFixed(2)}
             colorClass="text-purple-600"
           />
           {hasMashData && (
@@ -306,16 +306,16 @@ export default function PersonalStats() {
                       </p>
                     </div>
 
-                    {/* 投票的中率 */}
+                    {/* 平均得票数 */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
-                        <span className="text-xs text-gray-500">投票的中率</span>
-                        <TooltipIcon title="投票的中率" description={TOOLTIPS['投票的中率']} />
+                        <span className="text-xs text-gray-500">平均得票数</span>
+                        <TooltipIcon title="平均得票数" description={TOOLTIPS['平均得票数']} />
                       </div>
                       <div className="flex items-center gap-1">
-                        <span className="text-sm font-bold text-purple-600">{formatRate(s.voteAccuracy)}</span>
-                        <span className="text-xs text-gray-400">({s.voteHitCount}/{s.voteCastCount}票)</span>
-                        <span className="text-xs text-gray-400">({rankLabel(getRank(stats, s.userId, (x) => x.voteAccuracy))})</span>
+                        <span className="text-sm font-bold text-purple-600">{s.avgVotesPerGame.toFixed(2)}</span>
+                        <span className="text-xs text-gray-400">({s.totalVotesReceived}票/{s.gamesParticipated}戦)</span>
+                        <span className="text-xs text-gray-400">({rankLabel(getRank(stats, s.userId, (x) => x.avgVotesPerGame))})</span>
                       </div>
                     </div>
 
