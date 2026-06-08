@@ -469,6 +469,22 @@ async function generateAllComments(
     return null
   }
 
+  // 相対ランキング表（数値の相対評価用）
+  function rankAmong(getValue: (u: UserCommentInput) => number, higherIsBetter: boolean): string {
+    const sorted = [...users].sort((a, b) =>
+      higherIsBetter ? getValue(b) - getValue(a) : getValue(a) - getValue(b)
+    )
+    return sorted.map((u, i) => `${i + 1}位:${u.userName}(${getValue(u).toFixed(2)})`).join(' ')
+  }
+  const relativeRankings = [
+    `MVP数: ${rankAmong(u => u.overall.mvpCount, true)}`,
+    `平均得票: ${rankAmong(u => u.overall.avgVotesPerGame, true)}`,
+    `HR数: ${rankAmong(u => u.overall.homeRuns, true)}`,
+    `完封数(少ないほど良い): ${rankAmong(u => u.overall.shutoutCount, false)}`,
+    `前口上使用率: ${rankAmong(u => u.overall.preambleUsageRate, true)}`,
+    `孤独投票数: ${rankAmong(u => u.overall.loneVoteCount, true)}`,
+  ].join('\n')
+
   const playerSection = users
     .map((u) => {
       // ===== 通算データ（overall_comment・card_analysis_comment用） =====
@@ -543,6 +559,15 @@ async function generateAllComments(
 - last_comment: 前回大会データ（成績・作品・前口上）をもとに、その大会での動きや傾向を辛辣にギャル口調でイジる。必ず生成すること（データがあれば空にしない）
 - card_analysis_comment: 通算の使用済み札・作品・前口上をもとに、言葉選びのクセや発想の傾向からその人の内面・趣味嗜好を深読みしてギャル口調でイジる
 - nickname: 全体の傾向を総合した称号（20文字以内）
+
+【数値の相対評価について（重要）】
+- 数値を評価する際は必ず下記のランキングを参照し、参加者全員の中での相対的な位置づけで評価すること
+- 例：HR2本でも全員で最多なら「HR王」「このメンツの中では一番」と評価する
+- 「完封数」はこのゲームでは0票＝得票なし＝悪い成績。完封数が少ないほど良い（野球の一般論とは逆）
+- 数値の絶対値だけで良し悪しを判断しない。ランキングで何位かを見て評価する
+
+【通算成績ランキング（相対評価の参考に使うこと）】
+${relativeRankings}
 
 【大会総評（tournament_comment）について】
 キャラクター：スポーツ新聞の記者。ビジネスライクで格調ある文体を基本とするが、要所でツッコミやイジりが入り、思わず笑える記事スタイル。バッサリ先生とは別キャラ。
