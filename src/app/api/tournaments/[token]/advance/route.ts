@@ -571,6 +571,12 @@ export async function POST(
         .filter(([, c]) => c === maxInit)
         .map(([id]) => id)
 
+      if (tiedSubIds.length === 0) {
+        // 投票なし（ソロモード等）→ 即 showing_result
+        await supabase.from('games').update({ status: 'showing_result' }).eq('id', currentGame.id)
+        return NextResponse.json({ advanced: true, newGameStatus: 'showing_result' })
+      }
+
       const { data: tiedSubs } = await supabase
         .from('submissions')
         .select('user_id')
