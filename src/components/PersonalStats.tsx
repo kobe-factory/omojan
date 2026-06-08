@@ -79,8 +79,8 @@ const TOOLTIPS: Record<string, string> = {
   'HR（ホームラン）': '4票以上を獲得した作品の数です。ほぼ全員が認めた神作品！',
   'MVP勝率': '出場した回戦数のうちMVPを取った割合です。コンスタントに勝てるかの安定感指標です。野球の打率と同じ形式（.xxx）で表示されます。',
   'ホームラン率': '出場した回戦数のうち4票以上を獲得した割合です。大きな一発をどれだけ打てるかの指標です。',
-  '完封数': '投票が行われた回戦で、1票も入らなかった回数です。少ないほど良い！（笑）',
-  '完封率': '投票が行われた回戦のうち、0票だった回の割合です。完封王は不名誉な称号…',
+  'ズル滑り数': '投票が行われた回戦で、1票も入らなかった回数です。多いほど不名誉！ランキングは多い人が上位（不名誉な1位）。',
+  'ズル滑り率': '投票が行われた回戦のうち、0票だった回の割合です。ズル滑り王は不名誉な称号…',
   '前口上使用率': '作品投稿時に前口上（コメント）を入力した回の割合です。前口上でどれだけ場を盛り上げているかの指標です。',
   '最高得票数': '1回戦で獲得した最多票数の自己ベストです。その回戦で何票集めることができたか。',
   '多数派投票率': '自分が投じた票のうち、最終的にMVPになった作品に投票していた割合です。自分がMVPを取ったゲームは自分の作品に投票できないため集計から除外しています。高いほど「みんなと同じ感覚を持っている」＝多数派。低いほど個性派・天邪鬼！野球の打率と同じ形式（.xxx）で表示されます。',
@@ -251,12 +251,11 @@ export default function PersonalStats() {
             filter={(s) => s.gamesParticipated > 0}
           />
           <RankingRow
-            label="完封数"
+            label="ズル滑り数"
             stats={stats}
             getValue={(s) => s.shutoutCount}
             formatValue={(v) => `${v}回`}
             colorClass="text-gray-500"
-            ascending={true}
             filter={(s) => s.gamesParticipated > 0}
           />
           <div className="pt-1 pb-0.5">
@@ -475,8 +474,8 @@ export default function PersonalStats() {
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center">
-                            <span className="text-xs text-gray-500">完封数</span>
-                            <TooltipIcon title="完封数" description={TOOLTIPS['完封数']} />
+                            <span className="text-xs text-gray-500">ズル滑り数</span>
+                            <TooltipIcon title="ズル滑り数" description={TOOLTIPS['ズル滑り数']} />
                           </div>
                           <div className="flex items-center gap-1">
                             <span className="text-sm font-bold text-gray-500">{s.shutoutCount}回</span>

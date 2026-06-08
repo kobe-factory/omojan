@@ -451,7 +451,7 @@ function formatStats(s: CompactStats): string {
     `MVP${s.mvpCount}回(勝率${fmt(s.mvpWinRate)})`,
     `平均得票${s.avgVotesPerGame.toFixed(2)}`,
     `1B${s.singles}/2B${s.doubles}/3B${s.triples}/HR${s.homeRuns}`,
-    `完封${s.shutoutCount}回(${fmt(s.shutoutRate)})`,
+    `ズル滑り${s.shutoutCount}回(${fmt(s.shutoutRate)})`,
     `前口上${s.preambleCount}回(使用率${fmt(s.preambleUsageRate)})`,
     `孤独投票${s.loneVoteCount}回`,
     `作成札採用率${fmt(s.cardUsageRate)}`,
@@ -480,7 +480,7 @@ async function generateAllComments(
     `MVP数: ${rankAmong(u => u.overall.mvpCount, true)}`,
     `平均得票: ${rankAmong(u => u.overall.avgVotesPerGame, true)}`,
     `HR数: ${rankAmong(u => u.overall.homeRuns, true)}`,
-    `完封数(少ないほど良い): ${rankAmong(u => u.overall.shutoutCount, false)}`,
+    `ズル滑り数(多いほど不名誉・ズル滑りが多いほど悪い成績・不名誉ランキング1位が最悪): ${rankAmong(u => u.overall.shutoutCount, true)}`,
     `前口上使用率: ${rankAmong(u => u.overall.preambleUsageRate, true)}`,
     `孤独投票数: ${rankAmong(u => u.overall.loneVoteCount, true)}`,
   ].join('\n')
@@ -569,7 +569,7 @@ async function generateAllComments(
 - MVP数: その回戦で最も多く票を獲得した回数。同票の場合は決選で勝った場合も含む
 - 平均得票: 1回戦あたり平均何票獲得したか。高いほど安定した評価
 - HR数: 1作品で4票以上獲得した回数。ほぼ全員が認めた神作品の数
-- 完封数: 投票が行われた回戦で1票も入らなかった回数。【少ないほど良い。多いと不名誉】（野球の完封とは逆の意味）
+- ズル滑り数: 投票が行われた回戦で1票も入らなかった回数。【多いほど不名誉・多いほど悪い成績】。ランキングは多いほど上位（不名誉な1位）。「ズル滑りが多い＝すべってばかりで誰にも評価されなかった」という意味
 - 前口上使用率: 作品投稿時に前口上を入力した回の割合。場を盛り上げる貢献度の指標
 - 孤独投票数: 自分だけが票を入れたのに落選した回数。誰にも理解されなかった孤高の美学の記録
 
