@@ -27,6 +27,15 @@ interface UserCommentInput {
   lastTournamentNumber: number | null
   cardTexts: string[]
   usedCardTexts: string[]
+  lastUsedCardTexts: string[]
+}
+
+interface TournamentStanding {
+  userName: string
+  rank: number
+  wins: number
+  totalVotes: number
+  mvpCount: number
 }
 
 // GET: 保存済みコメントを返す
@@ -107,8 +116,11 @@ export async function POST(request: Request) {
   const mashResults = allMashResults ?? []
   const cards = allCards ?? []
 
-  // 全ゲームで実際に使われた手札カードIDのセット
+  // 全大会で使われた手札カードIDのセット
   const usedHandCardIds = new Set(submissions.map((s) => s.hand_card_id))
+  // 最新大会のみで使われた手札カードIDのセット
+  const lastTournamentSubs = submissions.filter((s) => lastTournamentValidGameIds.has(s.game_id))
+  const lastTournamentUsedHandCardIds = new Set(lastTournamentSubs.map((s) => s.hand_card_id))
 
   const userInputs: UserCommentInput[] = users.map((user) => {
     const overall = computeStats(user.id, cards, submissions, votes, mashResults, validGameIds)
@@ -117,7 +129,10 @@ export async function POST(request: Request) {
       : null
     const myCards = cards.filter((c) => c.creator_user_id === user.id)
     const cardTexts = myCards.map((c) => c.text)
+    // 個人総評用: 全大会の使用済み札
     const usedCardTexts = myCards.filter((c) => usedHandCardIds.has(c.id)).map((c) => c.text)
+    // 大会総評用: 最新大会のみの使用済み札（lastUsedCardTextsとしてもたせる）
+    const lastUsedCardTexts = myCards.filter((c) => lastTournamentUsedHandCardIds.has(c.id)).map((c) => c.text)
 
     return {
       userId: user.id,
@@ -127,17 +142,27 @@ export async function POST(request: Request) {
       lastTournamentNumber,
       cardTexts,
       usedCardTexts,
+      lastUsedCardTexts,
     }
   })
 
-  // Claude で一括生成
-  const generated = await generateAllComments(userInputs)
+  // 最新大会の順位データを計算
+  const lastTournamentStandings = buildStandings(
+    users,
+    submissions,
+    votes,
+    mashResults,
+    lastTournamentValidGameIds,
+  )
+
+  // Claude で一括生成（ユーザー総評 + 大会総評）
+  const generated = await generateAllComments(userInputs, tournamentCount, lastTournamentStandings)
   if (!generated) {
     return NextResponse.json({ error: 'Claude API エラー' }, { status: 500 })
   }
 
-  // DB 保存（upsert）
-  for (const item of generated) {
+  // ユーザー総評DB保存（upsert）
+  for (const item of generated.users) {
     await supabaseAdmin.from('user_ai_comments').upsert(
       {
         user_id: item.userId,
@@ -153,7 +178,15 @@ export async function POST(request: Request) {
     )
   }
 
-  return NextResponse.json({ success: true, generated: generated.length })
+  // 大会総評DB保存
+  if (generated.tournamentComment) {
+    await supabaseAdmin
+      .from('tournaments')
+      .update({ ai_comment: generated.tournamentComment })
+      .eq('id', lastTournamentId)
+  }
+
+  return NextResponse.json({ success: true, generated: generated.users.length })
 }
 
 // ---- helpers ----
@@ -300,6 +333,79 @@ function computeStats(
   }
 }
 
+function buildStandings(
+  users: { id: string; name: string }[],
+  submissions: { id: string; user_id: string; hand_card_id: string; game_id: string; preamble: string | null }[],
+  votes: { voter_user_id: string; submission_id: string; game_id: string; is_tiebreaker: boolean }[],
+  mashResults: { game_id: string; user_id: string; tap_count: number; mash_round: number }[],
+  validGameIds: Set<string>,
+): TournamentStanding[] {
+  const initialVotes = votes.filter((v) => !v.is_tiebreaker && validGameIds.has(v.game_id))
+  const voteCountBySub: Record<string, number> = {}
+  for (const v of initialVotes) {
+    voteCountBySub[v.submission_id] = (voteCountBySub[v.submission_id] ?? 0) + 1
+  }
+
+  const subsByGame: Record<string, { id: string; userId: string }[]> = {}
+  for (const s of submissions) {
+    if (!validGameIds.has(s.game_id)) continue
+    if (!subsByGame[s.game_id]) subsByGame[s.game_id] = []
+    subsByGame[s.game_id].push({ id: s.id, userId: s.user_id })
+  }
+
+  const winnersByGame: Record<string, string[]> = {}
+  for (const [gameId, subs] of Object.entries(subsByGame)) {
+    const gameMash = mashResults.filter((r) => r.game_id === gameId)
+    if (gameMash.length >= 2) {
+      const maxRound = Math.max(...gameMash.map((r) => r.mash_round))
+      const latest = gameMash.filter((r) => r.mash_round === maxRound)
+      const maxTaps = Math.max(...latest.map((r) => r.tap_count))
+      const winner = latest.find((r) => r.tap_count === maxTaps)
+      if (winner) { const ws = subs.find((s) => s.userId === winner.user_id); if (ws) winnersByGame[gameId] = [ws.id] }
+      continue
+    }
+    const tbVotes = votes.filter((v) => v.game_id === gameId && v.is_tiebreaker)
+    if (tbVotes.length > 0) {
+      const tbCount: Record<string, number> = {}
+      for (const v of tbVotes) tbCount[v.submission_id] = (tbCount[v.submission_id] ?? 0) + 1
+      const maxTb = Math.max(...Object.values(tbCount))
+      const w = Object.entries(tbCount).find(([, c]) => c === maxTb)
+      if (w) winnersByGame[gameId] = [w[0]]
+      continue
+    }
+    let maxV = 0
+    for (const s of subs) { const c = voteCountBySub[s.id] ?? 0; if (c > maxV) maxV = c }
+    if (maxV > 0) winnersByGame[gameId] = subs.filter((s) => (voteCountBySub[s.id] ?? 0) === maxV).map((s) => s.id)
+  }
+
+  const scoreMap: Record<string, { wins: number; totalVotes: number; mvpCount: number }> = {}
+  for (const user of users) scoreMap[user.id] = { wins: 0, totalVotes: 0, mvpCount: 0 }
+
+  for (const s of submissions) {
+    if (!validGameIds.has(s.game_id)) continue
+    const uid = s.user_id
+    if (!scoreMap[uid]) continue
+    scoreMap[uid].totalVotes += voteCountBySub[s.id] ?? 0
+    const winners = winnersByGame[s.game_id] ?? []
+    if (winners.includes(s.id)) {
+      scoreMap[uid].wins += winners.length === 1 ? 1 : 0
+      scoreMap[uid].mvpCount += 1
+    }
+  }
+
+  const sorted = users
+    .map((u) => ({ ...u, ...scoreMap[u.id] }))
+    .sort((a, b) => b.wins - a.wins || b.totalVotes - a.totalVotes)
+
+  return sorted.map((u, i) => ({
+    userName: u.name,
+    rank: i + 1,
+    wins: u.wins,
+    totalVotes: u.totalVotes,
+    mvpCount: u.mvpCount,
+  }))
+}
+
 function formatStats(s: CompactStats): string {
   const fmt = (n: number) => n.toFixed(3).replace(/^0/, '')
   return [
@@ -316,7 +422,9 @@ function formatStats(s: CompactStats): string {
 
 async function generateAllComments(
   users: UserCommentInput[],
-): Promise<{ userId: string; overallComment: string; lastComment: string; cardAnalysisComment: string; nickname: string }[] | null> {
+  tournamentNumber: number,
+  standings: TournamentStanding[],
+): Promise<{ users: { userId: string; overallComment: string; lastComment: string; cardAnalysisComment: string; nickname: string }[]; tournamentComment: string } | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
     console.error('ANTHROPIC_API_KEY が設定されていません')
@@ -335,6 +443,16 @@ async function generateAllComments(
       return `${overallLine}\n${lastLine}\n${cardLine}`
     })
     .join('\n\n')
+
+  const standingsText = standings.map((s) =>
+    `${s.rank}位: ${s.userName}（MVP${s.wins}回・総得票${s.totalVotes}票）`
+  ).join('、')
+
+  // 大会総評用: その大会で使われた手札テキストのみ（ユーザー別）
+  const lastTournamentUsedCardsByUser = users.map((u) => {
+    const texts = u.lastUsedCardTexts.length > 0 ? `「${u.lastUsedCardTexts.join('」「')}」` : 'なし'
+    return `${u.userName}: ${texts}`
+  }).join(' / ')
 
   const prompt = `あなたは「おもじゃん」というワードバトルゲームの毒舌解説者「バッサリ先生」です。
 
@@ -357,6 +475,18 @@ async function generateAllComments(
 - 日本語のみ
 - card_analysis_commentは「使用済み札」に言及しつつ、全札の傾向・言葉選びのクセからその人の内面・趣味嗜好・センスを深読みして毒舌で語る。使用されていない札には言及しない
 - nicknameは成績と人物像を総合したユニークで笑える称号。バラエティ豊かに（例：「孤高の変人センサー保持者」「自己プロデュース力ゼロの天才」「下ネタで世界を救う男」「誰よりも真面目に滑る人」など）。20文字以内
+
+【大会総評（tournament_comment）について】
+第${tournamentNumber}回大会の結果を、スポーツ新聞の記者のように報じてください。
+キャラクター：ビジネスライクで格調ある文体を基本とするが、要所でツッコミやイジりが入り、思わず笑えるスポーツ新聞風記事。
+- 見出しのような書き出しから始める（例：「激闘の末、〇〇が頂点へ！」など）
+- 順位・結果に加えて、大会中に使われた作品・札の内容にも触れる
+- 面白かった作品や印象的な札の組み合わせをピックアップして具体的に言及する
+- 300文字をフルに使うこと
+
+大会順位: ${standingsText}
+各プレイヤーがこの大会で使用した手札: ${lastTournamentUsedCardsByUser}
+
 - JSONのみ返す（説明不要）
 
 成績データ・作成した札：
@@ -364,6 +494,7 @@ ${playerSection}
 
 以下のJSON形式で返してください：
 {
+  "tournament_comment": "...",
   "users": [
     {
       "user_id": "ここにuuid",
@@ -408,16 +539,20 @@ user_idはそれぞれ: ${users.map((u) => `${u.userName}=${u.userId}`).join(', 
     }
 
     const parsed = JSON.parse(match[0]) as {
+      tournament_comment: string
       users: { user_id: string; overall_comment: string; last_comment: string; card_analysis_comment: string; nickname: string }[]
     }
 
-    return parsed.users.map((u) => ({
-      userId: u.user_id,
-      overallComment: u.overall_comment ?? '',
-      lastComment: u.last_comment ?? '',
-      cardAnalysisComment: u.card_analysis_comment ?? '',
-      nickname: u.nickname ?? '',
-    }))
+    return {
+      tournamentComment: parsed.tournament_comment ?? '',
+      users: parsed.users.map((u) => ({
+        userId: u.user_id,
+        overallComment: u.overall_comment ?? '',
+        lastComment: u.last_comment ?? '',
+        cardAnalysisComment: u.card_analysis_comment ?? '',
+        nickname: u.nickname ?? '',
+      })),
+    }
   } catch (e) {
     console.error('generateAllComments エラー:', e)
     return null

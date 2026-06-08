@@ -24,6 +24,7 @@ export type Database = {
           random_voting: boolean
           tiebreaker_mode: TiebreakerMode
           status: TournamentStatus
+          ai_comment: string | null
           created_at: string
         }
         Insert: {
@@ -60,6 +61,7 @@ export type Database = {
           random_voting?: boolean
           tiebreaker_mode?: TiebreakerMode
           status?: TournamentStatus
+          ai_comment?: string | null
           created_at?: string
         }
         Relationships: []

@@ -46,6 +46,7 @@ export default function TournamentFinished({ tournamentId, participants }: Props
   const [finalWinnerName, setFinalWinnerName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'result' | 'archive'>('result')
+  const [aiComment, setAiComment] = useState<string | null>(null)
 
   useEffect(() => {
     async function fetchData() {
@@ -299,6 +300,15 @@ export default function TournamentFinished({ tournamentId, participants }: Props
 
       setScores(sorted)
       setRounds(roundSummaries)
+
+      // 大会AI総評を取得
+      const { data: tournamentData } = await supabase
+        .from('tournaments')
+        .select('ai_comment')
+        .eq('id', tournamentId)
+        .maybeSingle()
+      setAiComment(tournamentData?.ai_comment ?? null)
+
       setLoading(false)
     }
 
@@ -377,6 +387,14 @@ export default function TournamentFinished({ tournamentId, participants }: Props
           {mvp.isTied && (
             <p className="text-xs text-yellow-500 mt-1">（同点）</p>
           )}
+        </div>
+      )}
+
+      {/* 大会AI総評 */}
+      {aiComment && (
+        <div className="bg-gradient-to-br from-slate-50 to-blue-50 border border-slate-200 rounded-2xl p-4">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">📰 大会総評</p>
+          <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{aiComment}</p>
         </div>
       )}
 
