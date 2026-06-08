@@ -352,15 +352,19 @@ export async function POST(
 
       // ソロモード：ラウンド数に応じてフローを切り替えてテスト
       // 再戦ゲーム or 1,4,7...回戦 → 通常結果
-      // 2,5,8...回戦 → 決選投票
+      // 2,5,8...回戦 → 決選投票 or 連打ゲーム（tiebreaker_modeに依存）
       // 3,6,9...回戦 → 流局
       if (tournament.mode === 'solo') {
-        const soloStatus =
-          currentGame.is_rematch || currentGame.round_number % 3 === 1
-            ? ('showing_result' as const)
-            : currentGame.round_number % 3 === 2
-              ? ('waiting_tiebreaker_vote' as const)
-              : ('showing_rematch' as const)
+        let soloStatus: 'showing_result' | 'waiting_tiebreaker_vote' | 'waiting_button_mash' | 'showing_rematch'
+        if (currentGame.is_rematch || currentGame.round_number % 3 === 1) {
+          soloStatus = 'showing_result'
+        } else if (currentGame.round_number % 3 === 2) {
+          soloStatus = tournament.tiebreaker_mode === 'button_mash'
+            ? 'waiting_button_mash'
+            : 'waiting_tiebreaker_vote'
+        } else {
+          soloStatus = 'showing_rematch'
+        }
         const { error: soloUpdateError } = await supabase
           .from('games')
           .update({ status: soloStatus })

@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import UserIcon from './UserIcon'
 import Archive from './Archive'
-import PersonalStats from './PersonalStats'
 
 interface User {
   id: string
@@ -45,7 +44,7 @@ export default function TournamentFinished({ tournamentId, participants }: Props
   const [scores, setScores] = useState<PlayerScore[]>([])
   const [rounds, setRounds] = useState<RoundSummary[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'result' | 'stats' | 'archive'>('result')
+  const [activeTab, setActiveTab] = useState<'result' | 'archive'>('result')
 
   useEffect(() => {
     async function fetchData() {
@@ -274,7 +273,6 @@ export default function TournamentFinished({ tournamentId, participants }: Props
     <div className="flex border-b border-gray-200 bg-white sticky top-[77px] z-10">
       {([
         { key: 'result', label: '大会結果' },
-        { key: 'stats', label: '個人成績' },
         { key: 'archive', label: '過去結果' },
       ] as const).map((tab) => (
         <button
@@ -291,8 +289,6 @@ export default function TournamentFinished({ tournamentId, participants }: Props
 
     {activeTab === 'archive' ? (
       <Archive tournamentId={tournamentId} participants={participants} />
-    ) : activeTab === 'stats' ? (
-      <PersonalStats />
     ) : (
     <div className="p-4 space-y-4 pb-10">
       {/* 大会終了ヘッダー */}

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import UserIcon from '@/components/UserIcon'
+import PersonalStats from '@/components/PersonalStats'
 
 interface User {
   id: string
@@ -57,6 +58,7 @@ export default function SummaryPage() {
   const [overallStandings, setOverallStandings] = useState<OverallStanding[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'summary' | 'stats'>('summary')
 
   useEffect(() => {
     fetchAll()
@@ -264,9 +266,27 @@ export default function SummaryPage() {
           <p className="text-[10px] text-gray-400">おもじゃん for 男根祭</p>
           <p className="text-base font-bold text-gray-800">全大会サマリ</p>
         </div>
+        <div className="flex border-t border-gray-100 max-w-md mx-auto">
+          {([
+            { key: 'summary', label: '総合結果' },
+            { key: 'stats', label: '個人成績' },
+          ] as const).map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+                activeTab === tab.key ? 'text-emerald-500 border-b-2 border-emerald-500' : 'text-gray-400'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </header>
 
-      <div className="max-w-md mx-auto p-4 space-y-4 pb-10">
+      {activeTab === 'stats' && <PersonalStats />}
+
+      {activeTab === 'summary' && <div className="max-w-md mx-auto p-4 space-y-4 pb-10">
         {tournaments.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-4xl mb-3">🎴</p>
@@ -459,10 +479,10 @@ export default function SummaryPage() {
             </div>
           </>
         )}
-      </div>
+      </div>}
 
       <footer className="text-center py-4">
-        <p className="text-xs text-gray-300">v1.27.4</p>
+        <p className="text-xs text-gray-300">v1.30.0</p>
       </footer>
     </div>
   )
