@@ -52,7 +52,7 @@ export default function ButtonMash({
 
   const getName = (id: string) => participants.find((p) => p.id === id)?.name ?? '???'
 
-  // 初回投票で同票の2作品の作者IDを取得
+  // 初回投票で同票の2作品の作者IDを取得（投票なし=ソロモード時は自分を参加者とする）
   useEffect(() => {
     supabase
       .from('votes')
@@ -66,13 +66,17 @@ export default function ButtonMash({
         }
         const max = Math.max(...Object.values(count), 0)
         const tiedIds = Object.entries(count).filter(([, c]) => c === max).map(([id]) => id)
+        if (tiedIds.length === 0) {
+          setTiebreakerUserIds([currentUserId])
+          return
+        }
         const { data: subs } = await supabase
           .from('submissions')
           .select('user_id')
           .in('id', tiedIds)
         setTiebreakerUserIds((subs ?? []).map((s) => s.user_id))
       })
-  }, [game.id])
+  }, [game.id, currentUserId])
 
   const isContestant = tiebreakerUserIds.includes(currentUserId)
   const opponentId = tiebreakerUserIds.find((id) => id !== currentUserId) ?? null
