@@ -133,19 +133,28 @@ function RankingRow({ label, tooltipKey, stats, getValue, formatValue, colorClas
   )
 }
 
+interface AiComment {
+  user_id: string
+  overall_comment: string | null
+  last_tournament_comment: string | null
+}
+
 export default function PersonalStats() {
   const [stats, setStats] = useState<UserStats[]>([])
+  const [aiComments, setAiComments] = useState<AiComment[]>([])
   const [loading, setLoading] = useState(true)
   const [openUserId, setOpenUserId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'individual' | 'ranking'>('ranking')
 
   useEffect(() => {
-    fetch('/api/analytics')
-      .then((r) => r.json())
-      .then((d) => {
-        setStats(d.stats ?? [])
-        setLoading(false)
-      })
+    Promise.all([
+      fetch('/api/analytics').then((r) => r.json()),
+      fetch('/api/ai/generate-comments').then((r) => r.json()),
+    ]).then(([analytics, aiData]) => {
+      setStats(analytics.stats ?? [])
+      setAiComments(aiData.comments ?? [])
+      setLoading(false)
+    })
   }, [])
 
   if (loading) {
@@ -321,6 +330,7 @@ export default function PersonalStats() {
           {stats.map((s) => {
             const isOpen = openUserId === s.userId
             const mvpRank = getRank(stats, s.userId, (x) => x.mvpCount)
+            const aiComment = aiComments.find((c) => c.user_id === s.userId)
             return (
               <div key={s.userId} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 <button
@@ -340,6 +350,25 @@ export default function PersonalStats() {
 
                 {isOpen && (
                   <div className="border-t border-gray-100 px-4 py-3 space-y-3">
+                    {/* AI総評 */}
+                    {aiComment && (aiComment.overall_comment || aiComment.last_tournament_comment) && (
+                      <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-3 space-y-2">
+                        <p className="text-[10px] font-bold text-purple-400 uppercase tracking-wide">🤖 AI総評</p>
+                        {aiComment.overall_comment && (
+                          <div>
+                            <p className="text-[10px] text-purple-400 mb-0.5">通算</p>
+                            <p className="text-xs text-gray-700 leading-relaxed">{aiComment.overall_comment}</p>
+                          </div>
+                        )}
+                        {aiComment.last_tournament_comment && (
+                          <div>
+                            <p className="text-[10px] text-purple-400 mb-0.5">前回大会</p>
+                            <p className="text-xs text-gray-700 leading-relaxed">{aiComment.last_tournament_comment}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* MVP */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">

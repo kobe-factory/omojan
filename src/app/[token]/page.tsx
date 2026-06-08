@@ -592,7 +592,13 @@ export default function TournamentPage() {
                     body: JSON.stringify({ confirm_result: true }),
                   })
                   const data = await res.json()
-                  if (data.advanced) await fetchState()
+                  if (data.advanced) {
+                    await fetchState()
+                    // 大会終了時にAI総評を非同期生成（ブロックしない）
+                    if (data.newStatus === 'finished' || data.newStatus === 'final_tiebreaker') {
+                      fetch('/api/ai/generate-comments', { method: 'POST' }).catch(() => {})
+                    }
+                  }
                 }}
               />
             )}
@@ -620,8 +626,14 @@ export default function TournamentPage() {
                   body: JSON.stringify({ triggering_user_id: userId }),
                 })
                 const data = await res.json()
-                if (data.advanced) await fetchState()
-                else await fetchState()
+                if (data.advanced) {
+                  await fetchState()
+                  if (data.newStatus === 'finished') {
+                    fetch('/api/ai/generate-comments', { method: 'POST' }).catch(() => {})
+                  }
+                } else {
+                  await fetchState()
+                }
               }}
             />
           ) : (
@@ -644,7 +656,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.33.0</p>
+        <p className="text-xs text-gray-300">v1.34.0</p>
       </footer>
 
       {/* 前戦結果モーダル（まだ結果を確認していないユーザー向け） */}

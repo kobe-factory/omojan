@@ -263,6 +263,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_ai_comments: {
+        Row: {
+          id: string
+          user_id: string
+          overall_comment: string | null
+          last_tournament_comment: string | null
+          last_tournament_id: string | null
+          tournament_count: number
+          generated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          overall_comment?: string | null
+          last_tournament_comment?: string | null
+          last_tournament_id?: string | null
+          tournament_count: number
+          generated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          overall_comment?: string | null
+          last_tournament_comment?: string | null
+          last_tournament_id?: string | null
+          tournament_count?: number
+          generated_at?: string
+        }
+        Relationships: []
+      }
       button_mash_results: {
         Row: {
           id: string

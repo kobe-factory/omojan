@@ -66,6 +66,8 @@ export default function AdminPage() {
   const [activeProductionTournament, setActiveProductionTournament] = useState<TournamentRow | null>(null)
   const [notifying, setNotifying] = useState(false)
   const [notified, setNotified] = useState(false)
+  const [generatingComments, setGeneratingComments] = useState(false)
+  const [commentGenResult, setCommentGenResult] = useState<string | null>(null)
 
   const productionPreset = GAME_PRESETS.find((p) => p.mode === 'production')!
   const [prodGameCount, setProdGameCount] = useState(String(productionPreset.game_count))
@@ -722,7 +724,36 @@ export default function AdminPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.33.0</p>
+        {/* AI総評 手動生成 */}
+        <div className="bg-white rounded-2xl shadow-sm p-5 mt-4">
+          <h2 className="text-sm font-bold text-gray-700 mb-3">🤖 AI個人総評</h2>
+          <p className="text-xs text-gray-400 mb-3">
+            大会終了時に自動生成されますが、手動でも実行できます。<br />
+            新しい大会が終了済みの場合のみ再生成されます。
+          </p>
+          <button
+            onClick={async () => {
+              setGeneratingComments(true)
+              setCommentGenResult(null)
+              const res = await fetch('/api/ai/generate-comments', { method: 'POST' })
+              const data = await res.json()
+              if (data.upToDate) setCommentGenResult('✅ 既に最新の総評です')
+              else if (data.success) setCommentGenResult(`✅ ${data.generated}名分の総評を生成しました`)
+              else if (data.message) setCommentGenResult(`ℹ️ ${data.message}`)
+              else setCommentGenResult('❌ 生成に失敗しました')
+              setGeneratingComments(false)
+            }}
+            disabled={generatingComments}
+            className="w-full py-2.5 bg-purple-500 text-white font-bold rounded-xl text-sm disabled:opacity-50"
+          >
+            {generatingComments ? '生成中...' : '🤖 AI総評を生成する'}
+          </button>
+          {commentGenResult && (
+            <p className="text-xs text-gray-500 mt-2 text-center">{commentGenResult}</p>
+          )}
+        </div>
+
+        <p className="text-center text-xs text-gray-300 mt-8">v1.34.0</p>
       </div>
     </div>
   )
