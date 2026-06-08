@@ -56,22 +56,26 @@ export async function GET() {
     return NextResponse.json({ stats: users.map((u) => ({ userId: u.id, userName: u.name, cardUsageRate: 0, cardsCreated: 0, cardsUsed: 0, singles: 0, doubles: 0, triples: 0, homeRuns: 0, totalHits: 0, mvpCount: 0, avgVotesPerGame: 0, totalVotesReceived: 0, gamesParticipated: 0, buttonMashWins: 0, buttonMashGames: 0, buttonMashWinRate: 0, bestTapCount: 0, avgTapCount: 0, totalTapSessions: 0, mvpWinRate: 0, shutoutCount: 0, shutoutRate: 0, homeRunRate: 0, preambleCount: 0, preambleUsageRate: 0, maxVotesInGame: 0 })) })
   }
 
-  // 本番大会の全ゲームIDを取得（status問わず。summary pageと同じ集計範囲にする）
+  // 本番大会の全ゲームIDを取得（tournament_id付きで取得し、大会ごとに流局除外判定する）
   const { data: prodGames } = await supabase
     .from('games')
-    .select('id, is_rematch, round_number')
+    .select('id, tournament_id, is_rematch, round_number')
     .in('tournament_id', prodTournamentIds)
   const prodGameIds = (prodGames ?? []).map((g) => g.id)
 
-  // 流局で再戦になった回戦のround_numberを特定して流局ゲームを除外（summaryと同ロジック）
-  const rematchRoundNumbers = new Set(
-    (prodGames ?? []).filter((g) => g.is_rematch).map((g) => g.round_number),
-  )
-  const validGameIds = new Set(
-    (prodGames ?? [])
-      .filter((g) => !(g.is_rematch === false && rematchRoundNumbers.has(g.round_number)))
-      .map((g) => g.id),
-  )
+  // 流局ゲームを大会ごとに除外（summaryと同ロジック。グローバルに判定すると別大会の同回戦が巻き込まれる）
+  const validGameIds = new Set<string>()
+  for (const tId of prodTournamentIds) {
+    const tourneyGames = (prodGames ?? []).filter((g) => g.tournament_id === tId)
+    const rematchRounds = new Set(
+      tourneyGames.filter((g) => g.is_rematch).map((g) => g.round_number)
+    )
+    for (const g of tourneyGames) {
+      if (!(g.is_rematch === false && rematchRounds.has(g.round_number))) {
+        validGameIds.add(g.id)
+      }
+    }
+  }
 
   // 本番大会のデータのみ一括取得
   const [
