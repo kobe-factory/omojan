@@ -52,6 +52,59 @@ const MODE_LABEL: Record<string, string> = {
   production: '本番',
 }
 
+function ForceRegenSection({
+  disabled,
+  onResult,
+  onLoading,
+}: {
+  disabled: boolean
+  onResult: (msg: string) => void
+  onLoading: (v: boolean) => void
+}) {
+  const [show, setShow] = useState(false)
+
+  if (!show) {
+    return (
+      <button
+        onClick={() => setShow(true)}
+        className="mt-3 w-full text-[10px] text-gray-300 hover:text-gray-400"
+      >
+        強制再生成
+      </button>
+    )
+  }
+
+  return (
+    <div className="mt-3 border-t border-gray-100 pt-3 space-y-2">
+      <p className="text-[10px] text-gray-400 text-center">APIコストが発生します。本当に再生成しますか？</p>
+      <div className="flex gap-2">
+        <button
+          onClick={() => setShow(false)}
+          className="flex-1 py-2 bg-gray-100 text-gray-500 font-bold rounded-xl text-xs"
+        >
+          キャンセル
+        </button>
+        <button
+          onClick={async () => {
+            onLoading(true)
+            onResult('')
+            const res = await fetch('/api/ai/generate-comments?force=true', { method: 'POST' })
+            const data = await res.json()
+            if (data.success) onResult(`✅ ${data.generated}名分の総評を強制再生成しました`)
+            else onResult('❌ 生成に失敗しました')
+            onLoading(false)
+            setShow(false)
+          }}
+          disabled={disabled}
+          className="flex-1 py-2 bg-red-500 text-white font-bold rounded-xl text-xs disabled:opacity-50"
+        >
+          強制再生成する
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function AdminPage() {
   const [selectedPreset, setSelectedPreset] = useState<GamePreset>(DEFAULT_PRESET)
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null)
@@ -751,9 +804,10 @@ export default function AdminPage() {
           {commentGenResult && (
             <p className="text-xs text-gray-500 mt-2 text-center">{commentGenResult}</p>
           )}
+          <ForceRegenSection disabled={generatingComments} onResult={setCommentGenResult} onLoading={setGeneratingComments} />
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.35.1</p>
+        <p className="text-center text-xs text-gray-300 mt-8">v1.35.2</p>
       </div>
     </div>
   )

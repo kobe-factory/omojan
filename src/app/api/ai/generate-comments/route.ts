@@ -34,8 +34,11 @@ export async function GET() {
   return NextResponse.json({ comments: data ?? [] })
 }
 
-// POST: 未生成 or 新大会追加時のみ生成
-export async function POST() {
+// POST: 未生成 or 新大会追加時のみ生成（force=trueで強制再生成）
+export async function POST(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const force = searchParams.get('force') === 'true'
+
   const { data: finishedTournaments } = await supabase
     .from('tournaments')
     .select('id, created_at')
@@ -48,15 +51,17 @@ export async function POST() {
     return NextResponse.json({ message: '終了済み大会なし', generated: false })
   }
 
-  // 最新コメントが現在の大会数と一致していればスキップ
-  const { data: existingAny } = await supabase
-    .from('user_ai_comments')
-    .select('tournament_count')
-    .limit(1)
-    .maybeSingle()
+  // 最新コメントが現在の大会数と一致していればスキップ（強制時は除く）
+  if (!force) {
+    const { data: existingAny } = await supabase
+      .from('user_ai_comments')
+      .select('tournament_count')
+      .limit(1)
+      .maybeSingle()
 
-  if (existingAny && existingAny.tournament_count === tournamentCount) {
-    return NextResponse.json({ message: '最新コメント済み', generated: false, upToDate: true })
+    if (existingAny && existingAny.tournament_count === tournamentCount) {
+      return NextResponse.json({ message: '最新コメント済み', generated: false, upToDate: true })
+    }
   }
 
   const { data: users } = await supabase.from('users').select('id, name')
