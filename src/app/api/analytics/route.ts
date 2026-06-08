@@ -28,6 +28,14 @@ export interface UserStats {
   bestTapCount: number     // 最高連打数（1セッション）
   avgTapCount: number      // 平均連打数
   totalTapSessions: number // 出場セッション数
+  // 追加指標
+  mvpWinRate: number       // MVP勝率 = mvpCount / gamesParticipated
+  shutoutCount: number     // 完封（0票）回数
+  shutoutRate: number      // 完封率
+  homeRunRate: number      // ホームラン率 = homeRuns / gamesParticipated
+  preambleCount: number    // 前口上使用回数
+  preambleUsageRate: number // 前口上使用率
+  maxVotesInGame: number   // 1ゲームでの最高得票数
 }
 
 export async function GET() {
@@ -44,7 +52,7 @@ export async function GET() {
     .eq('mode', 'production')
   const prodTournamentIds = (prodTournaments ?? []).map((t) => t.id)
   if (prodTournamentIds.length === 0) {
-    return NextResponse.json({ stats: users.map((u) => ({ userId: u.id, userName: u.name, cardUsageRate: 0, cardsCreated: 0, cardsUsed: 0, singles: 0, doubles: 0, triples: 0, homeRuns: 0, totalHits: 0, mvpCount: 0, avgVotesPerGame: 0, totalVotesReceived: 0, gamesParticipated: 0, buttonMashWins: 0, buttonMashGames: 0, buttonMashWinRate: 0, bestTapCount: 0, avgTapCount: 0, totalTapSessions: 0 })) })
+    return NextResponse.json({ stats: users.map((u) => ({ userId: u.id, userName: u.name, cardUsageRate: 0, cardsCreated: 0, cardsUsed: 0, singles: 0, doubles: 0, triples: 0, homeRuns: 0, totalHits: 0, mvpCount: 0, avgVotesPerGame: 0, totalVotesReceived: 0, gamesParticipated: 0, buttonMashWins: 0, buttonMashGames: 0, buttonMashWinRate: 0, bestTapCount: 0, avgTapCount: 0, totalTapSessions: 0, mvpWinRate: 0, shutoutCount: 0, shutoutRate: 0, homeRunRate: 0, preambleCount: 0, preambleUsageRate: 0, maxVotesInGame: 0 })) })
   }
 
   // 本番大会の全ゲームIDを取得（status問わず。summary pageと同じ集計範囲にする）
@@ -72,7 +80,7 @@ export async function GET() {
     { data: allMashResults },
   ] = await Promise.all([
     supabase.from('cards').select('id, creator_user_id, tournament_id').in('tournament_id', prodTournamentIds),
-    prodGameIds.length > 0 ? supabase.from('submissions').select('id, user_id, hand_card_id, game_id').in('game_id', prodGameIds) : Promise.resolve({ data: [] }),
+    prodGameIds.length > 0 ? supabase.from('submissions').select('id, user_id, hand_card_id, game_id, preamble').in('game_id', prodGameIds) : Promise.resolve({ data: [] }),
     prodGameIds.length > 0 ? supabase.from('votes').select('voter_user_id, submission_id, game_id, is_tiebreaker').in('game_id', prodGameIds) : Promise.resolve({ data: [] }),
     prodGameIds.length > 0 ? supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round').in('game_id', prodGameIds) : Promise.resolve({ data: [] }),
   ])
@@ -88,6 +96,8 @@ export async function GET() {
   for (const v of initialVotes) {
     voteCountBySubmission[v.submission_id] = (voteCountBySubmission[v.submission_id] ?? 0) + 1
   }
+  // 投票が行われたゲームのSet（完封判定用）
+  const gamesWithVotes = new Set(initialVotes.map((v) => v.game_id))
 
   // ゲーム別の勝者submissionId（複数可：決戦なし同票は全員1位）
   const winnersByGame: Record<string, string[]> = {}
@@ -204,6 +214,25 @@ export async function GET() {
       ? Math.round(myTapRecords.reduce((sum, r) => sum + r.tap_count, 0) / totalTapSessions)
       : 0
 
+    // 追加指標
+    const mvpWinRate = gamesParticipated > 0 ? mvpCount / gamesParticipated : 0
+
+    const shutoutCount = mySubmissions.filter(
+      (s) => validGameIds.has(s.game_id) && gamesWithVotes.has(s.game_id) && (voteCountBySubmission[s.id] ?? 0) === 0
+    ).length
+    const shutoutRate = gamesParticipated > 0 ? shutoutCount / gamesParticipated : 0
+
+    const homeRunRate = gamesParticipated > 0 ? homeRuns / gamesParticipated : 0
+
+    const preambleCount = mySubmissions.filter(
+      (s) => validGameIds.has(s.game_id) && s.preamble && (s.preamble as string).trim().length > 0
+    ).length
+    const preambleUsageRate = gamesParticipated > 0 ? preambleCount / gamesParticipated : 0
+
+    const maxVotesInGame = mySubmissions
+      .filter((s) => validGameIds.has(s.game_id))
+      .reduce((max, sub) => Math.max(max, voteCountBySubmission[sub.id] ?? 0), 0)
+
     return {
       userId: user.id,
       userName: user.name,
@@ -225,6 +254,13 @@ export async function GET() {
       bestTapCount,
       avgTapCount,
       totalTapSessions,
+      mvpWinRate,
+      shutoutCount,
+      shutoutRate,
+      homeRunRate,
+      preambleCount,
+      preambleUsageRate,
+      maxVotesInGame,
     }
   })
 

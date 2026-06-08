@@ -77,6 +77,12 @@ const TOOLTIPS: Record<string, string> = {
   '2B（ダブル）': '2票を獲得した作品の数です。半数以上に評価されたことを意味します（5人中2票）。',
   '3B（トリプル）': '3票以上を獲得した作品の数です。かなりの高評価！',
   'HR（ホームラン）': '4票以上を獲得した作品の数です。ほぼ全員が認めた神作品！',
+  'MVP勝率': '出場した回戦数のうちMVPを取った割合です。コンスタントに勝てるかの安定感指標です。野球の打率と同じ形式（.xxx）で表示されます。',
+  'ホームラン率': '出場した回戦数のうち4票以上を獲得した割合です。大きな一発をどれだけ打てるかの指標です。',
+  '完封数': '投票が行われた回戦で、1票も入らなかった回数です。少ないほど良い！（笑）',
+  '完封率': '投票が行われた回戦のうち、0票だった回の割合です。完封王は不名誉な称号…',
+  '前口上使用率': '作品投稿時に前口上（コメント）を入力した回の割合です。前口上でどれだけ場を盛り上げているかの指標です。',
+  '最高得票数': '1回戦で獲得した最多票数の自己ベストです。その回戦で何票集めることができたか。',
 }
 
 interface RankingRowProps {
@@ -87,11 +93,12 @@ interface RankingRowProps {
   formatValue: (v: number) => string
   colorClass?: string
   filter?: (s: UserStats) => boolean
+  ascending?: boolean  // trueなら小さい値が上位（完封数など）
 }
 
-function RankingRow({ label, tooltipKey, stats, getValue, formatValue, colorClass = 'text-emerald-600', filter }: RankingRowProps) {
+function RankingRow({ label, tooltipKey, stats, getValue, formatValue, colorClass = 'text-emerald-600', filter, ascending }: RankingRowProps) {
   const filtered = filter ? stats.filter(filter) : stats
-  const sorted = [...filtered].sort((a, b) => getValue(b) - getValue(a))
+  const sorted = [...filtered].sort((a, b) => ascending ? getValue(a) - getValue(b) : getValue(b) - getValue(a))
   return (
     <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
       <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center">
@@ -196,6 +203,46 @@ export default function PersonalStats() {
             getValue={(s) => s.avgVotesPerGame}
             formatValue={(v) => v.toFixed(2)}
             colorClass="text-purple-600"
+          />
+          <RankingRow
+            label="MVP勝率"
+            stats={stats}
+            getValue={(s) => s.mvpWinRate}
+            formatValue={(v) => formatRate(v)}
+            colorClass="text-yellow-600"
+            filter={(s) => s.gamesParticipated > 0}
+          />
+          <RankingRow
+            label="ホームラン率"
+            stats={stats}
+            getValue={(s) => s.homeRunRate}
+            formatValue={(v) => formatRate(v)}
+            colorClass="text-red-600"
+            filter={(s) => s.gamesParticipated > 0}
+          />
+          <RankingRow
+            label="最高得票数"
+            stats={stats}
+            getValue={(s) => s.maxVotesInGame}
+            formatValue={(v) => `${v}票`}
+            colorClass="text-emerald-600"
+          />
+          <RankingRow
+            label="前口上使用率"
+            stats={stats}
+            getValue={(s) => s.preambleUsageRate}
+            formatValue={(v) => formatRate(v)}
+            colorClass="text-teal-600"
+            filter={(s) => s.gamesParticipated > 0}
+          />
+          <RankingRow
+            label="完封数"
+            stats={stats}
+            getValue={(s) => s.shutoutCount}
+            formatValue={(v) => `${v}回`}
+            colorClass="text-gray-500"
+            ascending={true}
+            filter={(s) => s.gamesParticipated > 0}
           />
           {hasMashData && (
             <>
@@ -318,6 +365,66 @@ export default function PersonalStats() {
                         <span className="text-xs text-gray-400">({rankLabel(getRank(stats, s.userId, (x) => x.avgVotesPerGame))})</span>
                       </div>
                     </div>
+
+                    {/* 追加指標 */}
+                    {s.gamesParticipated > 0 && (
+                      <div className="bg-gray-50 rounded-xl px-3 py-2.5 space-y-2">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">詳細成績</p>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <span className="text-xs text-gray-500">MVP勝率</span>
+                            <TooltipIcon title="MVP勝率" description={TOOLTIPS['MVP勝率']} />
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm font-bold text-yellow-600">{formatRate(s.mvpWinRate)}</span>
+                            <span className="text-xs text-gray-400">({s.mvpCount}/{s.gamesParticipated}戦)</span>
+                            <span className="text-xs text-gray-400">({rankLabel(getRank(stats.filter(x => x.gamesParticipated > 0), s.userId, (x) => x.mvpWinRate))})</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <span className="text-xs text-gray-500">ホームラン率</span>
+                            <TooltipIcon title="ホームラン率" description={TOOLTIPS['ホームラン率']} />
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm font-bold text-red-600">{formatRate(s.homeRunRate)}</span>
+                            <span className="text-xs text-gray-400">({s.homeRuns}/{s.gamesParticipated}戦)</span>
+                            <span className="text-xs text-gray-400">({rankLabel(getRank(stats.filter(x => x.gamesParticipated > 0), s.userId, (x) => x.homeRunRate))})</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <span className="text-xs text-gray-500">最高得票数</span>
+                            <TooltipIcon title="最高得票数" description={TOOLTIPS['最高得票数']} />
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm font-bold text-emerald-600">{s.maxVotesInGame}票</span>
+                            <span className="text-xs text-gray-400">({rankLabel(getRank(stats, s.userId, (x) => x.maxVotesInGame))})</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <span className="text-xs text-gray-500">前口上使用率</span>
+                            <TooltipIcon title="前口上使用率" description={TOOLTIPS['前口上使用率']} />
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm font-bold text-teal-600">{formatRate(s.preambleUsageRate)}</span>
+                            <span className="text-xs text-gray-400">({s.preambleCount}/{s.gamesParticipated}戦)</span>
+                            <span className="text-xs text-gray-400">({rankLabel(getRank(stats.filter(x => x.gamesParticipated > 0), s.userId, (x) => x.preambleUsageRate))})</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <span className="text-xs text-gray-500">完封数</span>
+                            <TooltipIcon title="完封数" description={TOOLTIPS['完封数']} />
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm font-bold text-gray-500">{s.shutoutCount}回</span>
+                            <span className="text-xs text-gray-400">({formatRate(s.shutoutRate)})</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* 連打ゲーム */}
                     {hasMashData && (
