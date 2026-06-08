@@ -26,6 +26,7 @@ interface UserCommentInput {
   last: CompactStats | null
   lastTournamentNumber: number | null
   cardTexts: string[]
+  usedCardTexts: string[]
 }
 
 // GET: 保存済みコメントを返す
@@ -106,14 +107,17 @@ export async function POST(request: Request) {
   const mashResults = allMashResults ?? []
   const cards = allCards ?? []
 
+  // 全ゲームで実際に使われた手札カードIDのセット
+  const usedHandCardIds = new Set(submissions.map((s) => s.hand_card_id))
+
   const userInputs: UserCommentInput[] = users.map((user) => {
     const overall = computeStats(user.id, cards, submissions, votes, mashResults, validGameIds)
     const last = gameIdsLast.length > 0
       ? computeStats(user.id, cards, submissions, votes, mashResults, lastTournamentValidGameIds)
       : null
-    const cardTexts = cards
-      .filter((c) => c.creator_user_id === user.id)
-      .map((c) => c.text)
+    const myCards = cards.filter((c) => c.creator_user_id === user.id)
+    const cardTexts = myCards.map((c) => c.text)
+    const usedCardTexts = myCards.filter((c) => usedHandCardIds.has(c.id)).map((c) => c.text)
 
     return {
       userId: user.id,
@@ -122,6 +126,7 @@ export async function POST(request: Request) {
       last,
       lastTournamentNumber,
       cardTexts,
+      usedCardTexts,
     }
   })
 
@@ -325,30 +330,33 @@ async function generateAllComments(
         ? `【${u.userName}】第${u.lastTournamentNumber}回大会: ${formatStats(u.last)}`
         : `【${u.userName}】前回大会: データなし`
       const cardLine = u.cardTexts.length > 0
-        ? `【${u.userName}】作成した札（全${u.cardTexts.length}枚）: 「${u.cardTexts.join('」「')}」`
+        ? `【${u.userName}】作成した札（全${u.cardTexts.length}枚・うちゲームで使用された${u.usedCardTexts.length}枚）:\n  全札（分析用）: 「${u.cardTexts.join('」「')}」\n  使用済み札（文章で言及する際はこちらのみ）: 「${u.usedCardTexts.join('」「')}」`
         : `【${u.userName}】作成した札: なし`
       return `${overallLine}\n${lastLine}\n${cardLine}`
     })
     .join('\n\n')
 
-  const prompt = `あなたは「おもじゃん」というワードバトルゲームの陽気な実況解説者です。
-キャラクターの特徴：
-- 基本は明るくテンション高めの標準語だが、ツッコむときや感情が高ぶるとたまに関西弁が出る（「なんでやねん！」「ちゃうちゃう！」「そこかい！」「あかんやろ😂」など）
-- 友達グループで仲間をイジるノリ。愛があるのでどんなにイジっても最後は温かい
-- テンポよく畳み掛けるようなツッコミが得意
-- 笑いのツボを押さえた絵文字を効果的に使う
+  const prompt = `あなたは「おもじゃん」というワードバトルゲームの毒舌解説者「バッサリ先生」です。
+
+【キャラクター設定】
+- 毒舌がメイン。ただし単なる悪口ではなく、鋭いツッコミとイジりで笑いに変える
+- ツッコむ瞬間にたまに関西弁が出る（「なんでやねん」「ちゃうちゃう」「そこかい」「あかん」など）。常にではなく要所でのみ
+- 本当に良いところがあれば素直に認めるが、無理に褒めない
+- 絵文字は使いすぎず、ここぞという場面で1〜2個程度
+- 数字をそのまま並べるだけはNG。数値を少し交えながら、裏にある人間性・思考パターン・行動傾向を鋭く分析する
+- 野球的な視点は使わず、心理分析・人間観察・ライフスタイル・センスの話として語る
+- 成績から「このプレイヤーはどんな人間か」を炙り出す視点を持つ
 
 以下のプレイヤーの成績データと作成した札の一覧を見て、それぞれ4種類のコメントを書いてください。
 
 ルール：
-- 各コメントは300文字（厳守）。300文字をフルに使って書くこと。短くなるのは禁止
-- イジりとツッコミ多め、要所で関西弁を交える。でも愛のある明るいトーンで
-- 絵文字を積極的に使って明るく表現する（😂🔥👑💀🎯✨🙈など）
-- 具体的な数字や札の内容に触れてリアリティを出す
-- いいところは素直に褒め、残念なところはイジって笑いに変える
+- 各コメントは300文字（厳守）。300文字をフルに使うこと。短いのは禁止
+- 数字を少し交えながら、人物像・思考・癖・センスを語る。数字の羅列だけはNG
+- 毒舌ベースのイジりツッコミ。本当に良ければ褒める
+- 絵文字は1〜2個程度に抑える
 - 日本語のみ
-- card_analysis_commentは作成した札の内容・傾向・テーマ（下ネタ率・食べ物ネタ・哲学系・語感重視など）を深掘りしてイジるコメント
-- nicknameは成績と札の傾向を総合したユニークで面白い称号。バラエティ豊かに（例：「下ネタ界の生ける伝説」「みんなに愛される完封マスター」「連打だけは誰にも負けない男」「孤独な投票で宇宙と対話する人」など）。20文字以内
+- card_analysis_commentは「使用済み札」に言及しつつ、全札の傾向・言葉選びのクセからその人の内面・趣味嗜好・センスを深読みして毒舌で語る。使用されていない札には言及しない
+- nicknameは成績と人物像を総合したユニークで笑える称号。バラエティ豊かに（例：「孤高の変人センサー保持者」「自己プロデュース力ゼロの天才」「下ネタで世界を救う男」「誰よりも真面目に滑る人」など）。20文字以内
 - JSONのみ返す（説明不要）
 
 成績データ・作成した札：

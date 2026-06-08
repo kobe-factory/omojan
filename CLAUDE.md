@@ -95,7 +95,7 @@ READMEも適宜更新してください。
 - `src/app/summary/page.tsx` のフッター `v1.x.x`
 - `CLAUDE.md` の「現在のバージョン」
 
-**現在のバージョン：v1.35.7**
+**現在のバージョン：v1.35.8**
 
 ## ローカル開発
 
@@ -116,6 +116,7 @@ READMEも適宜更新してください。
 ## プランドキュメント
 
 - [docs/PLAN.md](docs/PLAN.md) — 実装プラン（常に最新に保つこと）
+- [docs/AI_COMMENT_CHARACTER.md](docs/AI_COMMENT_CHARACTER.md) — AI総評キャラクター設定（バッサリ先生）
 
 ## システム構成
 
