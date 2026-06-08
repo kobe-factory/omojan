@@ -393,7 +393,7 @@ export default function TournamentFinished({ tournamentId, participants }: Props
       {/* 大会AI総評 */}
       {aiComment && (
         <div className="bg-gradient-to-br from-slate-50 to-blue-50 border border-slate-200 rounded-2xl p-4">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">📰 大会総評</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">📰 デスク・大河内のコメント</p>
           <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{aiComment}</p>
         </div>
       )}

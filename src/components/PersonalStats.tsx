@@ -538,7 +538,7 @@ export default function PersonalStats() {
                     {/* AI総評 */}
                     {aiComment && (aiComment.overall_comment || aiComment.last_tournament_comment || aiComment.card_analysis_comment) && (
                       <div className="bg-linear-to-br from-purple-50 to-indigo-50 rounded-xl p-3 space-y-2">
-                        <p className="text-[10px] font-bold text-purple-400 uppercase tracking-wide">🤖 AI総評</p>
+                        <p className="text-[10px] font-bold text-purple-400 uppercase tracking-wide">💅 リナちゃんの総評</p>
                         {aiComment.overall_comment && (
                           <div>
                             <p className="text-[10px] text-purple-400 mb-0.5">通算</p>
