@@ -14,9 +14,9 @@ interface PlayerScore {
   userId: string
   userName: string
   totalVotes: number
-  totalVoteTimeSum: number
   wins: number
   isTied: boolean
+  isFinalWinner: boolean
 }
 
 interface RoundSummary {
@@ -43,30 +43,68 @@ interface Props {
 export default function TournamentFinished({ tournamentId, participants }: Props) {
   const [scores, setScores] = useState<PlayerScore[]>([])
   const [rounds, setRounds] = useState<RoundSummary[]>([])
+  const [finalWinnerName, setFinalWinnerName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'result' | 'archive'>('result')
 
   useEffect(() => {
     async function fetchData() {
-      const { data: games } = await supabase
+      const { data: allGames } = await supabase
         .from('games')
         .select('id, round_number, topic_card_id, status, is_rematch, voting_mode')
         .eq('tournament_id', tournamentId)
         .order('round_number', { ascending: true })
         .order('created_at', { ascending: true })
 
-      if (!games || games.length === 0) {
+      if (!allGames || allGames.length === 0) {
         setLoading(false)
         return
       }
 
+      // round_number=0 は大会決戦ゲーム
+      const finalTiebreakerGame = allGames.find((g) => g.round_number === 0)
+      const games = allGames.filter((g) => g.round_number > 0)
+
       const gameIds = games.map((g) => g.id)
 
       const [{ data: allVotes }, { data: allSubs }, { data: allMashResults }] = await Promise.all([
-        supabase.from('votes').select('game_id, submission_id, created_at, is_tiebreaker').in('game_id', gameIds),
+        supabase.from('votes').select('game_id, submission_id, is_tiebreaker').in('game_id', gameIds),
         supabase.from('submissions').select('id, game_id, user_id, hand_card_id, position, preamble, preamble_position').in('game_id', gameIds),
         supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round').in('game_id', gameIds),
       ])
+
+      // 大会決戦の勝者を取得
+      let finalTiebreakerWinnerId: string | null = null
+      if (finalTiebreakerGame) {
+        const tiedUserIds = (finalTiebreakerGame.voting_mode ?? '')
+          .replace('final_tiebreaker:', '')
+          .split(',')
+          .filter(Boolean)
+
+        const { data: finalMashResults } = await supabase
+          .from('button_mash_results')
+          .select('user_id, tap_count, mash_round')
+          .eq('game_id', finalTiebreakerGame.id)
+          .order('mash_round', { ascending: false })
+
+        if (finalMashResults && finalMashResults.length > 0) {
+          const latestRound = Math.max(...finalMashResults.map((r) => r.mash_round))
+          const latest = finalMashResults.filter((r) => r.mash_round === latestRound)
+          const maxTaps = Math.max(...latest.map((r) => r.tap_count))
+          const winners = latest.filter((r) => r.tap_count === maxTaps)
+          if (winners.length === 1) {
+            finalTiebreakerWinnerId = winners[0].user_id
+          }
+        }
+
+        if (!finalTiebreakerWinnerId && tiedUserIds.length > 0) {
+          // 未完了の場合はnull のまま
+        }
+
+        if (finalTiebreakerWinnerId) {
+          setFinalWinnerName(participants.find((p) => p.id === finalTiebreakerWinnerId)?.name ?? null)
+        }
+      }
 
       // ゲーム別の連打結果（最終ラウンドのみ）
       const mashResults = allMashResults ?? []
@@ -98,25 +136,23 @@ export default function TournamentFinished({ tournamentId, participants }: Props
 
       // 通常投票・決選投票を分けてカウント
       const regularVoteCount: Record<string, number> = {}
-      const regularVoteTimeSum: Record<string, number> = {}
       const tiebreakerVoteCount: Record<string, number> = {}
       for (const v of allVotes ?? []) {
         if (v.is_tiebreaker) {
           tiebreakerVoteCount[v.submission_id] = (tiebreakerVoteCount[v.submission_id] ?? 0) + 1
         } else {
           regularVoteCount[v.submission_id] = (regularVoteCount[v.submission_id] ?? 0) + 1
-          regularVoteTimeSum[v.submission_id] = (regularVoteTimeSum[v.submission_id] ?? 0) + new Date(v.created_at).getTime()
         }
       }
 
-      const scoreMap: Record<string, { totalVotes: number; totalVoteTimeSum: number; wins: number }> = {}
+      const scoreMap: Record<string, { totalVotes: number; wins: number }> = {}
       for (const p of participants) {
-        scoreMap[p.id] = { totalVotes: 0, totalVoteTimeSum: 0, wins: 0 }
+        scoreMap[p.id] = { totalVotes: 0, wins: 0 }
       }
 
       const roundSummaries: RoundSummary[] = []
 
-      // 流局判定: 同じround_numberで再戦(is_rematch=true)が存在する回戦は流局
+      // 流局判定
       const rematchRounds = new Set(
         (games ?? []).filter((g) => g.is_rematch).map((g) => g.round_number)
       )
@@ -128,38 +164,29 @@ export default function TournamentFinished({ tournamentId, participants }: Props
 
         const gameSubs = (allSubs ?? []).filter((s) => s.game_id === game.id)
         let maxRegularVotes = 0
-        let winnerTimeSum = Infinity
         let winnerSub: typeof gameSubs[0] | null = null
         let hasTie = false
         let isWinByTiebreaker = false
         let isWinByButtonMash = false
 
         if (!isVoided) {
-          // 通常投票で集計（流局ゲームはスコア計算から除外）
+          // 通常投票でスコア集計（時間ベースのタイブレーカーは使用しない）
           for (const sub of gameSubs) {
             const count = regularVoteCount[sub.id] ?? 0
-            const timeSum = regularVoteTimeSum[sub.id] ?? 0
             if (scoreMap[sub.user_id]) {
               scoreMap[sub.user_id].totalVotes += count
-              scoreMap[sub.user_id].totalVoteTimeSum += timeSum
             }
             if (count > maxRegularVotes) {
               maxRegularVotes = count
               winnerSub = sub
-              winnerTimeSum = timeSum
               hasTie = false
             } else if (count === maxRegularVotes && count > 0) {
               hasTie = true
-              if (timeSum < winnerTimeSum) {
-                winnerSub = sub
-                winnerTimeSum = timeSum
-              }
             }
           }
 
           // 同票の場合は連打ゲームまたは決選投票で勝者を決定
           if (hasTie) {
-            // 連打ゲームで決まった場合
             const mashWinnerUserId = mashWinnerByGame[game.id]
             if (mashWinnerUserId) {
               const mashWinnerSub = gameSubs.find((s) => s.user_id === mashWinnerUserId)
@@ -169,7 +196,6 @@ export default function TournamentFinished({ tournamentId, participants }: Props
                 hasTie = false
               }
             } else {
-              // 決選投票で決まった場合
               let maxTbVotes = 0
               let tbWinner: typeof gameSubs[0] | null = null
               for (const sub of gameSubs) {
@@ -187,32 +213,51 @@ export default function TournamentFinished({ tournamentId, participants }: Props
             }
           }
 
-          if (winnerSub && scoreMap[winnerSub.user_id]) {
-            scoreMap[winnerSub.user_id].wins += 1
-            // 連打ゲーム勝利は+1票なし、決選投票勝利は+1票
-            if (isWinByTiebreaker) scoreMap[winnerSub.user_id].totalVotes += 1
+          if (hasTie) {
+            // 解決されなかった同票 → 全員に +1勝
+            const tiedSubs = gameSubs.filter((s) => (regularVoteCount[s.id] ?? 0) === maxRegularVotes)
+            for (const ts of tiedSubs) {
+              if (scoreMap[ts.user_id]) scoreMap[ts.user_id].wins += 1
+            }
+          } else if (winnerSub) {
+            if (scoreMap[winnerSub.user_id]) {
+              scoreMap[winnerSub.user_id].wins += 1
+              if (isWinByTiebreaker) scoreMap[winnerSub.user_id].totalVotes += 1
+            }
           }
         }
 
-        // 表示票数: 通常最多票 + 決選投票の場合+1
         const displayVotes = maxRegularVotes + (isWinByTiebreaker ? 1 : 0)
 
         const topicText = topicMap[game.topic_card_id] ?? ''
-        const handText = winnerSub ? (handMap[winnerSub.hand_card_id] ?? '') : ''
-        const winnerText = winnerSub
-          ? winnerSub.position === 'before'
+
+        let winnerText = ''
+        let winnerName = '???'
+        let winnerPreamble: string | null = null
+        let winnerPreamblePosition: 'above' | 'below' = 'above'
+
+        if (hasTie) {
+          const tiedSubs = gameSubs.filter((s) => (regularVoteCount[s.id] ?? 0) === maxRegularVotes)
+          winnerName = tiedSubs
+            .map((ts) => participants.find((p) => p.id === ts.user_id)?.name ?? '???')
+            .join('・')
+        } else if (winnerSub) {
+          const handText = handMap[winnerSub.hand_card_id] ?? ''
+          winnerText = winnerSub.position === 'before'
             ? `${handText}${topicText}`
             : `${topicText}${handText}`
-          : ''
-        const winnerUser = winnerSub ? participants.find((p) => p.id === winnerSub!.user_id) : null
+          winnerName = participants.find((p) => p.id === winnerSub!.user_id)?.name ?? '???'
+          winnerPreamble = winnerSub.preamble ?? null
+          winnerPreamblePosition = (winnerSub.preamble_position ?? 'above') as 'above' | 'below'
+        }
 
         roundSummaries.push({
           roundNumber: game.round_number,
           topicText,
-          winnerName: winnerUser?.name ?? '???',
+          winnerName,
           winnerText,
-          winnerPreamble: winnerSub?.preamble ?? null,
-          winnerPreamblePosition: (winnerSub?.preamble_position ?? 'above') as 'above' | 'below',
+          winnerPreamble,
+          winnerPreamblePosition,
           votes: displayVotes,
           isTied: hasTie,
           isWinByTiebreaker,
@@ -227,19 +272,29 @@ export default function TournamentFinished({ tournamentId, participants }: Props
         userId: p.id,
         userName: p.name,
         totalVotes: scoreMap[p.id]?.totalVotes ?? 0,
-        totalVoteTimeSum: scoreMap[p.id]?.totalVoteTimeSum ?? 0,
         wins: scoreMap[p.id]?.wins ?? 0,
         isTied: false,
+        isFinalWinner: p.id === finalTiebreakerWinnerId,
       }))
 
       const sorted = unsorted.sort((a, b) => {
+        // 大会決戦勝者を最上位に
+        if (a.isFinalWinner && !b.isFinalWinner) return -1
+        if (!a.isFinalWinner && b.isFinalWinner) return 1
         if (b.wins !== a.wins) return b.wins - a.wins
         if (b.totalVotes !== a.totalVotes) return b.totalVotes - a.totalVotes
         return 0
       })
 
       sorted.forEach((s, i) => {
-        s.isTied = sorted.some((o, j) => j !== i && o.wins === s.wins && o.totalVotes === s.totalVotes)
+        // 大会決戦があった場合、同点でも isTied=false（決戦で決着済み）
+        if (finalTiebreakerWinnerId) {
+          s.isTied = false
+        } else {
+          s.isTied = sorted.some(
+            (o, j) => j !== i && o.wins === s.wins && o.totalVotes === s.totalVotes
+          )
+        }
       })
 
       setScores(sorted)
@@ -264,7 +319,7 @@ export default function TournamentFinished({ tournamentId, participants }: Props
     if (i === 0) return [1]
     const prev = scores[i - 1]
     const prevRank = acc[i - 1]
-    if (s.wins === prev.wins && s.totalVotes === prev.totalVotes) return [...acc, prevRank]
+    if (!s.isFinalWinner && !prev.isFinalWinner && s.wins === prev.wins && s.totalVotes === prev.totalVotes) return [...acc, prevRank]
     return [...acc, i + 1]
   }, [])
 
@@ -298,10 +353,19 @@ export default function TournamentFinished({ tournamentId, participants }: Props
         <p className="text-sm text-gray-400 mt-1">お疲れ様でした</p>
       </div>
 
+      {/* 大会決戦バナー */}
+      {finalWinnerName && (
+        <div className="bg-red-50 border-2 border-red-400 rounded-2xl p-4 text-center">
+          <p className="text-xs font-bold text-red-500 mb-1">⚔️ 大会決戦</p>
+          <p className="text-sm text-gray-600">同点のため5秒間の連打決戦が行われました</p>
+          <p className="text-lg font-black text-red-600 mt-1">優勝：{finalWinnerName}</p>
+        </div>
+      )}
+
       {/* MVP */}
       {mvp && (
         <div className="bg-yellow-50 border-2 border-yellow-400 rounded-2xl p-5 text-center">
-          <p className="text-xs font-bold text-yellow-500 mb-1">👑 MVP</p>
+          <p className="text-xs font-bold text-yellow-500 mb-1">👑 {finalWinnerName ? '大会優勝' : 'MVP'}</p>
           <div className="flex items-center justify-center gap-2 mb-1">
             <UserIcon name={mvp.userName} size="lg" />
             <p className="text-2xl font-black text-gray-800">{mvp.userName}</p>
@@ -334,8 +398,11 @@ export default function TournamentFinished({ tournamentId, participants }: Props
               <div className="flex items-center gap-2 flex-1">
                 <UserIcon name={s.userName} size="xs" />
                 <span className="text-sm font-medium text-gray-800">{s.userName}</span>
+                {s.isFinalWinner && (
+                  <span className="text-[9px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full">⚔️決戦優勝</span>
+                )}
               </div>
-              {s.isTied && (
+              {s.isTied && !s.isFinalWinner && (
                 <span className="text-xs text-gray-400">同点</span>
               )}
               <span className="text-xs text-gray-400"><span className="text-base font-bold text-yellow-500">{s.wins}</span>勝</span>
@@ -346,6 +413,9 @@ export default function TournamentFinished({ tournamentId, participants }: Props
         </div>
         {scores.some((s) => s.isTied) && (
           <p className="text-xs text-gray-400 mt-3 text-center">※勝数→得票数で順位を決定</p>
+        )}
+        {finalWinnerName && (
+          <p className="text-xs text-gray-400 mt-3 text-center">※同点のため大会決戦（5秒連打）で優勝を決定</p>
         )}
       </div>
 
@@ -373,7 +443,7 @@ export default function TournamentFinished({ tournamentId, participants }: Props
                 </div>
                 <div className="flex items-center gap-2">
                   {r.isTied && (
-                    <span className="text-xs text-gray-400">（同点・投票時間で決定）</span>
+                    <span className="text-xs text-gray-400">（同点）</span>
                   )}
                   {r.isWinByTiebreaker && (
                     <span className="text-[9px] font-bold text-red-400 bg-red-50 px-1.5 py-0.5 rounded-full">決選</span>
@@ -381,22 +451,34 @@ export default function TournamentFinished({ tournamentId, participants }: Props
                   {r.isWinByButtonMash && (
                     <span className="text-[9px] font-bold text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full">⚡連打</span>
                   )}
-                  <span className="text-xs text-gray-400">{r.votes}票</span>
+                  {!r.isTied && <span className="text-xs text-gray-400">{r.votes}票</span>}
                 </div>
               </div>
               <p className="text-xs text-gray-400 mb-2">お題：{r.topicText}</p>
-              <div className="bg-yellow-50 rounded-xl px-3 py-2">
-                {r.winnerPreamble && r.winnerPreamblePosition === 'above' && (
-                  <p className="text-xs text-gray-500 italic mb-1">「{r.winnerPreamble}」</p>
-                )}
-                <p className="text-sm font-bold text-gray-800">{r.winnerText}</p>
-                {r.winnerPreamble && r.winnerPreamblePosition === 'below' && (
-                  <p className="text-xs text-gray-500 italic mt-1">「{r.winnerPreamble}」</p>
-                )}
-              </div>
+              {r.isTied ? (
+                <div className="bg-gray-50 rounded-xl px-3 py-2">
+                  <p className="text-xs text-gray-500 text-center">同点（未決着）</p>
+                </div>
+              ) : (
+                <div className="bg-yellow-50 rounded-xl px-3 py-2">
+                  {r.winnerPreamble && r.winnerPreamblePosition === 'above' && (
+                    <p className="text-xs text-gray-500 italic mb-1">「{r.winnerPreamble}」</p>
+                  )}
+                  <p className="text-sm font-bold text-gray-800">{r.winnerText}</p>
+                  {r.winnerPreamble && r.winnerPreamblePosition === 'below' && (
+                    <p className="text-xs text-gray-500 italic mt-1">「{r.winnerPreamble}」</p>
+                  )}
+                </div>
+              )}
               <div className="flex items-center gap-1.5 mt-3">
-                <UserIcon name={r.winnerName} size="xs" />
-                <p className="text-xs text-gray-400">{r.winnerName}</p>
+                {r.winnerName.includes('・') ? (
+                  <p className="text-xs text-gray-400">{r.winnerName}</p>
+                ) : (
+                  <>
+                    <UserIcon name={r.winnerName} size="xs" />
+                    <p className="text-xs text-gray-400">{r.winnerName}</p>
+                  </>
+                )}
               </div>
             </div>
           ))}

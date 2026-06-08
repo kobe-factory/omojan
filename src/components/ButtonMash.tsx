@@ -25,6 +25,8 @@ interface Props {
   currentUserId: string
   participants: User[]
   onCompleted: () => Promise<void>
+  forcedContestants?: string[]  // 指定時は投票ベースの判定をスキップ
+  duration?: number             // 連打時間 ms（省略時 3000）
 }
 
 const MASH_DURATION_MS = 3000
@@ -35,13 +37,15 @@ export default function ButtonMash({
   currentUserId,
   participants,
   onCompleted,
+  forcedContestants,
+  duration = MASH_DURATION_MS,
 }: Props) {
   const [tiebreakerUserIds, setTiebreakerUserIds] = useState<string[]>([])
   const [mashRound, setMashRound] = useState(1)
   const [tapCount, setTapCount] = useState(0)
   const [started, setStarted] = useState(false)
   const [finished, setFinished] = useState(false)
-  const [timeLeft, setTimeLeft] = useState(MASH_DURATION_MS)
+  const [timeLeft, setTimeLeft] = useState(duration)
   const [saving, setSaving] = useState(false)
   const [results, setResults] = useState<ButtonMashResult[]>([])
   const [opponentDone, setOpponentDone] = useState(false)
@@ -52,8 +56,12 @@ export default function ButtonMash({
 
   const getName = (id: string) => participants.find((p) => p.id === id)?.name ?? '???'
 
-  // 初回投票で同票の2作品の作者IDを取得（投票なし=ソロモード時は自分を参加者とする）
+  // 参加者の取得：forcedContestants 指定時はそれを使用、それ以外は投票から判定
   useEffect(() => {
+    if (forcedContestants) {
+      setTiebreakerUserIds(forcedContestants)
+      return
+    }
     supabase
       .from('votes')
       .select('submission_id')
@@ -76,6 +84,7 @@ export default function ButtonMash({
           .in('id', tiedIds)
         setTiebreakerUserIds((subs ?? []).map((s) => s.user_id))
       })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game.id, currentUserId])
 
   const isContestant = tiebreakerUserIds.includes(currentUserId)
@@ -165,7 +174,7 @@ export default function ButtonMash({
 
     if (!started) {
       setStarted(true)
-      endTimeRef.current = Date.now() + MASH_DURATION_MS
+      endTimeRef.current = Date.now() + duration
       setTapCount(1)
 
       timerRef.current = setInterval(() => {
@@ -200,10 +209,10 @@ export default function ButtonMash({
     setTapCount(0)
     setStarted(false)
     setFinished(false)
-    setTimeLeft(MASH_DURATION_MS)
+    setTimeLeft(duration)
     setOpponentDone(false)
     savedMashRoundRef.current = 0
-  }, [mashRound])
+  }, [mashRound, duration])
 
   const latestResults = results.filter((r) => r.mash_round === mashRound)
   const opponentResult = latestResults.find((r) => r.user_id === opponentId)
@@ -267,7 +276,7 @@ export default function ButtonMash({
       <div className="bg-red-50 rounded-xl px-4 py-3 text-center">
         <p className="text-red-700 text-sm font-medium">
           {!started
-            ? '🎮 ボタンを押してスタート！3秒間連打しよう'
+            ? `🎮 ボタンを押してスタート！${duration / 1000}秒間連打しよう`
             : finished
             ? '⏱️ 終了！'
             : `残り ${(timeLeft / 1000).toFixed(1)} 秒`}

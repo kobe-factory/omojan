@@ -1,4 +1,4 @@
-export type TournamentStatus = 'waiting_users' | 'creating_cards' | 'playing' | 'finished'
+export type TournamentStatus = 'waiting_users' | 'creating_cards' | 'playing' | 'final_tiebreaker' | 'finished'
 export type TournamentMode = 'solo' | 'test' | 'production'
 export type GameStatus = 'waiting_submission' | 'waiting_vote' | 'waiting_tiebreaker_vote' | 'waiting_button_mash' | 'showing_result' | 'showing_rematch' | 'finished'
 export type TiebreakerMode = 'vote' | 'button_mash'

@@ -719,6 +719,54 @@ export async function POST(
         .eq('id', currentGame.id)
 
       if (currentGame.round_number >= tournament.game_count) {
+        // 同点チェック：1位タイなら大会決戦へ
+        const scoreMap = await computeTournamentStandings(tournament.id, participantIds)
+        const sortedStandings = participantIds
+          .map((id) => ({ id, wins: scoreMap[id]?.wins ?? 0, totalVotes: scoreMap[id]?.totalVotes ?? 0 }))
+          .sort((a, b) => b.wins - a.wins || b.totalVotes - a.totalVotes)
+
+        const top = sortedStandings[0]
+        const tiedTop = sortedStandings.filter((s) => s.wins === top.wins && s.totalVotes === top.totalVotes)
+
+        if (tiedTop.length >= 2) {
+          const tiedUserIds = tiedTop.map((s) => s.id)
+          const { data: anyCard } = await supabase
+            .from('cards')
+            .select('id')
+            .eq('tournament_id', tournament.id)
+            .limit(1)
+            .single()
+
+          if (anyCard) {
+            await supabaseAdmin.from('games').insert({
+              tournament_id: tournament.id,
+              round_number: 0,
+              status: 'waiting_button_mash',
+              topic_card_id: anyCard.id,
+              is_rematch: false,
+              voting_mode: `final_tiebreaker:${tiedUserIds.join(',')}`,
+            })
+
+            await supabase.from('tournaments').update({ status: 'final_tiebreaker' }).eq('id', tournament.id)
+
+            const finalNum = await getTournamentNumber(tournament.id)
+            await notifyParticipants(
+              participantIds,
+              triggeringUserId,
+              {
+                headerTitle: '⚔️ 大会決戦！',
+                headerColor: PHASE_COLORS.tiebreaker,
+                headerSub: `第${finalNum}回大会`,
+                body: `同点のため大会決戦を行います！\n${tiedUserIds.length}名で5秒間の連打決戦です ⚔️\nおもじゃんを開いてください`,
+                url: LIFF_URL,
+              },
+              tournament.mode,
+            )
+
+            return NextResponse.json({ advanced: true, newStatus: 'final_tiebreaker' })
+          }
+        }
+
         await supabase
           .from('tournaments')
           .update({ status: 'finished' })
@@ -744,7 +792,172 @@ export async function POST(
     }
   }
 
+  // final_tiebreaker: round_number=0 の連打ゲーム完了 → finished へ
+  if (tournament.status === 'final_tiebreaker') {
+    const { data: finalGame } = await supabase
+      .from('games')
+      .select('id, status, voting_mode')
+      .eq('tournament_id', tournament.id)
+      .eq('round_number', 0)
+      .single()
+
+    if (!finalGame || finalGame.status === 'finished') {
+      return NextResponse.json({ noChange: true })
+    }
+
+    const tiedUserIds = (finalGame.voting_mode ?? '')
+      .replace('final_tiebreaker:', '')
+      .split(',')
+      .filter(Boolean)
+
+    const { data: existingResults } = await supabase
+      .from('button_mash_results')
+      .select('user_id, tap_count, mash_round')
+      .eq('game_id', finalGame.id)
+      .order('mash_round', { ascending: false })
+
+    const currentMashRound =
+      existingResults && existingResults.length > 0
+        ? Math.max(...existingResults.map((r) => r.mash_round))
+        : 1
+
+    const currentRoundResults = (existingResults ?? []).filter(
+      (r) => r.mash_round === currentMashRound,
+    )
+    const completedUserIds = new Set(currentRoundResults.map((r) => r.user_id))
+    const allCompleted = tiedUserIds.every((id) => completedUserIds.has(id))
+
+    if (!allCompleted) {
+      const waiting = tiedUserIds.filter((id) => !completedUserIds.has(id))
+      return NextResponse.json({ waiting: true, waitingUserIds: waiting })
+    }
+
+    const maxTaps = Math.max(...currentRoundResults.map((r) => r.tap_count))
+    const topPlayers = currentRoundResults.filter((r) => r.tap_count === maxTaps)
+
+    if (topPlayers.length >= 2) {
+      return NextResponse.json({ waiting: true, isTie: true, nextMashRound: currentMashRound + 1 })
+    }
+
+    await supabaseAdmin.from('games').update({ status: 'finished' }).eq('id', finalGame.id)
+    await supabase.from('tournaments').update({ status: 'finished' }).eq('id', tournament.id)
+
+    const num = await getTournamentNumber(tournament.id)
+    await notifyParticipants(
+      participantIds,
+      triggeringUserId,
+      {
+        headerTitle: '🏆 大会優勝決定！',
+        headerColor: PHASE_COLORS.result,
+        headerSub: `第${num}回大会`,
+        body: '大会決戦が完了しました！\nおもじゃんを開いて優勝者を確認しましょう 🏆',
+        url: LIFF_URL,
+      },
+      tournament.mode,
+    )
+
+    return NextResponse.json({ advanced: true, newStatus: 'finished' })
+  }
+
   return NextResponse.json({ noChange: true })
+}
+
+async function computeTournamentStandings(
+  tournamentId: string,
+  participantIds: string[],
+): Promise<Record<string, { wins: number; totalVotes: number }>> {
+  const scoreMap: Record<string, { wins: number; totalVotes: number }> = {}
+  for (const id of participantIds) scoreMap[id] = { wins: 0, totalVotes: 0 }
+
+  const { data: games } = await supabase
+    .from('games')
+    .select('id, round_number, status, is_rematch')
+    .eq('tournament_id', tournamentId)
+    .gt('round_number', 0)
+
+  if (!games || games.length === 0) return scoreMap
+
+  const gameIds = games.map((g) => g.id)
+
+  const [{ data: allVotes }, { data: allSubs }, { data: allMashResults }] = await Promise.all([
+    supabase.from('votes').select('game_id, submission_id, is_tiebreaker').in('game_id', gameIds),
+    supabase.from('submissions').select('id, game_id, user_id').in('game_id', gameIds),
+    supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round').in('game_id', gameIds),
+  ])
+
+  const regularVoteCount: Record<string, number> = {}
+  const tiebreakerVoteCount: Record<string, number> = {}
+  for (const v of allVotes ?? []) {
+    if (v.is_tiebreaker) {
+      tiebreakerVoteCount[v.submission_id] = (tiebreakerVoteCount[v.submission_id] ?? 0) + 1
+    } else {
+      regularVoteCount[v.submission_id] = (regularVoteCount[v.submission_id] ?? 0) + 1
+    }
+  }
+
+  const mashWinnerByGame: Record<string, string> = {}
+  for (const game of games) {
+    const results = (allMashResults ?? []).filter((r) => r.game_id === game.id)
+    if (results.length < 2) continue
+    const latestRound = Math.max(...results.map((r) => r.mash_round))
+    const latest = results.filter((r) => r.mash_round === latestRound)
+    const maxTaps = Math.max(...latest.map((r) => r.tap_count))
+    const topWinners = latest.filter((r) => r.tap_count === maxTaps)
+    if (topWinners.length === 1) mashWinnerByGame[game.id] = topWinners[0].user_id
+  }
+
+  const rematchRounds = new Set(games.filter((g) => g.is_rematch).map((g) => g.round_number))
+
+  for (const game of games) {
+    const isVoided =
+      game.status === 'showing_rematch' ||
+      (!game.is_rematch && rematchRounds.has(game.round_number))
+    if (isVoided) continue
+
+    const gameSubs = (allSubs ?? []).filter((s) => s.game_id === game.id)
+
+    for (const sub of gameSubs) {
+      const count = regularVoteCount[sub.id] ?? 0
+      if (scoreMap[sub.user_id]) scoreMap[sub.user_id].totalVotes += count
+    }
+
+    if (mashWinnerByGame[game.id]) {
+      const wId = mashWinnerByGame[game.id]
+      if (scoreMap[wId]) scoreMap[wId].wins += 1
+      continue
+    }
+
+    let maxTbVotes = 0
+    let tbWinnerId: string | null = null
+    for (const sub of gameSubs) {
+      const tbCount = tiebreakerVoteCount[sub.id] ?? 0
+      if (tbCount > maxTbVotes) {
+        maxTbVotes = tbCount
+        tbWinnerId = sub.user_id
+      }
+    }
+    if (tbWinnerId) {
+      if (scoreMap[tbWinnerId]) {
+        scoreMap[tbWinnerId].wins += 1
+        scoreMap[tbWinnerId].totalVotes += 1
+      }
+      continue
+    }
+
+    let maxVotes = 0
+    for (const sub of gameSubs) {
+      const count = regularVoteCount[sub.id] ?? 0
+      if (count > maxVotes) maxVotes = count
+    }
+    if (maxVotes > 0) {
+      const winners = gameSubs.filter((s) => (regularVoteCount[s.id] ?? 0) === maxVotes)
+      for (const w of winners) {
+        if (scoreMap[w.user_id]) scoreMap[w.user_id].wins += 1
+      }
+    }
+  }
+
+  return scoreMap
 }
 
 async function dealCards(

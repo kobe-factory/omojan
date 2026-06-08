@@ -115,11 +115,21 @@ export default function TournamentPage() {
         .from('games')
         .select('*')
         .eq('tournament_id', t.id)
+        .gt('round_number', 0)
         .order('round_number', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(1)
 
       setCurrentGame(games?.[0] ?? null)
+    } else if (t.status === 'final_tiebreaker') {
+      const { data: finalGame } = await supabase
+        .from('games')
+        .select('*')
+        .eq('tournament_id', t.id)
+        .eq('round_number', 0)
+        .maybeSingle()
+
+      setCurrentGame(finalGame ?? null)
     }
 
     setLoading(false)
@@ -329,6 +339,7 @@ export default function TournamentPage() {
     if (tournament.status === 'waiting_users') return { label: '参加者募集中', bg: 'bg-sky-50', text: 'text-sky-600', border: 'border-sky-100' }
     if (tournament.status === 'creating_cards') return { label: '札作成中', bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-200' }
     if (tournament.status === 'finished') return { label: '大会終了', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' }
+    if (tournament.status === 'final_tiebreaker') return { label: '⚔️ 大会決戦中', bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-300' }
     if (tournament.status === 'playing' && currentGame) {
       if (currentGame.status === 'waiting_submission') return { label: '作品投稿中', bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-200' }
       if (currentGame.status === 'waiting_vote') return { label: '投票中', bg: 'bg-violet-50', text: 'text-violet-600', border: 'border-violet-100' }
@@ -437,7 +448,7 @@ export default function TournamentPage() {
         )}
 
         {/* 非参加者メッセージ（大会進行中に userId がない場合） */}
-        {(tournament.status === 'creating_cards' || tournament.status === 'playing') && !userId && (
+        {(tournament.status === 'creating_cards' || tournament.status === 'playing' || tournament.status === 'final_tiebreaker') && !userId && (
           <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
             <p className="text-4xl mb-4">🎴</p>
             <p className="text-gray-700 font-medium mb-2">この大会はすでに参加者が確定しています</p>
@@ -588,6 +599,40 @@ export default function TournamentPage() {
           </>
         )}
 
+        {/* 大会決戦フェーズ */}
+        {tournament.status === 'final_tiebreaker' && currentGame && (
+          userId ? (
+            <ButtonMash
+              token={token}
+              game={currentGame}
+              currentUserId={userId}
+              participants={participants}
+              duration={5000}
+              forcedContestants={
+                currentGame.voting_mode?.startsWith('final_tiebreaker:')
+                  ? currentGame.voting_mode.replace('final_tiebreaker:', '').split(',').filter(Boolean)
+                  : undefined
+              }
+              onCompleted={async () => {
+                const res = await fetch(`/api/tournaments/${token}/advance`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ triggering_user_id: userId }),
+                })
+                const data = await res.json()
+                if (data.advanced) await fetchState()
+                else await fetchState()
+              }}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
+              <p className="text-4xl mb-4">⚔️</p>
+              <p className="text-gray-700 font-medium">大会決戦が行われています</p>
+              <p className="text-sm text-gray-400 mt-1">しばらくお待ちください</p>
+            </div>
+          )
+        )}
+
         {/* 大会終了画面 */}
         {tournament.status === 'finished' && (
           <TournamentFinished
@@ -599,7 +644,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.32.3</p>
+        <p className="text-xs text-gray-300">v1.33.0</p>
       </footer>
 
       {/* 前戦結果モーダル（まだ結果を確認していないユーザー向け） */}
