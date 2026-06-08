@@ -28,6 +28,8 @@ interface UserCommentInput {
   cardTexts: string[]
   usedCardTexts: string[]
   lastUsedCardTexts: string[]
+  workTexts: string[]       // 全大会の作品テキスト（お題+手札）
+  lastWorkTexts: string[]   // 最新大会のみの作品テキスト
 }
 
 interface TournamentStanding {
@@ -105,16 +107,28 @@ export async function POST(request: Request) {
     { data: allSubs },
     { data: allVotes },
     { data: allMashResults },
+    { data: allGames },
   ] = await Promise.all([
-    supabase.from('submissions').select('id, user_id, hand_card_id, game_id, preamble').in('game_id', allGameIds),
+    supabase.from('submissions').select('id, user_id, hand_card_id, game_id, preamble, position').in('game_id', allGameIds),
     supabase.from('votes').select('voter_user_id, submission_id, game_id, is_tiebreaker').in('game_id', allGameIds),
     supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round').in('game_id', allGameIds),
+    supabase.from('games').select('id, topic_card_id').in('id', allGameIds),
   ])
 
   const submissions = allSubs ?? []
   const votes = allVotes ?? []
   const mashResults = allMashResults ?? []
   const cards = allCards ?? []
+  const cardTextMap = Object.fromEntries(cards.map((c) => [c.id, c.text]))
+  const topicCardMap = Object.fromEntries((allGames ?? []).map((g) => [g.id, g.topic_card_id]))
+
+  // 作品テキスト生成（お題＋手札の組み合わせ）
+  function buildWorkText(sub: { hand_card_id: string; game_id: string; position: string }): string {
+    const handText = cardTextMap[sub.hand_card_id] ?? ''
+    const topicId = topicCardMap[sub.game_id] ?? ''
+    const topicText = cardTextMap[topicId] ?? ''
+    return sub.position === 'before' ? `${handText}${topicText}` : `${topicText}${handText}`
+  }
 
   // 全大会で使われた手札カードIDのセット
   const usedHandCardIds = new Set(submissions.map((s) => s.hand_card_id))
@@ -131,8 +145,18 @@ export async function POST(request: Request) {
     const cardTexts = myCards.map((c) => c.text)
     // 個人総評用: 全大会の使用済み札
     const usedCardTexts = myCards.filter((c) => usedHandCardIds.has(c.id)).map((c) => c.text)
-    // 大会総評用: 最新大会のみの使用済み札（lastUsedCardTextsとしてもたせる）
+    // 大会総評用: 最新大会のみの使用済み札
     const lastUsedCardTexts = myCards.filter((c) => lastTournamentUsedHandCardIds.has(c.id)).map((c) => c.text)
+    // 個人総評用: 全大会のそのユーザーの作品テキスト（有効ゲームのみ）
+    const workTexts = submissions
+      .filter((s) => s.user_id === user.id && validGameIds.has(s.game_id))
+      .map((s) => buildWorkText(s))
+      .filter(Boolean)
+    // 大会総評用: 最新大会のみのそのユーザーの作品テキスト
+    const lastWorkTexts = submissions
+      .filter((s) => s.user_id === user.id && lastTournamentValidGameIds.has(s.game_id))
+      .map((s) => buildWorkText(s))
+      .filter(Boolean)
 
     return {
       userId: user.id,
@@ -143,6 +167,8 @@ export async function POST(request: Request) {
       cardTexts,
       usedCardTexts,
       lastUsedCardTexts,
+      workTexts,
+      lastWorkTexts,
     }
   })
 
@@ -440,7 +466,10 @@ async function generateAllComments(
       const cardLine = u.cardTexts.length > 0
         ? `【${u.userName}】作成した札（全${u.cardTexts.length}枚・うちゲームで使用された${u.usedCardTexts.length}枚）:\n  全札（分析用）: 「${u.cardTexts.join('」「')}」\n  使用済み札（文章で言及する際はこちらのみ）: 「${u.usedCardTexts.join('」「')}」`
         : `【${u.userName}】作成した札: なし`
-      return `${overallLine}\n${lastLine}\n${cardLine}`
+      const workLine = u.workTexts.length > 0
+        ? `【${u.userName}】過去の全作品（お題+手札の組み合わせ）: 「${u.workTexts.join('」「')}」`
+        : `【${u.userName}】過去の作品: なし`
+      return `${overallLine}\n${lastLine}\n${cardLine}\n${workLine}`
     })
     .join('\n\n')
 
@@ -448,11 +477,10 @@ async function generateAllComments(
     `${s.rank}位: ${s.userName}（MVP${s.wins}回・総得票${s.totalVotes}票）`
   ).join('、')
 
-  // 大会総評用: その大会で使われた手札テキストのみ（ユーザー別）
-  const lastTournamentUsedCardsByUser = users.map((u) => {
-    const texts = u.lastUsedCardTexts.length > 0 ? `「${u.lastUsedCardTexts.join('」「')}」` : 'なし'
-    return `${u.userName}: ${texts}`
-  }).join(' / ')
+  // 大会総評用: その大会の全作品テキスト（全ユーザー・ユーザー名付き）
+  const lastTournamentWorksByUser = users.map((u) => {
+    return `${u.userName}: ${u.lastWorkTexts.length > 0 ? `「${u.lastWorkTexts.join('」「')}」` : 'なし'}`
+  }).join('\n')
 
   const prompt = `あなたは「おもじゃん」というワードバトルゲームの毒舌解説者「バッサリ先生」です。
 
@@ -477,15 +505,16 @@ async function generateAllComments(
 - nicknameは成績と人物像を総合したユニークで笑える称号。バラエティ豊かに（例：「孤高の変人センサー保持者」「自己プロデュース力ゼロの天才」「下ネタで世界を救う男」「誰よりも真面目に滑る人」など）。20文字以内
 
 【大会総評（tournament_comment）について】
-第${tournamentNumber}回大会の結果を、スポーツ新聞の記者のように報じてください。
-キャラクター：ビジネスライクで格調ある文体を基本とするが、要所でツッコミやイジりが入り、思わず笑えるスポーツ新聞風記事。
+キャラクター：スポーツ新聞の記者。ビジネスライクで格調ある文体を基本とするが、要所でツッコミやイジりが入り、思わず笑える記事スタイル。バッサリ先生とは別キャラ。
+- これは「大会全体の総評」であり、個人評価ではなく大会を通じた出来事・流れ・印象を報じる
 - 見出しのような書き出しから始める（例：「激闘の末、〇〇が頂点へ！」など）
-- 順位・結果に加えて、大会中に使われた作品・札の内容にも触れる
-- 面白かった作品や印象的な札の組み合わせをピックアップして具体的に言及する
+- 順位・結果だけでなく、この大会で生まれた作品（お題+手札の組み合わせ）の面白さ・印象的な一句を具体的に取り上げる
+- 個人への言及は大会の流れを語る文脈でのみ自然に入れる
 - 300文字をフルに使うこと
 
-大会順位: ${standingsText}
-各プレイヤーがこの大会で使用した手札: ${lastTournamentUsedCardsByUser}
+第${tournamentNumber}回大会 順位: ${standingsText}
+この大会の全作品（ユーザー別）:
+${lastTournamentWorksByUser}
 
 - JSONのみ返す（説明不要）
 
