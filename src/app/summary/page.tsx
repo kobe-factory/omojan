@@ -87,7 +87,7 @@ export default function SummaryPage() {
         .in('tournament_id', tournamentIds),
       supabase
         .from('games')
-        .select('id, tournament_id, round_number, topic_card_id, voting_mode')
+        .select('id, tournament_id, round_number, topic_card_id, voting_mode, is_rematch')
         .in('tournament_id', tournamentIds)
         .order('round_number', { ascending: true }),
     ])
@@ -139,7 +139,14 @@ export default function SummaryPage() {
         .map((p) => p.users as unknown as User)
         .filter(Boolean)
 
-      const games = (allGames ?? []).filter((g) => g.tournament_id === t.id)
+      const allTournamentGames = (allGames ?? []).filter((g) => g.tournament_id === t.id)
+      // 流局（再戦あり）の無効ゲームを除外（analyticsと同ロジック）
+      const rematchRounds = new Set(
+        allTournamentGames.filter((g) => g.is_rematch).map((g) => g.round_number)
+      )
+      const games = allTournamentGames.filter(
+        (g) => !(g.is_rematch === false && rematchRounds.has(g.round_number))
+      )
 
       const scoreMap: Record<string, { totalVotes: number; wins: number }> = {}
       for (const p of participants) {
@@ -521,7 +528,7 @@ export default function SummaryPage() {
       </div>}
 
       <footer className="text-center py-4">
-        <p className="text-xs text-gray-300">v1.32.0</p>
+        <p className="text-xs text-gray-300">v1.32.1</p>
       </footer>
     </div>
   )
