@@ -350,25 +350,6 @@ export default function PersonalStats() {
 
                 {isOpen && (
                   <div className="border-t border-gray-100 px-4 py-3 space-y-3">
-                    {/* AI総評 */}
-                    {aiComment && (aiComment.overall_comment || aiComment.last_tournament_comment) && (
-                      <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-3 space-y-2">
-                        <p className="text-[10px] font-bold text-purple-400 uppercase tracking-wide">🤖 AI総評</p>
-                        {aiComment.overall_comment && (
-                          <div>
-                            <p className="text-[10px] text-purple-400 mb-0.5">通算</p>
-                            <p className="text-xs text-gray-700 leading-relaxed">{aiComment.overall_comment}</p>
-                          </div>
-                        )}
-                        {aiComment.last_tournament_comment && (
-                          <div>
-                            <p className="text-[10px] text-purple-400 mb-0.5">前回大会</p>
-                            <p className="text-xs text-gray-700 leading-relaxed">{aiComment.last_tournament_comment}</p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
                     {/* MVP */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
@@ -538,6 +519,25 @@ export default function PersonalStats() {
                               <span className="text-sm font-bold text-teal-600">{s.avgPreambleLength}文字</span>
                               <span className="text-xs text-gray-400">({s.preambleCount}回使用)</span>
                             </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* AI総評 */}
+                    {aiComment && (aiComment.overall_comment || aiComment.last_tournament_comment) && (
+                      <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-3 space-y-2">
+                        <p className="text-[10px] font-bold text-purple-400 uppercase tracking-wide">🤖 AI総評</p>
+                        {aiComment.overall_comment && (
+                          <div>
+                            <p className="text-[10px] text-purple-400 mb-0.5">通算</p>
+                            <p className="text-xs text-gray-700 leading-relaxed">{aiComment.overall_comment}</p>
+                          </div>
+                        )}
+                        {aiComment.last_tournament_comment && (
+                          <div>
+                            <p className="text-[10px] text-purple-400 mb-0.5">前回大会</p>
+                            <p className="text-xs text-gray-700 leading-relaxed">{aiComment.last_tournament_comment}</p>
                           </div>
                         )}
                       </div>

@@ -753,7 +753,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.34.0</p>
+        <p className="text-center text-xs text-gray-300 mt-8">v1.34.1</p>
       </div>
     </div>
   )
