@@ -73,7 +73,7 @@ export async function GET() {
   ] = await Promise.all([
     supabase.from('cards').select('id, creator_user_id, tournament_id').in('tournament_id', prodTournamentIds),
     prodGameIds.length > 0 ? supabase.from('submissions').select('id, user_id, hand_card_id, game_id').in('game_id', prodGameIds) : Promise.resolve({ data: [] }),
-    prodGameIds.length > 0 ? supabase.from('votes').select('voter_user_id, submission_id, game_id, is_tiebreaker, created_at').in('game_id', prodGameIds) : Promise.resolve({ data: [] }),
+    prodGameIds.length > 0 ? supabase.from('votes').select('voter_user_id, submission_id, game_id, is_tiebreaker').in('game_id', prodGameIds) : Promise.resolve({ data: [] }),
     prodGameIds.length > 0 ? supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round').in('game_id', prodGameIds) : Promise.resolve({ data: [] }),
   ])
 
@@ -82,17 +82,15 @@ export async function GET() {
   const votes = allVotes ?? []
   const mashResults = allMashResults ?? []
 
-  // 作品別の得票数・投票時刻合計（初回投票のみ）
+  // 作品別の得票数（初回投票のみ）
   const voteCountBySubmission: Record<string, number> = {}
-  const voteTimeSumBySubmission: Record<string, number> = {}
   const initialVotes = votes.filter((v) => !v.is_tiebreaker)
   for (const v of initialVotes) {
     voteCountBySubmission[v.submission_id] = (voteCountBySubmission[v.submission_id] ?? 0) + 1
-    voteTimeSumBySubmission[v.submission_id] = (voteTimeSumBySubmission[v.submission_id] ?? 0) + new Date(v.created_at).getTime()
   }
 
-  // ゲーム別の勝者submissionId（最多票）
-  const winnerByGame: Record<string, string> = {}
+  // ゲーム別の勝者submissionId（複数可：決戦なし同票は全員1位）
+  const winnersByGame: Record<string, string[]> = {}
   const submissionsByGame: Record<string, { id: string; userId: string }[]> = {}
   for (const s of submissions) {
     if (!submissionsByGame[s.game_id]) submissionsByGame[s.game_id] = []
@@ -102,8 +100,6 @@ export async function GET() {
   for (const gameId of Object.keys(submissionsByGame)) {
     if (!validGameIds.has(gameId)) continue
     const gameSubs = submissionsByGame[gameId]
-    let maxVotes = 0
-    let winnerId = ''
 
     // 連打ゲームで決まったゲームかチェック
     const gameMashResults = mashResults.filter((r) => r.game_id === gameId)
@@ -114,7 +110,7 @@ export async function GET() {
       const mashWinner = latestMash.find((r) => r.tap_count === maxTaps)
       if (mashWinner) {
         const winnerSub = gameSubs.find((s) => s.userId === mashWinner.user_id)
-        if (winnerSub) winnerByGame[gameId] = winnerSub.id
+        if (winnerSub) winnersByGame[gameId] = [winnerSub.id]
       }
       continue
     }
@@ -128,22 +124,21 @@ export async function GET() {
       }
       const maxTb = Math.max(...Object.values(tbCount), 0)
       const tbWinner = Object.entries(tbCount).find(([, c]) => c === maxTb)
-      if (tbWinner) winnerByGame[gameId] = tbWinner[0]
+      if (tbWinner) winnersByGame[gameId] = [tbWinner[0]]
       continue
     }
 
-    // 通常投票（同票時は投票時刻の合計が小さい方＝早く票が集まった方を勝者とする。summaryと同ロジック）
-    let winnerTimeSum = Infinity
+    // 通常投票（同票の場合は複数勝者）
+    let maxVotes = 0
     for (const sub of gameSubs) {
       const cnt = voteCountBySubmission[sub.id] ?? 0
-      const timeSum = voteTimeSumBySubmission[sub.id] ?? 0
-      if (cnt > maxVotes) {
-        maxVotes = cnt; winnerId = sub.id; winnerTimeSum = timeSum
-      } else if (cnt === maxVotes && cnt > 0 && timeSum < winnerTimeSum) {
-        winnerId = sub.id; winnerTimeSum = timeSum
-      }
+      if (cnt > maxVotes) maxVotes = cnt
     }
-    if (maxVotes > 0 && winnerId) winnerByGame[gameId] = winnerId
+    if (maxVotes > 0) {
+      winnersByGame[gameId] = gameSubs
+        .filter((s) => (voteCountBySubmission[s.id] ?? 0) === maxVotes)
+        .map((s) => s.id)
+    }
   }
 
   // 連打ゲームの最終ラウンド勝者をゲーム別に集計
@@ -183,8 +178,8 @@ export async function GET() {
     }
     const totalHits = singles + doubles + triples + homeRuns
 
-    // MVP回数
-    const mvpCount = mySubmissions.filter((s) => winnerByGame[s.game_id] === s.id).length
+    // MVP回数（同票時は複数人がカウント）
+    const mvpCount = mySubmissions.filter((s) => (winnersByGame[s.game_id] ?? []).includes(s.id)).length
 
     // 平均得票数（validなゲームでの作品への初回投票合計 / 出場ゲーム数）
     const gamesParticipated = mySubmissions.filter((s) => validGameIds.has(s.game_id)).length

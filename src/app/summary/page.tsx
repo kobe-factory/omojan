@@ -96,7 +96,7 @@ export default function SummaryPage() {
 
     const [{ data: allSubs }, { data: allVotes }, { data: allMashResults }] = await Promise.all([
       supabase.from('submissions').select('id, game_id, user_id, hand_card_id, position, preamble, preamble_position').in('game_id', gameIds),
-      supabase.from('votes').select('game_id, submission_id, created_at, is_tiebreaker').in('game_id', gameIds),
+      supabase.from('votes').select('game_id, submission_id, is_tiebreaker').in('game_id', gameIds),
       supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round').in('game_id', gameIds),
     ])
 
@@ -122,14 +122,12 @@ export default function SummaryPage() {
     const cardMap = Object.fromEntries((allCards ?? []).map((c) => [c.id, c.text]))
 
     const regularVoteCount: Record<string, number> = {}
-    const regularVoteTimeSum: Record<string, number> = {}
     const tiebreakerVoteCount: Record<string, number> = {}
     for (const v of allVotes ?? []) {
       if (v.is_tiebreaker) {
         tiebreakerVoteCount[v.submission_id] = (tiebreakerVoteCount[v.submission_id] ?? 0) + 1
       } else {
         regularVoteCount[v.submission_id] = (regularVoteCount[v.submission_id] ?? 0) + 1
-        regularVoteTimeSum[v.submission_id] = (regularVoteTimeSum[v.submission_id] ?? 0) + new Date(v.created_at).getTime()
       }
     }
 
@@ -143,9 +141,9 @@ export default function SummaryPage() {
 
       const games = (allGames ?? []).filter((g) => g.tournament_id === t.id)
 
-      const scoreMap: Record<string, { totalVotes: number; totalVoteTimeSum: number; wins: number }> = {}
+      const scoreMap: Record<string, { totalVotes: number; wins: number }> = {}
       for (const p of participants) {
-        scoreMap[p.id] = { totalVotes: 0, totalVoteTimeSum: 0, wins: 0 }
+        scoreMap[p.id] = { totalVotes: 0, wins: 0 }
         if (!overallMap[p.id]) overallMap[p.id] = { name: p.name, totalVotes: 0, totalWins: 0, totalRoundWins: 0 }
       }
 
@@ -153,26 +151,18 @@ export default function SummaryPage() {
       for (const game of games) {
         const gameSubs = (allSubs ?? []).filter((s) => s.game_id === game.id)
         let maxRegularVotes = 0
-        let winnerTimeSum = Infinity
         let winnerSub: typeof gameSubs[0] | null = null
         let hasTie = false
         let isWinByTiebreaker = false
 
         for (const sub of gameSubs) {
           const count = regularVoteCount[sub.id] ?? 0
-          const timeSum = regularVoteTimeSum[sub.id] ?? 0
-          if (scoreMap[sub.user_id]) {
-            scoreMap[sub.user_id].totalVotes += count
-            scoreMap[sub.user_id].totalVoteTimeSum += timeSum
-          }
-          if (overallMap[sub.user_id]) {
-            overallMap[sub.user_id].totalVotes += count
-          }
+          if (scoreMap[sub.user_id]) scoreMap[sub.user_id].totalVotes += count
+          if (overallMap[sub.user_id]) overallMap[sub.user_id].totalVotes += count
           if (count > maxRegularVotes) {
-            maxRegularVotes = count; winnerSub = sub; winnerTimeSum = timeSum; hasTie = false
+            maxRegularVotes = count; winnerSub = sub; hasTie = false
           } else if (count === maxRegularVotes && count > 0) {
             hasTie = true
-            if (timeSum < winnerTimeSum) { winnerSub = sub; winnerTimeSum = timeSum }
           }
         }
 
@@ -194,25 +184,36 @@ export default function SummaryPage() {
           if (tbWinner) { winnerSub = tbWinner; isWinByTiebreaker = true; hasTie = false }
         }
 
-        const displayVotes = maxRegularVotes + (isWinByTiebreaker ? 1 : 0)
-
-        if (winnerSub && scoreMap[winnerSub.user_id]) {
-          scoreMap[winnerSub.user_id].wins += 1
-          if (isWinByTiebreaker) scoreMap[winnerSub.user_id].totalVotes += 1
-        }
-        if (winnerSub && overallMap[winnerSub.user_id]) {
-          overallMap[winnerSub.user_id].totalRoundWins += 1
-          if (isWinByTiebreaker) overallMap[winnerSub.user_id].totalVotes += 1
-        }
-
         const topicText = cardMap[game.topic_card_id] ?? ''
-        const handText = winnerSub ? (cardMap[winnerSub.hand_card_id] ?? '') : ''
-        const winnerText = winnerSub
-          ? winnerSub.position === 'before' ? `${handText}${topicText}` : `${topicText}${handText}`
-          : ''
-        const winnerUser = winnerSub ? participants.find((p) => p.id === winnerSub!.user_id) : null
+        const votingMode = (game as { voting_mode?: string | null }).voting_mode ?? null
 
-        rounds.push({ roundNumber: game.round_number, topicText, winnerName: winnerUser?.name ?? '???', winnerText, winnerPreamble: winnerSub?.preamble ?? null, winnerPreamblePosition: (winnerSub?.preamble_position ?? 'above') as 'above' | 'below', votes: displayVotes, isTied: hasTie, votingMode: (game as { voting_mode?: string | null }).voting_mode ?? null, isWinByButtonMash })
+        if (hasTie) {
+          // 決戦なし同票：全員が1位
+          const tiedSubs = gameSubs.filter((s) => (regularVoteCount[s.id] ?? 0) === maxRegularVotes)
+          for (const ts of tiedSubs) {
+            if (scoreMap[ts.user_id]) scoreMap[ts.user_id].wins += 1
+            if (overallMap[ts.user_id]) overallMap[ts.user_id].totalRoundWins += 1
+          }
+          const tiedNames = tiedSubs.map((ts) => participants.find((p) => p.id === ts.user_id)?.name ?? '???').join('・')
+          rounds.push({ roundNumber: game.round_number, topicText, winnerName: tiedNames, winnerText: '', winnerPreamble: null, winnerPreamblePosition: 'above', votes: maxRegularVotes, isTied: true, votingMode, isWinByButtonMash: false })
+        } else {
+          // 単独1位または決戦で決定
+          if (winnerSub && scoreMap[winnerSub.user_id]) {
+            scoreMap[winnerSub.user_id].wins += 1
+            if (isWinByTiebreaker) scoreMap[winnerSub.user_id].totalVotes += 1
+          }
+          if (winnerSub && overallMap[winnerSub.user_id]) {
+            overallMap[winnerSub.user_id].totalRoundWins += 1
+            if (isWinByTiebreaker) overallMap[winnerSub.user_id].totalVotes += 1
+          }
+          const handText = winnerSub ? (cardMap[winnerSub.hand_card_id] ?? '') : ''
+          const winnerText = winnerSub
+            ? winnerSub.position === 'before' ? `${handText}${topicText}` : `${topicText}${handText}`
+            : ''
+          const winnerUser = winnerSub ? participants.find((p) => p.id === winnerSub!.user_id) : null
+          const displayVotes = maxRegularVotes + (isWinByTiebreaker ? 1 : 0)
+          rounds.push({ roundNumber: game.round_number, topicText, winnerName: winnerUser?.name ?? '???', winnerText, winnerPreamble: winnerSub?.preamble ?? null, winnerPreamblePosition: (winnerSub?.preamble_position ?? 'above') as 'above' | 'below', votes: displayVotes, isTied: false, votingMode, isWinByButtonMash })
+        }
       }
 
       const sortedScores = participants
@@ -471,7 +472,7 @@ export default function SummaryPage() {
                                     )}
                                   </div>
                                   <div className="flex items-center gap-2">
-                                    {r.isTied && <span className="text-xs text-gray-400">（同点・投票時間で決定）</span>}
+                                    {r.isTied && <span className="text-xs text-orange-400 font-bold">同票</span>}
                                     {r.isWinByButtonMash && (
                                       <span className="text-[9px] font-bold text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full">⚡連打</span>
                                     )}
@@ -479,19 +480,32 @@ export default function SummaryPage() {
                                   </div>
                                 </div>
                                 <p className="text-xs text-gray-400 mb-2">お題：{r.topicText}</p>
-                                <div className="bg-yellow-50 rounded-xl px-3 py-2">
-                                  {r.winnerPreamble && r.winnerPreamblePosition === 'above' && (
-                                    <p className="text-xs text-gray-500 italic mb-1">「{r.winnerPreamble}」</p>
-                                  )}
-                                  <p className="text-sm font-bold text-gray-800">{r.winnerText}</p>
-                                  {r.winnerPreamble && r.winnerPreamblePosition === 'below' && (
-                                    <p className="text-xs text-gray-500 italic mt-1">「{r.winnerPreamble}」</p>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-1.5 mt-3">
-                                  <UserIcon name={r.winnerName} size="xs" />
-                                  <p className="text-xs text-gray-600">{r.winnerName}</p>
-                                </div>
+                                {r.isTied ? (
+                                  <div className="flex flex-wrap gap-2 mt-1">
+                                    {r.winnerName.split('・').map((name) => (
+                                      <div key={name} className="flex items-center gap-1.5">
+                                        <UserIcon name={name} size="xs" />
+                                        <p className="text-xs text-gray-600">{name}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="bg-yellow-50 rounded-xl px-3 py-2">
+                                      {r.winnerPreamble && r.winnerPreamblePosition === 'above' && (
+                                        <p className="text-xs text-gray-500 italic mb-1">「{r.winnerPreamble}」</p>
+                                      )}
+                                      <p className="text-sm font-bold text-gray-800">{r.winnerText}</p>
+                                      {r.winnerPreamble && r.winnerPreamblePosition === 'below' && (
+                                        <p className="text-xs text-gray-500 italic mt-1">「{r.winnerPreamble}」</p>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 mt-3">
+                                      <UserIcon name={r.winnerName} size="xs" />
+                                      <p className="text-xs text-gray-600">{r.winnerName}</p>
+                                    </div>
+                                  </>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -507,7 +521,7 @@ export default function SummaryPage() {
       </div>}
 
       <footer className="text-center py-4">
-        <p className="text-xs text-gray-300">v1.31.1</p>
+        <p className="text-xs text-gray-300">v1.31.2</p>
       </footer>
     </div>
   )
