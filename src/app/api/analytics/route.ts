@@ -73,7 +73,7 @@ export async function GET() {
   ] = await Promise.all([
     supabase.from('cards').select('id, creator_user_id, tournament_id').in('tournament_id', prodTournamentIds),
     prodGameIds.length > 0 ? supabase.from('submissions').select('id, user_id, hand_card_id, game_id').in('game_id', prodGameIds) : Promise.resolve({ data: [] }),
-    prodGameIds.length > 0 ? supabase.from('votes').select('voter_user_id, submission_id, game_id, is_tiebreaker').in('game_id', prodGameIds) : Promise.resolve({ data: [] }),
+    prodGameIds.length > 0 ? supabase.from('votes').select('voter_user_id, submission_id, game_id, is_tiebreaker, created_at').in('game_id', prodGameIds) : Promise.resolve({ data: [] }),
     prodGameIds.length > 0 ? supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round').in('game_id', prodGameIds) : Promise.resolve({ data: [] }),
   ])
 
@@ -82,11 +82,13 @@ export async function GET() {
   const votes = allVotes ?? []
   const mashResults = allMashResults ?? []
 
-  // 作品別の得票数（初回投票のみ）
+  // 作品別の得票数・投票時刻合計（初回投票のみ）
   const voteCountBySubmission: Record<string, number> = {}
+  const voteTimeSumBySubmission: Record<string, number> = {}
   const initialVotes = votes.filter((v) => !v.is_tiebreaker)
   for (const v of initialVotes) {
     voteCountBySubmission[v.submission_id] = (voteCountBySubmission[v.submission_id] ?? 0) + 1
+    voteTimeSumBySubmission[v.submission_id] = (voteTimeSumBySubmission[v.submission_id] ?? 0) + new Date(v.created_at).getTime()
   }
 
   // ゲーム別の勝者submissionId（最多票）
@@ -130,18 +132,18 @@ export async function GET() {
       continue
     }
 
-    // 通常投票
+    // 通常投票（同票時は投票時刻の合計が小さい方＝早く票が集まった方を勝者とする。summaryと同ロジック）
+    let winnerTimeSum = Infinity
     for (const sub of gameSubs) {
       const cnt = voteCountBySubmission[sub.id] ?? 0
+      const timeSum = voteTimeSumBySubmission[sub.id] ?? 0
       if (cnt > maxVotes) {
-        maxVotes = cnt
-        winnerId = sub.id
+        maxVotes = cnt; winnerId = sub.id; winnerTimeSum = timeSum
+      } else if (cnt === maxVotes && cnt > 0 && timeSum < winnerTimeSum) {
+        winnerId = sub.id; winnerTimeSum = timeSum
       }
     }
-    if (maxVotes > 0) {
-      const topCount = gameSubs.filter((s) => (voteCountBySubmission[s.id] ?? 0) === maxVotes).length
-      if (topCount === 1) winnerByGame[gameId] = winnerId
-    }
+    if (maxVotes > 0 && winnerId) winnerByGame[gameId] = winnerId
   }
 
   // 連打ゲームの最終ラウンド勝者をゲーム別に集計
