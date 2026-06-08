@@ -30,6 +30,7 @@ interface UserCommentInput {
   lastUsedCardTexts: string[]
   workTexts: string[]       // 全大会の作品テキスト（お題+手札）
   lastWorkTexts: string[]   // 最新大会のみの作品テキスト
+  preambleTexts: string[]   // 全大会の前口上テキスト（分析用）
 }
 
 interface TournamentStanding {
@@ -157,6 +158,10 @@ export async function POST(request: Request) {
       .filter((s) => s.user_id === user.id && lastTournamentValidGameIds.has(s.game_id))
       .map((s) => buildWorkText(s))
       .filter(Boolean)
+    // 個人総評用: 全大会の前口上テキスト（空文字・null除外）
+    const preambleTexts = submissions
+      .filter((s) => s.user_id === user.id && validGameIds.has(s.game_id) && s.preamble && (s.preamble as string).trim().length > 0)
+      .map((s) => (s.preamble as string).trim())
 
     return {
       userId: user.id,
@@ -169,6 +174,7 @@ export async function POST(request: Request) {
       lastUsedCardTexts,
       workTexts,
       lastWorkTexts,
+      preambleTexts,
     }
   })
 
@@ -469,7 +475,10 @@ async function generateAllComments(
       const workLine = u.workTexts.length > 0
         ? `【${u.userName}】過去の全作品（お題+手札の組み合わせ）: 「${u.workTexts.join('」「')}」`
         : `【${u.userName}】過去の作品: なし`
-      return `${overallLine}\n${lastLine}\n${cardLine}\n${workLine}`
+      const preambleLine = u.preambleTexts.length > 0
+        ? `【${u.userName}】過去の前口上（分析用・全${u.preambleTexts.length}件）: 「${u.preambleTexts.join('」「')}」`
+        : `【${u.userName}】前口上: なし`
+      return `${overallLine}\n${lastLine}\n${cardLine}\n${workLine}\n${preambleLine}`
     })
     .join('\n\n')
 
@@ -504,6 +513,7 @@ async function generateAllComments(
 - 絵文字は1〜2個程度に抑える
 - 日本語のみ
 - card_analysis_commentは「札の羅列・列挙」を絶対にしない。「〇〇」「△△」「□□」のように複数の札を並べるのは禁止。1〜2枚だけ例として引用するのはOKだが、それ以外は分析の言葉で語ること。分析の軸：その人の趣味・好きなもの・嫌いなもの・笑いのセンス・こだわり・世界観・人間性・心理傾向など。「使用済み札」と「作品」のテキストのみ文中に登場させる（「全札（分析用）」の未使用札は絶対に登場させない）
+- 前口上（preamble）データは分析に活用すること。前口上からその人の説明スタイル・自己表現の傾向・作品への向き合い方・ユーモアの質などを読み取る。前口上の羅列は禁止。例として1件だけ引用するのはOK
 - nicknameは作品・札の傾向と人物像を総合したユニークで笑える称号。バラエティ豊かに（例：「孤高の変人センサー保持者」「自己プロデュース力ゼロの天才」「下ネタで世界を救う男」「誰よりも真面目に滑る人」など）。20文字以内
 
 【大会総評（tournament_comment）について】

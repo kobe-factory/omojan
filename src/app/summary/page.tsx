@@ -528,7 +528,7 @@ export default function SummaryPage() {
       </div>}
 
       <footer className="text-center py-4">
-        <p className="text-xs text-gray-300">v1.36.8</p>
+        <p className="text-xs text-gray-300">v1.36.9</p>
       </footer>
     </div>
   )
