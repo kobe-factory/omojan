@@ -19,6 +19,7 @@ interface ArchiveGame {
   isVoided: boolean
   hasTiebreaker: boolean
   votingMode: string | null
+  buttonMashType: string | null
 }
 
 interface ArchiveSubmission {
@@ -36,6 +37,7 @@ interface ArchiveSubmission {
   tbVoterNames: string[]
   isWinner: boolean
   decidedByTiebreaker: boolean
+  decidedByButtonMash: boolean
 }
 
 interface Props {
@@ -54,7 +56,7 @@ export default function Archive({ tournamentId, participants, impersonationMode 
     async function fetchArchive() {
       const { data: finishedGames } = await supabase
         .from('games')
-        .select('id, round_number, topic_card_id, status, is_rematch, voting_mode')
+        .select('id, round_number, topic_card_id, status, is_rematch, voting_mode, button_mash_type')
         .eq('tournament_id', tournamentId)
         .in('status', ['showing_result', 'finished', 'showing_rematch'])
         .order('round_number', { ascending: true })
@@ -76,10 +78,11 @@ export default function Archive({ tournamentId, participants, impersonationMode 
             g.status === 'showing_rematch' ||
             (!g.is_rematch && rematchRoundSet.has(g.round_number))
 
-          const [{ data: topicCard }, { data: subs }, { data: votes }] = await Promise.all([
+          const [{ data: topicCard }, { data: subs }, { data: votes }, { data: mashResults }] = await Promise.all([
             supabase.from('cards').select('text').eq('id', g.topic_card_id).single(),
             supabase.from('submissions').select('id, user_id, hand_card_id, position, preamble, preamble_position, impersonated_user_id').eq('game_id', g.id),
             supabase.from('votes').select('submission_id, voter_user_id, is_tiebreaker').eq('game_id', g.id),
+            supabase.from('button_mash_results').select('user_id, tap_count, mash_round, completion_time_ms').eq('game_id', g.id),
           ])
 
           const allVotes = votes ?? []
@@ -137,6 +140,7 @@ export default function Archive({ tournamentId, participants, impersonationMode 
                 tbVoterNames: tbVoterNames[s.id] ?? [],
                 isWinner: false,
                 decidedByTiebreaker: false,
+                decidedByButtonMash: false,
               }
             })
           )
@@ -159,6 +163,35 @@ export default function Archive({ tournamentId, participants, impersonationMode 
                 const topItems = sorted.filter((s) => s.voteCount === maxVotes)
                 if (topItems.length === 1) {
                   topItems[0].isWinner = true
+                } else if (mashResults && mashResults.length >= 2) {
+                  // 連打ゲームで決着
+                  const latestRound = Math.max(...mashResults.map((r) => r.mash_round))
+                  const latest = mashResults.filter((r) => r.mash_round === latestRound)
+                  // speed mode か timed mode か（completion_time_ms の有無で判定）
+                  const hasMashSpeedMode = latest.some(
+                    (r) => (r as { completion_time_ms?: number | null }).completion_time_ms != null,
+                  )
+                  let winnerUserId: string | null = null
+                  if (hasMashSpeedMode) {
+                    const minTime = Math.min(
+                      ...latest.map((r) => (r as { completion_time_ms?: number | null }).completion_time_ms ?? Infinity),
+                    )
+                    const winners = latest.filter(
+                      (r) => (r as { completion_time_ms?: number | null }).completion_time_ms === minTime,
+                    )
+                    if (winners.length === 1) winnerUserId = winners[0].user_id
+                  } else {
+                    const maxTaps = Math.max(...latest.map((r) => r.tap_count))
+                    const winners = latest.filter((r) => r.tap_count === maxTaps)
+                    if (winners.length === 1) winnerUserId = winners[0].user_id
+                  }
+                  if (winnerUserId) {
+                    const winnerSub = sorted.find((s) => s.userId === winnerUserId)
+                    if (winnerSub) {
+                      winnerSub.isWinner = true
+                      winnerSub.decidedByButtonMash = true
+                    }
+                  }
                 }
               }
             }
@@ -176,6 +209,7 @@ export default function Archive({ tournamentId, participants, impersonationMode 
             isVoided,
             hasTiebreaker,
             votingMode: (g as { voting_mode?: string | null }).voting_mode ?? null,
+            buttonMashType: (g as { button_mash_type?: string | null }).button_mash_type ?? null,
           }
         })
       )
@@ -281,6 +315,9 @@ export default function Archive({ tournamentId, participants, impersonationMode 
                         <span className="text-yellow-500 text-xs font-bold">👑 WINNER</span>
                         {s.decidedByTiebreaker && (
                           <span className="text-red-500 text-xs">（決選投票で決定）</span>
+                        )}
+                        {s.decidedByButtonMash && (
+                          <span className="text-red-500 text-xs">（⚔️ 連打で決定）</span>
                         )}
                       </div>
                     )}

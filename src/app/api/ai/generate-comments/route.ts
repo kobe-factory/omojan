@@ -113,7 +113,7 @@ export async function POST(request: Request) {
   ] = await Promise.all([
     supabase.from('submissions').select('id, user_id, hand_card_id, game_id, preamble, position').in('game_id', allGameIds),
     supabase.from('votes').select('voter_user_id, submission_id, game_id, is_tiebreaker').in('game_id', allGameIds),
-    supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round').in('game_id', allGameIds),
+    supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round, completion_time_ms').in('game_id', allGameIds),
     supabase.from('games').select('id, topic_card_id').in('id', allGameIds),
   ])
 
@@ -256,7 +256,7 @@ function computeStats(
   cards: { id: string; creator_user_id: string; tournament_id: string; text: string }[],
   submissions: { id: string; user_id: string; hand_card_id: string; game_id: string; preamble: string | null }[],
   votes: { voter_user_id: string; submission_id: string; game_id: string; is_tiebreaker: boolean }[],
-  mashResults: { game_id: string; user_id: string; tap_count: number; mash_round: number }[],
+  mashResults: { game_id: string; user_id: string; tap_count: number; mash_round: number; completion_time_ms?: number | null }[],
   validGameIds: Set<string>,
 ): CompactStats {
   const initialVotes = votes.filter((v) => !v.is_tiebreaker)
@@ -286,7 +286,19 @@ function computeStats(
       const maxRound = Math.max(...gameMash.map((r) => r.mash_round))
       const latest = gameMash.filter((r) => r.mash_round === maxRound)
       const maxTaps = Math.max(...latest.map((r) => r.tap_count))
-      const winner = latest.find((r) => r.tap_count === maxTaps)
+      const topByTaps = latest.filter((r) => r.tap_count === maxTaps)
+      let winner
+      if (topByTaps.length === 1) {
+        winner = topByTaps[0]
+      } else {
+        // speed mode: completion_time_ms で比較
+        const withTime = topByTaps.filter((r) => r.completion_time_ms != null)
+        if (withTime.length >= 2) {
+          const minTime = Math.min(...withTime.map((r) => r.completion_time_ms!))
+          const topByTime = withTime.filter((r) => r.completion_time_ms === minTime)
+          if (topByTime.length === 1) winner = topByTime[0]
+        }
+      }
       if (winner) {
         const ws = subs.find((s) => s.userId === winner.user_id)
         if (ws) winnersByGame[gameId] = [ws.id]
@@ -375,7 +387,7 @@ function buildStandings(
   users: { id: string; name: string }[],
   submissions: { id: string; user_id: string; hand_card_id: string; game_id: string; preamble: string | null }[],
   votes: { voter_user_id: string; submission_id: string; game_id: string; is_tiebreaker: boolean }[],
-  mashResults: { game_id: string; user_id: string; tap_count: number; mash_round: number }[],
+  mashResults: { game_id: string; user_id: string; tap_count: number; mash_round: number; completion_time_ms?: number | null }[],
   validGameIds: Set<string>,
 ): TournamentStanding[] {
   const initialVotes = votes.filter((v) => !v.is_tiebreaker && validGameIds.has(v.game_id))
@@ -398,7 +410,18 @@ function buildStandings(
       const maxRound = Math.max(...gameMash.map((r) => r.mash_round))
       const latest = gameMash.filter((r) => r.mash_round === maxRound)
       const maxTaps = Math.max(...latest.map((r) => r.tap_count))
-      const winner = latest.find((r) => r.tap_count === maxTaps)
+      const topByTaps = latest.filter((r) => r.tap_count === maxTaps)
+      let winner
+      if (topByTaps.length === 1) {
+        winner = topByTaps[0]
+      } else {
+        const withTime = topByTaps.filter((r) => r.completion_time_ms != null)
+        if (withTime.length >= 2) {
+          const minTime = Math.min(...withTime.map((r) => r.completion_time_ms!))
+          const topByTime = withTime.filter((r) => r.completion_time_ms === minTime)
+          if (topByTime.length === 1) winner = topByTime[0]
+        }
+      }
       if (winner) { const ws = subs.find((s) => s.userId === winner.user_id); if (ws) winnersByGame[gameId] = [ws.id] }
       continue
     }

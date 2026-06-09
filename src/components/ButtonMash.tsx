@@ -17,6 +17,7 @@ interface ButtonMashResult {
   user_id: string
   tap_count: number
   mash_round: number
+  completion_time_ms: number | null
 }
 
 interface Props {
@@ -26,10 +27,8 @@ interface Props {
   participants: User[]
   onCompleted: () => Promise<void>
   forcedContestants?: string[]  // 指定時は投票ベースの判定をスキップ
-  duration?: number             // 連打時間 ms（省略時 3000）
+  duration?: number             // 連打時間 ms（省略時 3000、timed mode のみ使用）
 }
-
-const MASH_DURATION_MS = 3000
 
 export default function ButtonMash({
   token,
@@ -38,23 +37,30 @@ export default function ButtonMash({
   participants,
   onCompleted,
   forcedContestants,
-  duration = MASH_DURATION_MS,
 }: Props) {
   const [tiebreakerUserIds, setTiebreakerUserIds] = useState<string[]>([])
   const [mashRound, setMashRound] = useState(1)
+  const [mashType, setMashType] = useState<string>('timed_3s')
   const [tapCount, setTapCount] = useState(0)
   const [started, setStarted] = useState(false)
   const [finished, setFinished] = useState(false)
-  const [timeLeft, setTimeLeft] = useState(duration)
+  const [timeLeft, setTimeLeft] = useState(3000)
   const [saving, setSaving] = useState(false)
   const [results, setResults] = useState<ButtonMashResult[]>([])
   const [opponentDone, setOpponentDone] = useState(false)
+  const [completionTimeMs, setCompletionTimeMs] = useState<number | null>(null)
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const endTimeRef = useRef<number>(0)
+  const startTimeRef = useRef<number>(0)
   const savedMashRoundRef = useRef(0)
 
   const getName = (id: string) => participants.find((p) => p.id === id)?.name ?? '???'
+
+  // speed mode 判定
+  const isSpeedMode = mashType === 'speed_20tap' || mashType === 'speed_30tap'
+  const targetTaps = mashType === 'speed_30tap' ? 30 : 20
+  const timedDuration = mashType === 'timed_5s' ? 5000 : 3000
 
   // 参加者の取得：forcedContestants 指定時はそれを使用、それ以外は投票から判定
   useEffect(() => {
@@ -97,13 +103,18 @@ export default function ButtonMash({
       .then((r) => r.json())
       .then(async (json) => {
         const allResults: ButtonMashResult[] = json.results ?? []
-        const latestRound = allResults.length > 0 ? Math.max(...allResults.map((r) => r.mash_round)) : 1
-        const myResult = allResults.find((r) => r.user_id === currentUserId && r.mash_round === latestRound)
+        const newMashType = json.mash_type ?? 'timed_3s'
+        const expectedRound = json.expected_round ?? 1
+        setMashType(newMashType)
+        setMashRound(expectedRound)
+        const myResult = allResults.find(
+          (r) => r.user_id === currentUserId && r.mash_round === expectedRound,
+        )
         if (myResult) {
-          savedMashRoundRef.current = latestRound
+          savedMashRoundRef.current = expectedRound
           setFinished(true)
           setTapCount(myResult.tap_count)
-          setMashRound(latestRound)
+          if (myResult.completion_time_ms != null) setCompletionTimeMs(myResult.completion_time_ms)
           await onCompleted()
         }
       })
@@ -117,13 +128,13 @@ export default function ButtonMash({
       const res = await fetch(`/api/tournaments/${token}/button-mash?game_id=${game.id}`)
       const json = await res.json()
       const allResults: ButtonMashResult[] = json.results ?? []
-      const latestRound = allResults.length > 0
-        ? Math.max(...allResults.map((r) => r.mash_round))
-        : 1
-      setMashRound(latestRound)
+      const newMashType: string = json.mash_type ?? 'timed_3s'
+      const expectedRound: number = json.expected_round ?? 1
+      setMashType(newMashType)
+      setMashRound(expectedRound)
       setResults(allResults)
       const opponentResult = allResults.find(
-        (r) => r.user_id === opponentId && r.mash_round === latestRound,
+        (r) => r.user_id === opponentId && r.mash_round === expectedRound,
       )
       if (opponentResult) setOpponentDone(true)
     }, 2000)
@@ -137,10 +148,10 @@ export default function ButtonMash({
       const res = await fetch(`/api/tournaments/${token}/button-mash?game_id=${game.id}`)
       const json = await res.json()
       const allResults: ButtonMashResult[] = json.results ?? []
+      const expectedRound: number = json.expected_round ?? 1
       if (allResults.length === 0) return
-      const latestRound = Math.max(...allResults.map((r) => r.mash_round))
       setResults(allResults)
-      const latestResults = allResults.filter((r) => r.mash_round === latestRound)
+      const latestResults = allResults.filter((r) => r.mash_round === expectedRound)
       if (latestResults.length >= tiebreakerUserIds.length) {
         await onCompleted()
       }
@@ -149,7 +160,7 @@ export default function ButtonMash({
   }, [token, game.id, isContestant, tiebreakerUserIds.length, onCompleted])
 
   const saveResult = useCallback(
-    async (count: number, round: number) => {
+    async (count: number, round: number, completionMs?: number) => {
       if (savedMashRoundRef.current === round) return
       savedMashRoundRef.current = round
       setSaving(true)
@@ -161,6 +172,7 @@ export default function ButtonMash({
           user_id: currentUserId,
           tap_count: count,
           mash_round: round,
+          completion_time_ms: completionMs ?? null,
         }),
       })
       setSaving(false)
@@ -172,9 +184,36 @@ export default function ButtonMash({
   const handleTap = () => {
     if (finished) return
 
+    if (isSpeedMode) {
+      if (!started) {
+        setStarted(true)
+        startTimeRef.current = Date.now()
+        const newCount = 1
+        setTapCount(newCount)
+        if (newCount >= targetTaps) {
+          const elapsed = Date.now() - startTimeRef.current
+          setFinished(true)
+          setCompletionTimeMs(elapsed)
+          saveResult(newCount, mashRound, elapsed)
+        }
+        return
+      }
+      const newCount = tapCount + 1
+      setTapCount(newCount)
+      if (newCount >= targetTaps) {
+        const elapsed = Date.now() - startTimeRef.current
+        setFinished(true)
+        setCompletionTimeMs(elapsed)
+        saveResult(newCount, mashRound, elapsed)
+      }
+      return
+    }
+
+    // timed mode
     if (!started) {
       setStarted(true)
-      endTimeRef.current = Date.now() + duration
+      endTimeRef.current = Date.now() + timedDuration
+      setTimeLeft(timedDuration)
       setTapCount(1)
 
       timerRef.current = setInterval(() => {
@@ -209,13 +248,18 @@ export default function ButtonMash({
     setTapCount(0)
     setStarted(false)
     setFinished(false)
-    setTimeLeft(duration)
+    setTimeLeft(timedDuration)
     setOpponentDone(false)
+    setCompletionTimeMs(null)
     savedMashRoundRef.current = 0
-  }, [mashRound, duration])
+  }, [mashRound, timedDuration])
 
   const latestResults = results.filter((r) => r.mash_round === mashRound)
   const opponentResult = latestResults.find((r) => r.user_id === opponentId)
+
+  const progressPct = !isSpeedMode && started && !finished
+    ? ((timedDuration - timeLeft) / timedDuration) * 100
+    : !isSpeedMode && finished ? 100 : 0
 
   // ローディング中
   if (tiebreakerUserIds.length === 0) {
@@ -230,10 +274,12 @@ export default function ButtonMash({
       <div className="p-4 space-y-4">
         <div className="bg-red-500 rounded-2xl p-4 text-center">
           <p className="text-red-100 text-xs font-bold mb-0.5">第{game.round_number}回戦</p>
-          <h2 className="text-white text-lg font-bold">⚔️ 連打決戦</h2>
+          <h2 className="text-white text-lg font-bold">
+            {isSpeedMode ? `🏁 ${targetTaps}回早打ち` : '⚔️ 連打決戦'}
+          </h2>
         </div>
         <div className="bg-gray-50 rounded-2xl p-8 text-center space-y-3">
-          <p className="text-4xl">⚔️</p>
+          <p className="text-4xl">{isSpeedMode ? '🏁' : '⚔️'}</p>
           <p className="text-gray-700 font-bold text-lg">現在決戦中！</p>
           <p className="text-gray-500 text-sm">結果が出るまでお待ちください</p>
           <div className="mt-4 space-y-2">
@@ -243,7 +289,7 @@ export default function ButtonMash({
                 <div key={uid} className="flex items-center justify-between bg-white rounded-xl px-4 py-2 border border-gray-100">
                   <span className="text-sm font-medium text-gray-700">{getName(uid)}</span>
                   <span className={`text-xs font-bold ${done ? 'text-green-500' : 'text-gray-400'}`}>
-                    {done ? '✓ 完了' : '連打中...'}
+                    {done ? '✓ 完了' : isSpeedMode ? '早打ち中...' : '連打中...'}
                   </span>
                 </div>
               )
@@ -254,17 +300,15 @@ export default function ButtonMash({
     )
   }
 
-  const progressPct = started && !finished
-    ? ((MASH_DURATION_MS - timeLeft) / MASH_DURATION_MS) * 100
-    : finished ? 100 : 0
-
   return (
     <div className="p-4 space-y-4">
       <div className="bg-red-500 rounded-2xl p-4 text-center">
         <p className="text-red-100 text-xs font-bold mb-0.5">
           第{game.round_number}回戦{mashRound > 1 ? ` / 再戦${mashRound}回目` : ''}
         </p>
-        <h2 className="text-white text-lg font-bold">⚔️ 連打決戦</h2>
+        <h2 className="text-white text-lg font-bold">
+          {isSpeedMode ? `🏁 ${targetTaps}回早打ち` : '⚔️ 連打決戦'}
+        </h2>
       </div>
 
       {mashRound > 1 && (
@@ -273,28 +317,44 @@ export default function ButtonMash({
         </div>
       )}
 
-      <div className="bg-red-50 rounded-xl px-4 py-3 text-center">
-        <p className="text-red-700 text-sm font-medium">
-          {!started
-            ? `🎮 ボタンを押してスタート！${duration / 1000}秒間連打しよう`
-            : finished
-            ? '⏱️ 終了！'
-            : `残り ${(timeLeft / 1000).toFixed(1)} 秒`}
-        </p>
-      </div>
+      {isSpeedMode ? (
+        <div className="bg-blue-50 rounded-xl px-4 py-3 text-center">
+          <p className="text-blue-700 text-sm font-medium">
+            {!started
+              ? `🏁 ボタンを押してスタート！${targetTaps}回タップで完了`
+              : finished
+              ? `⏱️ 完了！ ${((completionTimeMs ?? 0) / 1000).toFixed(2)}秒`
+              : `${tapCount} / ${targetTaps} 回`}
+          </p>
+        </div>
+      ) : (
+        <div className="bg-red-50 rounded-xl px-4 py-3 text-center">
+          <p className="text-red-700 text-sm font-medium">
+            {!started
+              ? `🎮 ボタンを押してスタート！${timedDuration / 1000}秒間連打しよう`
+              : finished
+              ? '⏱️ 終了！'
+              : `残り ${(timeLeft / 1000).toFixed(1)} 秒`}
+          </p>
+        </div>
+      )}
 
-      {/* プログレスバー */}
-      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-        <div
-          className="h-full bg-red-500 transition-all duration-50"
-          style={{ width: `${progressPct}%` }}
-        />
-      </div>
+      {/* プログレスバー（timed mode のみ） */}
+      {!isSpeedMode && (
+        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-red-500 transition-all duration-50"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+      )}
 
       {/* タップ回数 */}
       <div className="text-center">
         <p className="text-6xl font-black text-red-500">{tapCount}</p>
-        <p className="text-gray-400 text-sm mt-1">回</p>
+        <p className="text-gray-400 text-sm mt-1">
+          {isSpeedMode ? `/ ${targetTaps} 回` : '回'}
+        </p>
       </div>
 
       {/* 連打ボタン */}
@@ -309,7 +369,7 @@ export default function ButtonMash({
             }`}
           style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
         >
-          {finished ? '終了' : started ? '連打！' : 'スタート'}
+          {finished ? '完了' : started ? (isSpeedMode ? 'タップ！' : '連打！') : 'スタート'}
         </button>
       </div>
 
@@ -318,13 +378,23 @@ export default function ButtonMash({
         <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-gray-700">あなた（{getName(currentUserId)}）</span>
-            <span className="text-sm font-bold text-red-500">{tapCount} 回</span>
+            <span className="text-sm font-bold text-red-500">
+              {isSpeedMode
+                ? completionTimeMs != null ? `${(completionTimeMs / 1000).toFixed(2)}秒` : '—'
+                : `${tapCount} 回`}
+            </span>
           </div>
           {opponentId && (
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-gray-700">{getName(opponentId)}</span>
               <span className={`text-sm font-bold ${opponentDone ? 'text-red-500' : 'text-gray-400'}`}>
-                {opponentDone && opponentResult ? `${opponentResult.tap_count} 回` : '連打中...'}
+                {opponentDone && opponentResult
+                  ? isSpeedMode
+                    ? opponentResult.completion_time_ms != null
+                      ? `${(opponentResult.completion_time_ms / 1000).toFixed(2)}秒`
+                      : '—'
+                    : `${opponentResult.tap_count} 回`
+                  : isSpeedMode ? '早打ち中...' : '連打中...'}
               </span>
             </div>
           )}

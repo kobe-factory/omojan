@@ -178,6 +178,8 @@ export type Database = {
           topic_card_id: string
           is_rematch: boolean
           voting_mode: string | null
+          button_mash_type: string | null
+          mash_current_round: number
           created_at: string
         }
         Insert: {
@@ -188,6 +190,8 @@ export type Database = {
           topic_card_id: string
           is_rematch?: boolean
           voting_mode?: string | null
+          button_mash_type?: string | null
+          mash_current_round?: number
           created_at?: string
         }
         Update: {
@@ -198,6 +202,8 @@ export type Database = {
           topic_card_id?: string
           is_rematch?: boolean
           voting_mode?: string | null
+          button_mash_type?: string | null
+          mash_current_round?: number
           created_at?: string
         }
         Relationships: []
@@ -308,6 +314,7 @@ export type Database = {
           user_id: string
           tap_count: number
           mash_round: number
+          completion_time_ms: number | null
           completed_at: string
         }
         Insert: {
@@ -316,6 +323,7 @@ export type Database = {
           user_id: string
           tap_count: number
           mash_round?: number
+          completion_time_ms?: number | null
           completed_at?: string
         }
         Update: {
@@ -324,6 +332,7 @@ export type Database = {
           user_id?: string
           tap_count?: number
           mash_round?: number
+          completion_time_ms?: number | null
           completed_at?: string
         }
         Relationships: []

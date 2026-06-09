@@ -7,7 +7,7 @@ export async function POST(
   { params }: { params: Promise<{ token: string }> },
 ) {
   const { token } = await params
-  const { game_id, user_id, tap_count, mash_round } = await request.json()
+  const { game_id, user_id, tap_count, mash_round, completion_time_ms } = await request.json()
 
   if (!game_id || !user_id || tap_count == null) {
     return NextResponse.json({ error: 'パラメータが不足しています' }, { status: 400 })
@@ -29,7 +29,7 @@ export async function POST(
   const { error } = await supabaseAdmin
     .from('button_mash_results')
     .upsert(
-      { game_id, user_id, tap_count, mash_round: round },
+      { game_id, user_id, tap_count, mash_round: round, completion_time_ms: completion_time_ms ?? null },
       { onConflict: 'game_id,user_id,mash_round' },
     )
 
@@ -62,12 +62,21 @@ export async function GET(
     return NextResponse.json({ error: '大会が見つかりません' }, { status: 404 })
   }
 
+  const { data: game } = await supabase
+    .from('games')
+    .select('button_mash_type, mash_current_round')
+    .eq('id', game_id)
+    .single()
+
   const { data: results } = await supabase
     .from('button_mash_results')
-    .select('user_id, tap_count, mash_round, completed_at')
+    .select('user_id, tap_count, mash_round, completion_time_ms')
     .eq('game_id', game_id)
     .order('mash_round', { ascending: false })
-    .order('completed_at', { ascending: true })
 
-  return NextResponse.json({ results: results ?? [] })
+  return NextResponse.json({
+    results: results ?? [],
+    mash_type: game?.button_mash_type ?? 'timed_3s',
+    expected_round: game?.mash_current_round ?? 1,
+  })
 }

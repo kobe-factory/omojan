@@ -266,7 +266,7 @@ export async function POST(
   if (tournament.status === 'playing') {
     const { data: currentGame } = await supabase
       .from('games')
-      .select('id, round_number, status, topic_card_id, is_rematch, voting_mode')
+      .select('id, round_number, status, topic_card_id, is_rematch, voting_mode, button_mash_type, mash_current_round')
       .eq('tournament_id', tournament.id)
       .order('round_number', { ascending: false })
       .order('created_at', { ascending: false })
@@ -422,10 +422,11 @@ export async function POST(
 
       if (tiedAtTopIds.length === 2) {
         if (tournament.tiebreaker_mode === 'button_mash') {
-          // 2作品同票 → 連打ゲーム
+          // 2作品同票 → 連打ゲーム（ランダムでモードを決定）
+          const mashType = Math.random() < 0.5 ? 'timed_3s' : 'speed_20tap'
           const { error: toBMError } = await supabase
             .from('games')
-            .update({ status: 'waiting_button_mash' })
+            .update({ status: 'waiting_button_mash', button_mash_type: mashType })
             .eq('id', currentGame.id)
           if (toBMError) return NextResponse.json({ error: toBMError.message }, { status: 500 })
 
@@ -601,16 +602,14 @@ export async function POST(
         .in('id', tiedSubIds)
       const tiebreakerUserIds = (tiedSubs ?? []).map((s) => s.user_id)
 
-      // 現在の最大 mash_round を取得
+      // 現在のラウンドは games.mash_current_round を優先使用
       const { data: existingResults } = await supabase
         .from('button_mash_results')
-        .select('user_id, tap_count, mash_round')
+        .select('user_id, tap_count, mash_round, completion_time_ms')
         .eq('game_id', currentGame.id)
         .order('mash_round', { ascending: false })
 
-      const currentMashRound = existingResults && existingResults.length > 0
-        ? existingResults[0].mash_round
-        : 1
+      const currentMashRound = (currentGame as { mash_current_round?: number }).mash_current_round ?? 1
 
       // 現在のラウンドで両者が完了しているか確認
       const currentRoundResults = (existingResults ?? []).filter(
@@ -624,16 +623,38 @@ export async function POST(
         return NextResponse.json({ waiting: true, waitingUserIds: waiting })
       }
 
-      // 両者完了 → 勝敗判定
-      const countMap: Record<string, number> = {}
-      for (const r of currentRoundResults) {
-        countMap[r.user_id] = r.tap_count
+      // 両者完了 → 勝敗判定（speed mode か timed mode か）
+      const isSpeedMode =
+        (currentGame as { button_mash_type?: string | null }).button_mash_type === 'speed_20tap' ||
+        (currentGame as { button_mash_type?: string | null }).button_mash_type === 'speed_30tap'
+      let isTie = false
+
+      if (isSpeedMode) {
+        const minTime = Math.min(
+          ...currentRoundResults.map((r) => (r as { completion_time_ms?: number | null }).completion_time_ms ?? Infinity),
+        )
+        const topPlayers = currentRoundResults.filter(
+          (r) => (r as { completion_time_ms?: number | null }).completion_time_ms === minTime,
+        )
+        isTie = topPlayers.length >= 2
+      } else {
+        const countMap: Record<string, number> = {}
+        for (const r of currentRoundResults) {
+          countMap[r.user_id] = r.tap_count
+        }
+        const counts = Object.values(countMap)
+        isTie = counts.length >= 2 && counts[0] === counts[1]
       }
-      const counts = Object.values(countMap)
-      const isTie = counts.length >= 2 && counts[0] === counts[1]
 
       if (isTie) {
-        // 同点 → mash_round をインクリメントして継続
+        // 同点 → モードを交互に切り替えて mash_current_round をインクリメント
+        const currentType =
+          (currentGame as { button_mash_type?: string | null }).button_mash_type ?? 'timed_3s'
+        const nextType = currentType === 'timed_3s' ? 'speed_20tap' : 'timed_3s'
+        await supabase
+          .from('games')
+          .update({ button_mash_type: nextType, mash_current_round: currentMashRound + 1 })
+          .eq('id', currentGame.id)
         return NextResponse.json({ waiting: true, isTie: true, nextMashRound: currentMashRound + 1 })
       }
 
@@ -738,6 +759,7 @@ export async function POST(
             .single()
 
           if (anyCard) {
+            const finalMashType = Math.random() < 0.5 ? 'timed_5s' : 'speed_30tap'
             await supabaseAdmin.from('games').insert({
               tournament_id: tournament.id,
               round_number: 0,
@@ -745,6 +767,8 @@ export async function POST(
               topic_card_id: anyCard.id,
               is_rematch: false,
               voting_mode: `final_tiebreaker:${tiedUserIds.join(',')}`,
+              button_mash_type: finalMashType,
+              mash_current_round: 1,
             })
 
             await supabase.from('tournaments').update({ status: 'final_tiebreaker' }).eq('id', tournament.id)
@@ -796,7 +820,7 @@ export async function POST(
   if (tournament.status === 'final_tiebreaker') {
     const { data: finalGame } = await supabase
       .from('games')
-      .select('id, status, voting_mode')
+      .select('id, status, voting_mode, button_mash_type, mash_current_round')
       .eq('tournament_id', tournament.id)
       .eq('round_number', 0)
       .single()
@@ -812,14 +836,12 @@ export async function POST(
 
     const { data: existingResults } = await supabase
       .from('button_mash_results')
-      .select('user_id, tap_count, mash_round')
+      .select('user_id, tap_count, mash_round, completion_time_ms')
       .eq('game_id', finalGame.id)
       .order('mash_round', { ascending: false })
 
     const currentMashRound =
-      existingResults && existingResults.length > 0
-        ? Math.max(...existingResults.map((r) => r.mash_round))
-        : 1
+      (finalGame as { mash_current_round?: number }).mash_current_round ?? 1
 
     const currentRoundResults = (existingResults ?? []).filter(
       (r) => r.mash_round === currentMashRound,
@@ -832,10 +854,38 @@ export async function POST(
       return NextResponse.json({ waiting: true, waitingUserIds: waiting })
     }
 
-    const maxTaps = Math.max(...currentRoundResults.map((r) => r.tap_count))
-    const topPlayers = currentRoundResults.filter((r) => r.tap_count === maxTaps)
+    // 勝敗判定（speed mode か timed mode か）
+    const isFinalSpeedMode =
+      (finalGame as { button_mash_type?: string | null }).button_mash_type === 'speed_20tap' ||
+      (finalGame as { button_mash_type?: string | null }).button_mash_type === 'speed_30tap'
+    let isFinalTie = false
+    let finalTopPlayers = currentRoundResults
 
-    if (topPlayers.length >= 2) {
+    if (isFinalSpeedMode) {
+      const minTime = Math.min(
+        ...currentRoundResults.map((r) => (r as { completion_time_ms?: number | null }).completion_time_ms ?? Infinity),
+      )
+      finalTopPlayers = currentRoundResults.filter(
+        (r) => (r as { completion_time_ms?: number | null }).completion_time_ms === minTime,
+      )
+      isFinalTie = finalTopPlayers.length >= 2
+    } else {
+      const maxTaps = Math.max(...currentRoundResults.map((r) => r.tap_count))
+      finalTopPlayers = currentRoundResults.filter((r) => r.tap_count === maxTaps)
+      isFinalTie = finalTopPlayers.length >= 2
+    }
+
+    if (isFinalTie) {
+      // 同点 → モードを交互に切り替えて mash_current_round をインクリメント
+      const currentFinalType =
+        (finalGame as { button_mash_type?: string | null }).button_mash_type ?? 'timed_5s'
+      const nextFinalType = currentFinalType === 'timed_5s' || currentFinalType === 'timed_3s'
+        ? 'speed_30tap'
+        : 'timed_5s'
+      await supabaseAdmin
+        .from('games')
+        .update({ button_mash_type: nextFinalType, mash_current_round: currentMashRound + 1 })
+        .eq('id', finalGame.id)
       return NextResponse.json({ waiting: true, isTie: true, nextMashRound: currentMashRound + 1 })
     }
 
@@ -871,7 +921,7 @@ async function computeTournamentStandings(
 
   const { data: games } = await supabase
     .from('games')
-    .select('id, round_number, status, is_rematch')
+    .select('id, round_number, status, is_rematch, button_mash_type')
     .eq('tournament_id', tournamentId)
     .gt('round_number', 0)
 
@@ -882,7 +932,7 @@ async function computeTournamentStandings(
   const [{ data: allVotes }, { data: allSubs }, { data: allMashResults }] = await Promise.all([
     supabase.from('votes').select('game_id, submission_id, is_tiebreaker').in('game_id', gameIds),
     supabase.from('submissions').select('id, game_id, user_id').in('game_id', gameIds),
-    supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round').in('game_id', gameIds),
+    supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round, completion_time_ms').in('game_id', gameIds),
   ])
 
   const regularVoteCount: Record<string, number> = {}
@@ -901,9 +951,22 @@ async function computeTournamentStandings(
     if (results.length < 2) continue
     const latestRound = Math.max(...results.map((r) => r.mash_round))
     const latest = results.filter((r) => r.mash_round === latestRound)
-    const maxTaps = Math.max(...latest.map((r) => r.tap_count))
-    const topWinners = latest.filter((r) => r.tap_count === maxTaps)
-    if (topWinners.length === 1) mashWinnerByGame[game.id] = topWinners[0].user_id
+    const isSpeedMode =
+      (game as { button_mash_type?: string | null }).button_mash_type === 'speed_20tap' ||
+      (game as { button_mash_type?: string | null }).button_mash_type === 'speed_30tap'
+    if (isSpeedMode) {
+      const minTime = Math.min(
+        ...latest.map((r) => (r as { completion_time_ms?: number | null }).completion_time_ms ?? Infinity),
+      )
+      const topWinners = latest.filter(
+        (r) => (r as { completion_time_ms?: number | null }).completion_time_ms === minTime,
+      )
+      if (topWinners.length === 1) mashWinnerByGame[game.id] = topWinners[0].user_id
+    } else {
+      const maxTaps = Math.max(...latest.map((r) => r.tap_count))
+      const topWinners = latest.filter((r) => r.tap_count === maxTaps)
+      if (topWinners.length === 1) mashWinnerByGame[game.id] = topWinners[0].user_id
+    }
   }
 
   const rematchRounds = new Set(games.filter((g) => g.is_rematch).map((g) => g.round_number))

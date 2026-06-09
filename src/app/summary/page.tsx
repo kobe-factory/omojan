@@ -97,7 +97,7 @@ export default function SummaryPage() {
     const [{ data: allSubs }, { data: allVotes }, { data: allMashResults }] = await Promise.all([
       supabase.from('submissions').select('id, game_id, user_id, hand_card_id, position, preamble, preamble_position').in('game_id', gameIds),
       supabase.from('votes').select('game_id, submission_id, is_tiebreaker').in('game_id', gameIds),
-      supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round').in('game_id', gameIds),
+      supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round, completion_time_ms').in('game_id', gameIds),
     ])
 
     // ゲーム別の連打ゲーム勝者を集計
@@ -107,9 +107,22 @@ export default function SummaryPage() {
       const results = (allMashResults ?? []).filter((r) => r.game_id === gameId)
       const latestRound = Math.max(...results.map((r) => r.mash_round))
       const latest = results.filter((r) => r.mash_round === latestRound)
-      const maxTaps = Math.max(...latest.map((r) => r.tap_count))
-      const winners = latest.filter((r) => r.tap_count === maxTaps)
-      if (winners.length === 1) mashWinnerByGame[gameId] = winners[0].user_id
+      const isSpeedMode = latest.some(
+        (r) => (r as { completion_time_ms?: number | null }).completion_time_ms != null,
+      )
+      if (isSpeedMode) {
+        const minTime = Math.min(
+          ...latest.map((r) => (r as { completion_time_ms?: number | null }).completion_time_ms ?? Infinity),
+        )
+        const winners = latest.filter(
+          (r) => (r as { completion_time_ms?: number | null }).completion_time_ms === minTime,
+        )
+        if (winners.length === 1) mashWinnerByGame[gameId] = winners[0].user_id
+      } else {
+        const maxTaps = Math.max(...latest.map((r) => r.tap_count))
+        const winners = latest.filter((r) => r.tap_count === maxTaps)
+        if (winners.length === 1) mashWinnerByGame[gameId] = winners[0].user_id
+      }
     }
 
     const topicIds = (allGames ?? []).map((g) => g.topic_card_id)
@@ -528,7 +541,7 @@ export default function SummaryPage() {
       </div>}
 
       <footer className="text-center py-4">
-        <p className="text-xs text-gray-300">v1.36.24</p>
+        <p className="text-xs text-gray-300">v1.37.0</p>
       </footer>
     </div>
   )
