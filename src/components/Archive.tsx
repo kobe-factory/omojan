@@ -9,6 +9,13 @@ interface User {
   name: string
 }
 
+interface ButtonMashResult {
+  userId: string
+  userName: string
+  tapCount: number
+  completionTimeMs: number | null
+}
+
 interface ArchiveGame {
   id: string
   round_number: number
@@ -20,6 +27,8 @@ interface ArchiveGame {
   hasTiebreaker: boolean
   votingMode: string | null
   buttonMashType: string | null
+  buttonMashResults: ButtonMashResult[]
+  buttonMashIsSpeedMode: boolean
 }
 
 interface ArchiveSubmission {
@@ -167,7 +176,6 @@ export default function Archive({ tournamentId, participants, impersonationMode 
                   // 連打ゲームで決着
                   const latestRound = Math.max(...mashResults.map((r) => r.mash_round))
                   const latest = mashResults.filter((r) => r.mash_round === latestRound)
-                  // speed mode か timed mode か（completion_time_ms の有無で判定）
                   const hasMashSpeedMode = latest.some(
                     (r) => (r as { completion_time_ms?: number | null }).completion_time_ms != null,
                   )
@@ -190,6 +198,8 @@ export default function Archive({ tournamentId, participants, impersonationMode 
                     if (winnerSub) {
                       winnerSub.isWinner = true
                       winnerSub.decidedByButtonMash = true
+                      // 順位を正しく表示するため勝者のdisplayVoteCountを+1
+                      winnerSub.displayVoteCount = winnerSub.voteCount + 1
                     }
                   }
                 }
@@ -198,6 +208,31 @@ export default function Archive({ tournamentId, participants, impersonationMode 
           }
 
           sorted.sort((a, b) => b.displayVoteCount - a.displayVoteCount)
+
+          // 連打結果を最終ラウンドから構築
+          let buttonMashResults: ButtonMashResult[] = []
+          let buttonMashIsSpeedMode = false
+          if (mashResults && mashResults.length > 0) {
+            const latestRound = Math.max(...mashResults.map((r) => r.mash_round))
+            const latest = mashResults.filter((r) => r.mash_round === latestRound)
+            buttonMashIsSpeedMode = latest.some(
+              (r) => (r as { completion_time_ms?: number | null }).completion_time_ms != null,
+            )
+            buttonMashResults = latest.map((r) => {
+              const user = participants.find((p) => p.id === r.user_id)
+              return {
+                userId: r.user_id,
+                userName: user?.name ?? '???',
+                tapCount: r.tap_count,
+                completionTimeMs: (r as { completion_time_ms?: number | null }).completion_time_ms ?? null,
+              }
+            })
+            if (buttonMashIsSpeedMode) {
+              buttonMashResults.sort((a, b) => (a.completionTimeMs ?? Infinity) - (b.completionTimeMs ?? Infinity))
+            } else {
+              buttonMashResults.sort((a, b) => b.tapCount - a.tapCount)
+            }
+          }
 
           return {
             id: g.id,
@@ -210,6 +245,8 @@ export default function Archive({ tournamentId, participants, impersonationMode 
             hasTiebreaker,
             votingMode: (g as { voting_mode?: string | null }).voting_mode ?? null,
             buttonMashType: (g as { button_mash_type?: string | null }).button_mash_type ?? null,
+            buttonMashResults,
+            buttonMashIsSpeedMode,
           }
         })
       )
@@ -296,6 +333,35 @@ export default function Archive({ tournamentId, participants, impersonationMode 
                   <p className="text-xs text-orange-600 text-center bg-orange-50 rounded-xl py-2">
                     ⚔️ 全員同票のためこの回はお流れ・再戦となりました
                   </p>
+                )}
+                {g.buttonMashResults.length > 0 && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+                    <p className="text-xs font-bold text-red-600 mb-2">⚔️ 連打ゲーム結果</p>
+                    <div className="space-y-1">
+                      {g.buttonMashResults.map((r, i) => {
+                        const isWinner = i === 0 && (
+                          g.buttonMashIsSpeedMode
+                            ? r.completionTimeMs != null && r.completionTimeMs < (g.buttonMashResults[1]?.completionTimeMs ?? Infinity)
+                            : r.tapCount > (g.buttonMashResults[1]?.tapCount ?? 0)
+                        )
+                        return (
+                          <div key={r.userId} className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-1.5">
+                              {isWinner && <span className="text-yellow-500">👑</span>}
+                              <span className={isWinner ? 'font-bold text-red-700' : 'text-gray-600'}>{r.userName}</span>
+                            </div>
+                            <span className={`font-bold tabular-nums ${isWinner ? 'text-red-600' : 'text-gray-500'}`}>
+                              {g.buttonMashIsSpeedMode
+                                ? r.completionTimeMs != null
+                                  ? `${(r.completionTimeMs / 1000).toFixed(2)}秒`
+                                  : '−'
+                                : `${r.tapCount}回`}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
                 )}
                 {(() => {
                   const rankList = g.submissions.reduce<number[]>((acc, s, i) => {
