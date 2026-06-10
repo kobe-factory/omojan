@@ -580,37 +580,6 @@ export default function PersonalStats() {
                       </div>
                     )}
 
-                    {/* AI総評 */}
-                    {aiComment && (aiComment.overall_comment || aiComment.last_tournament_comment || aiComment.card_analysis_comment || aiComment.vote_analysis_comment) && (
-                      <div className="bg-linear-to-br from-purple-50 to-indigo-50 rounded-xl p-3 space-y-2">
-                        <p className="text-[10px] font-bold text-purple-400 uppercase tracking-wide">💅 リナちゃんの総評</p>
-                        {aiComment.overall_comment && (
-                          <div>
-                            <p className="text-[10px] text-purple-400 mb-0.5">通算</p>
-                            <p className="text-xs text-gray-700 leading-relaxed">{aiComment.overall_comment}</p>
-                          </div>
-                        )}
-                        {aiComment.last_tournament_comment && (
-                          <div>
-                            <p className="text-[10px] text-purple-400 mb-0.5">前回大会</p>
-                            <p className="text-xs text-gray-700 leading-relaxed">{aiComment.last_tournament_comment}</p>
-                          </div>
-                        )}
-                        {aiComment.card_analysis_comment && (
-                          <div>
-                            <p className="text-[10px] text-purple-400 mb-0.5">🃏 作成した札の傾向</p>
-                            <p className="text-xs text-gray-700 leading-relaxed">{aiComment.card_analysis_comment}</p>
-                          </div>
-                        )}
-                        {aiComment.vote_analysis_comment && (
-                          <div>
-                            <p className="text-[10px] text-purple-400 mb-0.5">🗳️ 投票作品について</p>
-                            <p className="text-xs text-gray-700 leading-relaxed">{aiComment.vote_analysis_comment}</p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
                     {/* 連打ゲーム */}
                     {hasMashData && (
                       <div className="space-y-2">
@@ -679,6 +648,37 @@ export default function PersonalStats() {
                                 <span className="text-xs text-sky-400">({rankLabel(getRank(stats.filter((x) => x.speedMashSessions > 0), s.userId, (x) => -x.avgCompletionTimeMs))})</span>
                               </div>
                             </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* AI総評 */}
+                    {aiComment && (aiComment.overall_comment || aiComment.last_tournament_comment || aiComment.card_analysis_comment || aiComment.vote_analysis_comment) && (
+                      <div className="bg-linear-to-br from-purple-50 to-indigo-50 rounded-xl p-3 space-y-2">
+                        <p className="text-[10px] font-bold text-purple-400 uppercase tracking-wide">💅 リナちゃんの総評</p>
+                        {aiComment.overall_comment && (
+                          <div>
+                            <p className="text-[10px] text-purple-400 mb-0.5">通算</p>
+                            <p className="text-xs text-gray-700 leading-relaxed">{aiComment.overall_comment}</p>
+                          </div>
+                        )}
+                        {aiComment.last_tournament_comment && (
+                          <div>
+                            <p className="text-[10px] text-purple-400 mb-0.5">前回大会</p>
+                            <p className="text-xs text-gray-700 leading-relaxed">{aiComment.last_tournament_comment}</p>
+                          </div>
+                        )}
+                        {aiComment.card_analysis_comment && (
+                          <div>
+                            <p className="text-[10px] text-purple-400 mb-0.5">🃏 作成した札の傾向</p>
+                            <p className="text-xs text-gray-700 leading-relaxed">{aiComment.card_analysis_comment}</p>
+                          </div>
+                        )}
+                        {aiComment.vote_analysis_comment && (
+                          <div>
+                            <p className="text-[10px] text-purple-400 mb-0.5">🗳️ 投票作品について</p>
+                            <p className="text-xs text-gray-700 leading-relaxed">{aiComment.vote_analysis_comment}</p>
                           </div>
                         )}
                       </div>
