@@ -562,24 +562,46 @@ async function generateAllComments(
   }
 
   // 相対ランキング表（数値の相対評価用）
-  function rankAmong(getValue: (u: UserCommentInput) => number, higherIsBetter: boolean): string {
-    const sorted = [...users].sort((a, b) =>
-      higherIsBetter ? getValue(b) - getValue(a) : getValue(a) - getValue(b)
-    )
-    return sorted.map((u, i) => `${i + 1}位:${u.userName}(${getValue(u).toFixed(2)})`).join(' ')
+  function rankAmong(getValue: (s: CompactStats) => number, users: UserCommentInput[], higherIsBetter: boolean, useOverall: boolean): string {
+    const sorted = [...users].sort((a, b) => {
+      const as = useOverall ? a.overall : (a.last ?? a.overall)
+      const bs = useOverall ? b.overall : (b.last ?? b.overall)
+      return higherIsBetter ? getValue(bs) - getValue(as) : getValue(as) - getValue(bs)
+    })
+    return sorted.map((u, i) => {
+      const s = useOverall ? u.overall : (u.last ?? u.overall)
+      return `${i + 1}位:${u.userName}(${getValue(s).toFixed(2)})`
+    }).join(' ')
   }
+
+  const ro = (fn: (s: CompactStats) => number, higher: boolean) => rankAmong(fn, users, higher, true)
+  const rl = (fn: (s: CompactStats) => number, higher: boolean) => rankAmong(fn, users, higher, false)
+
   const relativeRankings = [
-    `MVP数: ${rankAmong(u => u.overall.mvpCount, true)}`,
-    `平均得票: ${rankAmong(u => u.overall.avgVotesPerGame, true)}`,
-    `HR数: ${rankAmong(u => u.overall.homeRuns, true)}`,
-    `ズル滑り数(多いほど不名誉・悪い成績・不名誉ランキング1位が最悪): ${rankAmong(u => u.overall.shutoutCount, true)}`,
-    `ズル滑り率(多いほど不名誉・悪い成績): ${rankAmong(u => u.overall.shutoutRate, true)}`,
-    `前口上使用率: ${rankAmong(u => u.overall.preambleUsageRate, true)}`,
-    `独りぼっち票(多いほど不名誉・ワーストランキング1位が最悪): ${rankAmong(u => u.overall.loneVoteCount, true)}`,
+    `MVP数: ${ro(s => s.mvpCount, true)}`,
+    `平均得票: ${ro(s => s.avgVotesPerGame, true)}`,
+    `HR数: ${ro(s => s.homeRuns, true)}`,
+    `ズル滑り数(多いほど不名誉・悪い成績・不名誉ランキング1位が最悪): ${ro(s => s.shutoutCount, true)}`,
+    `ズル滑り率(多いほど不名誉・悪い成績): ${ro(s => s.shutoutRate, true)}`,
+    `前口上使用率: ${ro(s => s.preambleUsageRate, true)}`,
+    `独りぼっち票(多いほど不名誉・ワーストランキング1位が最悪): ${ro(s => s.loneVoteCount, true)}`,
     users.some(u => u.overall.buttonMashGames > 0)
-      ? `連打ゲーム勝率: ${rankAmong(u => u.overall.buttonMashWinRate, true)}`
+      ? `連打ゲーム勝率: ${ro(s => s.buttonMashWinRate, true)}`
       : null,
   ].filter(Boolean).join('\n')
+
+  // 前回大会専用ランキング（tournament_comment用）
+  const hasLastData = users.some(u => u.last !== null)
+  const lastRelativeRankings = hasLastData ? [
+    `MVP数: ${rl(s => s.mvpCount, true)}`,
+    `平均得票: ${rl(s => s.avgVotesPerGame, true)}`,
+    `HR数: ${rl(s => s.homeRuns, true)}`,
+    `ズル滑り数(多いほど不名誉): ${rl(s => s.shutoutCount, true)}`,
+    `ズル滑り率(多いほど不名誉): ${rl(s => s.shutoutRate, true)}`,
+    users.some(u => (u.last?.buttonMashGames ?? 0) > 0)
+      ? `連打ゲーム勝率: ${rl(s => s.buttonMashWinRate, true)}`
+      : null,
+  ].filter(Boolean).join('\n') : '（前回大会データなし）'
 
   const playerSection = users
     .map((u) => {
@@ -654,7 +676,7 @@ async function generateAllComments(
 - アドバイス・改善点は入れてもいいが、あくまで補足程度
 - 絵文字は1〜2個程度に抑える
 - 日本語のみ。**関西弁（〜やん、〜やで、〜やねん等）は絶対禁止**
-- **last_tournament_commentは「前回大会データ」セクションの情報のみ使うこと。通算データのカード・作品・前口上は絶対に使用しない**
+- **last_tournament_commentは「前回大会データ」セクションの情報のみ使うこと。通算データのカード・作品・前口上・ランキングは絶対に使用しない。「--- 前回大会データ ---」以下の情報のみ参照すること**
 - card_analysis_commentは札の羅列・列挙を絶対しない。1〜2枚だけ例として引用するのはOKだが、それ以外は分析の言葉で語ること。「使用済み札」と「作品」のテキストのみ文中に登場させる（「全札（分析用）」の未使用札は絶対に登場させない）
 - 前口上データは分析に活用すること（overall/card_analysisは通算前口上、last_tournament_commentは前回大会前口上のみ使用）。前口上の羅列は禁止
 - **作品内容の傾向を分析する**：下ネタ系・シュール系・勢いだけ・カッコつけ・ダジャレ系・変化球等のパターンを見抜いてイジること
@@ -688,7 +710,8 @@ ${relativeRankings}
 
 【大会総評（tournament_comment）について】
 キャラクター：「デスク・大河内」というスポーツ新聞のベテラン記者。ビジネスライクで格調ある文体を基本とするが、要所でツッコミやイジりが入り、思わず笑える記事スタイル。リナちゃんとは別キャラ。
-- これは「大会全体の総評」。結果だけに焦点を置かず、大会全体のセンス・傾向・雰囲気を語る
+- これは「今回の大会（第${tournamentNumber}回大会）のみの総評」。通算成績・通算ランキングは一切使わない
+- **以下の「前回大会ランキング」と「第${tournamentNumber}回大会 順位」「この大会の全作品」のみを使用すること**
 - 見出しのような書き出しから始める（例：「激闘の末、〇〇が頂点へ！」など）
 - この大会で実際に使われた作品から読み取れる参加者全体の趣味嗜好・センス・心理状態・傾向を分析・言及する
 - 印象的な作品を具体的に取り上げてコメントする
@@ -696,6 +719,9 @@ ${relativeRankings}
 - 次回大会への期待や不安・予測もさりげなく含める
 - 個人への言及は大会の流れを語る文脈でのみ自然に入れる
 - 300文字前後（280〜320文字）をフルに使うこと
+
+【前回大会ランキング（この大会のみのデータ）】
+${lastRelativeRankings}
 
 第${tournamentNumber}回大会 順位: ${standingsText}
 この大会の全作品（ユーザー別）:
