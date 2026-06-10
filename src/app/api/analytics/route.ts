@@ -24,10 +24,14 @@ export interface UserStats {
   buttonMashWins: number
   buttonMashGames: number
   buttonMashWinRate: number
-  // 連打回数
+  // 連打回数（回数勝負）
   bestTapCount: number     // 最高連打数（1セッション）
   avgTapCount: number      // 平均連打数
-  totalTapSessions: number // 出場セッション数
+  totalTapSessions: number // 出場セッション数（回数勝負）
+  // 連打タイム（タイム勝負）
+  bestCompletionTimeMs: number  // 最速タイム（ms）。0=データなし
+  avgCompletionTimeMs: number   // 平均タイム（ms）。0=データなし
+  speedMashSessions: number     // タイム勝負の出場セッション数
   // 追加指標
   mvpWinRate: number       // MVP勝率 = mvpCount / gamesParticipated
   shutoutCount: number     // 完封（0票）回数
@@ -60,7 +64,7 @@ export async function GET() {
     .eq('status', 'finished')
   const prodTournamentIds = (prodTournaments ?? []).map((t) => t.id)
   if (prodTournamentIds.length === 0) {
-    return NextResponse.json({ stats: users.map((u) => ({ userId: u.id, userName: u.name, cardUsageRate: 0, cardsCreated: 0, cardsUsed: 0, singles: 0, doubles: 0, triples: 0, homeRuns: 0, totalHits: 0, mvpCount: 0, avgVotesPerGame: 0, totalVotesReceived: 0, gamesParticipated: 0, buttonMashWins: 0, buttonMashGames: 0, buttonMashWinRate: 0, bestTapCount: 0, avgTapCount: 0, totalTapSessions: 0, mvpWinRate: 0, shutoutCount: 0, shutoutRate: 0, homeRunRate: 0, preambleCount: 0, preambleUsageRate: 0, maxVotesInGame: 0 })) })
+    return NextResponse.json({ stats: users.map((u) => ({ userId: u.id, userName: u.name, cardUsageRate: 0, cardsCreated: 0, cardsUsed: 0, singles: 0, doubles: 0, triples: 0, homeRuns: 0, totalHits: 0, mvpCount: 0, avgVotesPerGame: 0, totalVotesReceived: 0, gamesParticipated: 0, buttonMashWins: 0, buttonMashGames: 0, buttonMashWinRate: 0, bestTapCount: 0, avgTapCount: 0, totalTapSessions: 0, bestCompletionTimeMs: 0, avgCompletionTimeMs: 0, speedMashSessions: 0, mvpWinRate: 0, shutoutCount: 0, shutoutRate: 0, homeRunRate: 0, preambleCount: 0, preambleUsageRate: 0, maxVotesInGame: 0 })) })
   }
 
   // 本番大会の全ゲームIDを取得（tournament_id付きで取得し、大会ごとに流局除外判定する）
@@ -94,7 +98,7 @@ export async function GET() {
     supabase.from('cards').select('id, creator_user_id, tournament_id').in('tournament_id', prodTournamentIds),
     prodGameIds.length > 0 ? supabase.from('submissions').select('id, user_id, hand_card_id, game_id, preamble').in('game_id', prodGameIds) : Promise.resolve({ data: [] }),
     prodGameIds.length > 0 ? supabase.from('votes').select('voter_user_id, submission_id, game_id, is_tiebreaker').in('game_id', prodGameIds) : Promise.resolve({ data: [] }),
-    prodGameIds.length > 0 ? supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round').in('game_id', prodGameIds) : Promise.resolve({ data: [] }),
+    prodGameIds.length > 0 ? supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round, completion_time_ms').in('game_id', prodGameIds) : Promise.resolve({ data: [] }),
   ])
 
   const cards = allCards ?? []
@@ -220,10 +224,21 @@ export async function GET() {
 
     // 連打回数（自分が出場した全セッション）
     const myTapRecords = mashResults.filter((r) => r.user_id === user.id)
-    const totalTapSessions = myTapRecords.length
-    const bestTapCount = totalTapSessions > 0 ? Math.max(...myTapRecords.map((r) => r.tap_count)) : 0
+    // 回数勝負（completion_time_ms が null）
+    const countMashRecords = myTapRecords.filter((r) => !r.completion_time_ms)
+    const totalTapSessions = countMashRecords.length
+    const bestTapCount = totalTapSessions > 0 ? Math.max(...countMashRecords.map((r) => r.tap_count)) : 0
     const avgTapCount = totalTapSessions > 0
-      ? Math.round(myTapRecords.reduce((sum, r) => sum + r.tap_count, 0) / totalTapSessions)
+      ? Math.round(countMashRecords.reduce((sum, r) => sum + r.tap_count, 0) / totalTapSessions)
+      : 0
+    // タイム勝負（completion_time_ms が非null）
+    const speedMashRecords = myTapRecords.filter((r) => r.completion_time_ms != null)
+    const speedMashSessions = speedMashRecords.length
+    const bestCompletionTimeMs = speedMashSessions > 0
+      ? Math.min(...speedMashRecords.map((r) => r.completion_time_ms as number))
+      : 0
+    const avgCompletionTimeMs = speedMashSessions > 0
+      ? Math.round(speedMashRecords.reduce((sum, r) => sum + (r.completion_time_ms as number), 0) / speedMashSessions)
       : 0
 
     // 追加指標
@@ -293,6 +308,9 @@ export async function GET() {
       bestTapCount,
       avgTapCount,
       totalTapSessions,
+      bestCompletionTimeMs,
+      avgCompletionTimeMs,
+      speedMashSessions,
       mvpWinRate,
       shutoutCount,
       shutoutRate,

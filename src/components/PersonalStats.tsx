@@ -71,8 +71,10 @@ const TOOLTIPS: Record<string, string> = {
   '総ヒット数': '1票以上を獲得した作品の総数です。1B〜HRの合計値です。',
   '平均得票数': '出場した1回戦あたり、自分の作品が平均何票を獲得したかです。高いほど安定した評価を受けていることを意味します。',
   '連打ゲーム勝率': '連打ゲームに出場した回数のうち、勝利した割合です。',
-  '連打最高記録': '3秒間の連打ゲームで出した自己最高タップ数です。',
-  '連打平均': '連打ゲームに出場した全セッションの平均タップ数です。',
+  '連打最高記録': '回数勝負（3秒/5秒）の連打ゲームで出した自己最高タップ数です。',
+  '連打平均': '回数勝負の連打ゲームに出場した全セッションの平均タップ数です。',
+  '最速タイム': 'タイム勝負（20回/30回）の連打ゲームで出した自己最速タイムです。短いほど強い。',
+  '平均タイム': 'タイム勝負の連打ゲームに出場した全セッションの平均タイムです。',
   '1B（シングル）': '1票を獲得した作品の数です。票を入れてもらえた！という基本ヒットです。',
   '2B（ダブル）': '2票を獲得した作品の数です。半数以上に評価されたことを意味します（5人中2票）。',
   '3B（トリプル）': '3票以上を獲得した作品の数です。かなりの高評価！',
@@ -346,6 +348,26 @@ export default function PersonalStats() {
             filter={(s) => s.totalTapSessions > 0}
             showNoRecord
           />
+          <RankingRow
+            label="最速タイム"
+            tooltipKey="最速タイム"
+            stats={stats}
+            getValue={(s) => -s.bestCompletionTimeMs}
+            formatValue={(v) => `${(-v / 1000).toFixed(2)}秒`}
+            colorClass="text-sky-500"
+            filter={(s) => s.speedMashSessions > 0}
+            showNoRecord
+          />
+          <RankingRow
+            label="平均タイム"
+            tooltipKey="平均タイム"
+            stats={stats}
+            getValue={(s) => -s.avgCompletionTimeMs}
+            formatValue={(v) => `${(-v / 1000).toFixed(2)}秒`}
+            colorClass="text-sky-400"
+            filter={(s) => s.speedMashSessions > 0}
+            showNoRecord
+          />
         </div>
       )}
 
@@ -611,6 +633,7 @@ export default function PersonalStats() {
                         </div>
                         {s.totalTapSessions > 0 && (
                           <div className="bg-orange-50 rounded-xl px-3 py-2 space-y-1.5">
+                            <p className="text-[10px] font-bold text-orange-400">回数勝負</p>
                             <div className="flex items-center justify-between">
                               <div className="flex items-center">
                                 <span className="text-[11px] text-orange-700">最高連打数</span>
@@ -629,6 +652,31 @@ export default function PersonalStats() {
                               <div className="flex items-center gap-1">
                                 <span className="text-sm font-bold text-orange-500">{s.avgTapCount}回</span>
                                 <span className="text-xs text-orange-400">({rankLabel(getRank(stats.filter((x) => x.totalTapSessions > 0), s.userId, (x) => x.avgTapCount))})</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {s.speedMashSessions > 0 && (
+                          <div className="bg-sky-50 rounded-xl px-3 py-2 space-y-1.5">
+                            <p className="text-[10px] font-bold text-sky-400">タイム勝負</p>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center">
+                                <span className="text-[11px] text-sky-700">最速タイム</span>
+                                <TooltipIcon title="最速タイム" description={TOOLTIPS['最速タイム']} />
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-sm font-bold text-sky-600">{(s.bestCompletionTimeMs / 1000).toFixed(2)}秒</span>
+                                <span className="text-xs text-sky-400">({rankLabel(getRank(stats.filter((x) => x.speedMashSessions > 0), s.userId, (x) => -x.bestCompletionTimeMs))})</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center">
+                                <span className="text-[11px] text-sky-700">平均タイム</span>
+                                <TooltipIcon title="平均タイム" description={TOOLTIPS['平均タイム']} />
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-sm font-bold text-sky-500">{(s.avgCompletionTimeMs / 1000).toFixed(2)}秒</span>
+                                <span className="text-xs text-sky-400">({rankLabel(getRank(stats.filter((x) => x.speedMashSessions > 0), s.userId, (x) => -x.avgCompletionTimeMs))})</span>
                               </div>
                             </div>
                           </div>
