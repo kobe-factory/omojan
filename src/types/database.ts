@@ -278,6 +278,7 @@ export type Database = {
           overall_comment: string | null
           last_tournament_comment: string | null
           card_analysis_comment: string | null
+          vote_analysis_comment: string | null
           nickname: string | null
           last_tournament_id: string | null
           tournament_count: number
@@ -289,6 +290,7 @@ export type Database = {
           overall_comment?: string | null
           last_tournament_comment?: string | null
           card_analysis_comment?: string | null
+          vote_analysis_comment?: string | null
           nickname?: string | null
           last_tournament_id?: string | null
           tournament_count: number
@@ -300,6 +302,7 @@ export type Database = {
           overall_comment?: string | null
           last_tournament_comment?: string | null
           card_analysis_comment?: string | null
+          vote_analysis_comment?: string | null
           nickname?: string | null
           last_tournament_id?: string | null
           tournament_count?: number

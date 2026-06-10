@@ -795,6 +795,9 @@ export async function POST(
           .from('tournaments')
           .update({ status: 'finished' })
           .eq('id', tournament.id)
+        // 大会終了時にコメント自動生成（fire-and-forget）
+        const origin = new URL(request.url).origin
+        fetch(`${origin}/api/ai/generate-comments`, { method: 'POST' }).catch(() => {})
         return NextResponse.json({ advanced: true, newStatus: 'finished' })
       }
 
@@ -891,6 +894,9 @@ export async function POST(
 
     await supabaseAdmin.from('games').update({ status: 'finished' }).eq('id', finalGame.id)
     await supabase.from('tournaments').update({ status: 'finished' }).eq('id', tournament.id)
+    // 大会終了時にコメント自動生成（fire-and-forget）
+    const originFinal = new URL(request.url).origin
+    fetch(`${originFinal}/api/ai/generate-comments`, { method: 'POST' }).catch(() => {})
 
     const num = await getTournamentNumber(tournament.id)
     await notifyParticipants(

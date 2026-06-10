@@ -17,6 +17,9 @@ interface CompactStats {
   preambleUsageRate: number
   loneVoteCount: number
   cardUsageRate: number
+  buttonMashWins: number
+  buttonMashGames: number
+  buttonMashWinRate: number
 }
 
 interface UserCommentInput {
@@ -25,13 +28,16 @@ interface UserCommentInput {
   overall: CompactStats
   last: CompactStats | null
   lastTournamentNumber: number | null
-  cardTexts: string[]           // 全大会の全作成札（分析用）
-  usedCardTexts: string[]       // 全大会の使用済み札
-  lastUsedCardTexts: string[]   // 前回大会のみの使用済み札
-  workTexts: string[]           // 全大会の作品テキスト（お題+手札）
-  lastWorkTexts: string[]       // 前回大会のみの作品テキスト
-  preambleTexts: string[]       // 全大会の前口上テキスト（分析用）
-  lastPreambleTexts: string[]   // 前回大会のみの前口上テキスト
+  cardTexts: string[]
+  usedCardTexts: string[]
+  lastUsedCardTexts: string[]
+  workTexts: string[]
+  lastWorkTexts: string[]
+  preambleTexts: string[]
+  lastPreambleTexts: string[]
+  votedWorkTexts: string[]       // 全大会でこのユーザーが票を入れた作品テキスト
+  lastVotedWorkTexts: string[]   // 前回大会のみ
+  votedForUsers: { userName: string; count: number }[]  // 誰の作品に多く票を入れたか
 }
 
 interface TournamentStanding {
@@ -145,28 +151,55 @@ export async function POST(request: Request) {
       : null
     const myCards = cards.filter((c) => c.creator_user_id === user.id)
     const cardTexts = myCards.map((c) => c.text)
-    // 個人総評用: 全大会の使用済み札
     const usedCardTexts = myCards.filter((c) => usedHandCardIds.has(c.id)).map((c) => c.text)
-    // 大会総評用: 最新大会のみの使用済み札
     const lastUsedCardTexts = myCards.filter((c) => lastTournamentUsedHandCardIds.has(c.id)).map((c) => c.text)
-    // 個人総評用: 全大会のそのユーザーの作品テキスト（有効ゲームのみ）
     const workTexts = submissions
       .filter((s) => s.user_id === user.id && validGameIds.has(s.game_id))
       .map((s) => buildWorkText(s))
       .filter(Boolean)
-    // 大会総評用: 最新大会のみのそのユーザーの作品テキスト
     const lastWorkTexts = submissions
       .filter((s) => s.user_id === user.id && lastTournamentValidGameIds.has(s.game_id))
       .map((s) => buildWorkText(s))
       .filter(Boolean)
-    // 全大会の前口上テキスト（分析用）
     const preambleTexts = submissions
       .filter((s) => s.user_id === user.id && validGameIds.has(s.game_id) && s.preamble && (s.preamble as string).trim().length > 0)
       .map((s) => (s.preamble as string).trim())
-    // 前回大会のみの前口上テキスト
     const lastPreambleTexts = submissions
       .filter((s) => s.user_id === user.id && lastTournamentValidGameIds.has(s.game_id) && s.preamble && (s.preamble as string).trim().length > 0)
       .map((s) => (s.preamble as string).trim())
+
+    // 投票した作品テキスト（全大会）
+    const myVotes = votes.filter(
+      (v) => !v.is_tiebreaker && v.voter_user_id === user.id && validGameIds.has(v.game_id),
+    )
+    const votedWorkTexts = myVotes.map((v) => {
+      const sub = submissions.find((s) => s.id === v.submission_id)
+      if (!sub) return null
+      return buildWorkText(sub)
+    }).filter(Boolean) as string[]
+
+    // 投票した作品テキスト（前回大会のみ）
+    const myLastVotes = votes.filter(
+      (v) => !v.is_tiebreaker && v.voter_user_id === user.id && lastTournamentValidGameIds.has(v.game_id),
+    )
+    const lastVotedWorkTexts = myLastVotes.map((v) => {
+      const sub = submissions.find((s) => s.id === v.submission_id)
+      if (!sub) return null
+      return buildWorkText(sub)
+    }).filter(Boolean) as string[]
+
+    // 誰の作品に多く票を入れたか
+    const votedForCount: Record<string, number> = {}
+    for (const v of myVotes) {
+      const sub = submissions.find((s) => s.id === v.submission_id)
+      if (!sub) continue
+      const author = users.find((u) => u.id === sub.user_id)
+      if (!author) continue
+      votedForCount[author.name] = (votedForCount[author.name] ?? 0) + 1
+    }
+    const votedForUsers = Object.entries(votedForCount)
+      .sort((a, b) => b[1] - a[1])
+      .map(([userName, count]) => ({ userName, count }))
 
     return {
       userId: user.id,
@@ -181,6 +214,9 @@ export async function POST(request: Request) {
       lastWorkTexts,
       preambleTexts,
       lastPreambleTexts,
+      votedWorkTexts,
+      lastVotedWorkTexts,
+      votedForUsers,
     }
   })
 
@@ -207,6 +243,7 @@ export async function POST(request: Request) {
         overall_comment: item.overallComment,
         last_tournament_comment: item.lastComment,
         card_analysis_comment: item.cardAnalysisComment,
+        vote_analysis_comment: item.voteAnalysisComment,
         nickname: item.nickname,
         last_tournament_id: lastTournamentId,
         tournament_count: tournamentCount,
@@ -358,12 +395,38 @@ function computeStats(
 
   const myWinGameIds = new Set(mySubs.filter((s) => (winnersByGame[s.game_id] ?? []).includes(s.id)).map((s) => s.game_id))
   const myVotesCast = initialVotes.filter((v) => v.voter_user_id === userId && validGameIds.has(v.game_id))
-  const fairVotesCast = myVotesCast.filter((v) => !myWinGameIds.has(v.game_id))
   const loneVoteCount = myVotesCast.filter(
     (v) => (voteCountBySub[v.submission_id] ?? 0) === 1 && !(winnersByGame[v.game_id] ?? []).includes(v.submission_id)
   ).length
 
-  void fairVotesCast
+  void myWinGameIds
+
+  // 連打ゲーム成績
+  const myMash = mashResults.filter((r) => r.user_id === userId)
+  const mashGameIds = new Set(myMash.map((r) => r.game_id))
+  let buttonMashWins = 0
+  let buttonMashGames = 0
+  for (const gameId of mashGameIds) {
+    const gameMash = mashResults.filter((r) => r.game_id === gameId)
+    if (gameMash.length < 2) continue
+    buttonMashGames++
+    const maxRound = Math.max(...gameMash.map((r) => r.mash_round))
+    const latest = gameMash.filter((r) => r.mash_round === maxRound)
+    const winnerSub = winnersByGame[gameId]
+    if (winnerSub) {
+      const winnerMash = latest.find((r) => r.user_id === userId)
+      if (winnerMash) {
+        const subForWinner = (Object.entries(winnersByGame).find(([gId]) => gId === gameId)?.[1] ?? [])
+        void subForWinner
+        // シンプルに: winnersByGame[gameId]が自分のsubかを確認
+        const mySub = submissions.find((s) => s.game_id === gameId && s.user_id === userId)
+        if (mySub && (winnersByGame[gameId] ?? []).includes(mySub.id)) {
+          buttonMashWins++
+        }
+      }
+    }
+  }
+  const buttonMashWinRate = buttonMashGames > 0 ? buttonMashWins / buttonMashGames : 0
 
   return {
     gamesParticipated,
@@ -380,6 +443,9 @@ function computeStats(
     preambleUsageRate,
     loneVoteCount,
     cardUsageRate,
+    buttonMashWins,
+    buttonMashGames,
+    buttonMashWinRate,
   }
 }
 
@@ -469,23 +535,26 @@ function buildStandings(
 
 function formatStats(s: CompactStats): string {
   const fmt = (n: number) => n.toFixed(3).replace(/^0/, '')
-  return [
-    `出場${s.gamesParticipated}回`,
+  const parts = [
     `MVP${s.mvpCount}回(勝率${fmt(s.mvpWinRate)})`,
     `平均得票${s.avgVotesPerGame.toFixed(2)}`,
     `1B${s.singles}/2B${s.doubles}/3B${s.triples}/HR${s.homeRuns}`,
-    `ズル滑り${s.shutoutCount}回(${fmt(s.shutoutRate)})`,
+    `ズル滑り${s.shutoutCount}回(率${fmt(s.shutoutRate)})`,
     `前口上${s.preambleCount}回(使用率${fmt(s.preambleUsageRate)})`,
     `独りぼっち票${s.loneVoteCount}回`,
     `作成札採用率${fmt(s.cardUsageRate)}`,
-  ].join(' | ')
+  ]
+  if (s.buttonMashGames > 0) {
+    parts.push(`連打${s.buttonMashWins}勝${s.buttonMashGames - s.buttonMashWins}敗(勝率${fmt(s.buttonMashWinRate)})`)
+  }
+  return parts.join(' | ')
 }
 
 async function generateAllComments(
   users: UserCommentInput[],
   tournamentNumber: number,
   standings: TournamentStanding[],
-): Promise<{ users: { userId: string; overallComment: string; lastComment: string; cardAnalysisComment: string; nickname: string }[]; tournamentComment: string } | null> {
+): Promise<{ users: { userId: string; overallComment: string; lastComment: string; cardAnalysisComment: string; voteAnalysisComment: string; nickname: string }[]; tournamentComment: string } | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
     console.error('ANTHROPIC_API_KEY が設定されていません')
@@ -503,14 +572,17 @@ async function generateAllComments(
     `MVP数: ${rankAmong(u => u.overall.mvpCount, true)}`,
     `平均得票: ${rankAmong(u => u.overall.avgVotesPerGame, true)}`,
     `HR数: ${rankAmong(u => u.overall.homeRuns, true)}`,
-    `ズル滑り数(多いほど不名誉・ズル滑りが多いほど悪い成績・不名誉ランキング1位が最悪): ${rankAmong(u => u.overall.shutoutCount, true)}`,
+    `ズル滑り数(多いほど不名誉・悪い成績・不名誉ランキング1位が最悪): ${rankAmong(u => u.overall.shutoutCount, true)}`,
+    `ズル滑り率(多いほど不名誉・悪い成績): ${rankAmong(u => u.overall.shutoutRate, true)}`,
     `前口上使用率: ${rankAmong(u => u.overall.preambleUsageRate, true)}`,
     `独りぼっち票(多いほど不名誉・ワーストランキング1位が最悪): ${rankAmong(u => u.overall.loneVoteCount, true)}`,
-  ].join('\n')
+    users.some(u => u.overall.buttonMashGames > 0)
+      ? `連打ゲーム勝率: ${rankAmong(u => u.overall.buttonMashWinRate, true)}`
+      : null,
+  ].filter(Boolean).join('\n')
 
   const playerSection = users
     .map((u) => {
-      // ===== 通算データ（overall_comment・card_analysis_comment用） =====
       const overallLine = `【${u.userName}】通算成績: ${formatStats(u.overall)}`
       const cardLine = u.cardTexts.length > 0
         ? `【${u.userName}】[通算] 作成した札（全${u.cardTexts.length}枚・うちゲームで使用された${u.usedCardTexts.length}枚）:\n  全札（分析用のみ・文章に登場禁止）: 「${u.cardTexts.join('」「')}」\n  使用済み札（文章で言及可）: 「${u.usedCardTexts.join('」「')}」`
@@ -521,8 +593,13 @@ async function generateAllComments(
       const preambleLine = u.preambleTexts.length > 0
         ? `【${u.userName}】[通算] 前口上（分析用・全${u.preambleTexts.length}件）: 「${u.preambleTexts.join('」「')}」`
         : `【${u.userName}】[通算] 前口上: なし`
+      const votedLine = u.votedWorkTexts.length > 0
+        ? `【${u.userName}】[通算] 票を入れた作品（全${u.votedWorkTexts.length}件）: 「${u.votedWorkTexts.join('」「')}」`
+        : `【${u.userName}】[通算] 票を入れた作品: データなし`
+      const votedForLine = u.votedForUsers.length > 0
+        ? `【${u.userName}】[通算] 誰の作品に多く票を入れたか: ${u.votedForUsers.map(v => `${v.userName}(${v.count}回)`).join('、')}`
+        : `【${u.userName}】[通算] 誰への投票: データなし`
 
-      // ===== 前回大会専用データ（last_tournament_comment用・これ以外の情報は使用禁止） =====
       const lastLine = u.last && u.lastTournamentNumber
         ? `【${u.userName}】[前回大会・第${u.lastTournamentNumber}回] 成績: ${formatStats(u.last)}`
         : `【${u.userName}】[前回大会] データなし`
@@ -532,12 +609,15 @@ async function generateAllComments(
       const lastPreambleLine = u.lastPreambleTexts.length > 0
         ? `【${u.userName}】[前回大会] 前口上（分析用）: 「${u.lastPreambleTexts.join('」「')}」`
         : `【${u.userName}】[前回大会] 前口上: なし`
+      const lastVotedLine = u.lastVotedWorkTexts.length > 0
+        ? `【${u.userName}】[前回大会] 票を入れた作品: 「${u.lastVotedWorkTexts.join('」「')}」`
+        : `【${u.userName}】[前回大会] 票を入れた作品: なし`
 
       return [
         '--- 通算データ ---',
-        overallLine, cardLine, workLine, preambleLine,
+        overallLine, cardLine, workLine, preambleLine, votedLine, votedForLine,
         '--- 前回大会データ（last_tournament_commentはこのデータのみ使用すること） ---',
-        lastLine, lastWorkLine, lastPreambleLine,
+        lastLine, lastWorkLine, lastPreambleLine, lastVotedLine,
       ].join('\n')
     })
     .join('\n\n')
@@ -546,64 +626,71 @@ async function generateAllComments(
     `${s.rank}位: ${s.userName}（MVP${s.wins}回・総得票${s.totalVotes}票）`
   ).join('、')
 
-  // 大会総評用: その大会の全作品テキスト（全ユーザー・ユーザー名付き）
   const lastTournamentWorksByUser = users.map((u) => {
     return `${u.userName}: ${u.lastWorkTexts.length > 0 ? `「${u.lastWorkTexts.join('」「')}」` : 'なし'}`
   }).join('\n')
 
-  const prompt = `あなたは「おもじゃん」というワードバトルゲームの毒舌解説者「バッサリ先生」です。
+  const prompt = `あなたは「おもじゃん」というワードバトルゲームのAI解説者です。
 
-【キャラクター設定（個人総評専用）】
-- キャラは「リナちゃん」という辛辣なギャル美少女。おっさんを容赦なく罵ってる感じで、辛辣な悪口・イジり・ツッコミを浴びせる
-- 口調はギャルっぽい言葉遣い多め。「ウケる〜」「マジ？」「ヤバくない？」「〜じゃん」「〜くない？」「てか」「ってゆーか」「超〜」「〜すぎ」「は？」「なにそれ」「ありえないし」「〜だし」「〜なんだけど」など。敬語は一切使わない
+【ゲームの前提（必ず守ること）】
+- 参加者は全員が全回戦に必ず参加している。参加率・出場率・参加頻度の高低は言及禁止
+- 参加者は全員おっさん（中年男性）グループ。本人たちは知り合い同士
+
+【個人総評キャラクター設定（リナちゃん）】
+- キャラ：「リナちゃん」という辛辣なギャル美少女。おっさんを容赦なく罵る感じで、辛辣な悪口・イジり・ツッコミを浴びせる
+- 口調：ギャル口調。「ウケる〜」「マジ？」「ヤバくない？」「〜じゃん」「〜くない？」「てか」「ってゆーか」「超〜」「〜すぎ」「は？」「なにそれ」「ありえないし」「〜だし」「〜なんだけど」など。敬語は一切使わない
+- 関西弁（〜やん、〜やで、〜やねん、〜やろ等）は絶対に使わない
 - おっさんが美少女に見下されて罵られてる感が大事。読んだ人が「うわ、これ俺のことじゃん…」と苦笑いするコメント
 - ただの悪口にならないよう、ユーモアと鋭い分析を織り交ぜる。クスッと笑えることが重要
 - 良いところがあれば「まぁそこだけは認めてあげる」くらいのテンションで渋々認める
 - 絵文字は使いすぎず、ここぞという場面で1〜2個程度
-- 作品・札・前口上から読み取れる趣味嗜好・性格・傾向・センスを容赦なくイジる
-- 数値は補足程度でOK。数字の羅列はNG
+- 作品・札・前口上・投票傾向から読み取れる趣味嗜好・性格・傾向・センスを容赦なくイジる
 
-以下のプレイヤーの成績データと作成した札・作品の一覧を見て、それぞれ4種類のコメントを書いてください。
+以下のプレイヤーの成績データと作成した札・作品・投票した作品の一覧を見て、それぞれ5種類のコメントを書いてください。
 
 ルール：
 - 各コメントは200文字前後（180〜220文字）。短すぎも長すぎもNG
-- 作品・札の内容から見えるユーザーの傾向・性格・趣味嗜好を中心に語る
 - 上から目線の毒舌タメ口ベースのイジりツッコミがメイン。本当に良ければ褒める
-- アドバイス・改善点は入れてもいいが、あくまで補足程度。コメントの主役はイジりと分析であってアドバイスではない
+- アドバイス・改善点は入れてもいいが、あくまで補足程度
 - 絵文字は1〜2個程度に抑える
-- 日本語のみ
+- 日本語のみ。**関西弁（〜やん、〜やで、〜やねん等）は絶対禁止**
 - **last_tournament_commentは「前回大会データ」セクションの情報のみ使うこと。通算データのカード・作品・前口上は絶対に使用しない**
-- card_analysis_commentは「札の羅列・列挙」を絶対にしない。「〇〇」「△△」「□□」のように複数の札を並べるのは禁止。1〜2枚だけ例として引用するのはOKだが、それ以外は分析の言葉で語ること。分析の軸：その人の趣味・好きなもの・嫌いなもの・笑いのセンス・こだわり・世界観・人間性・心理傾向など。「使用済み札」と「作品」のテキストのみ文中に登場させる（「全札（分析用）」の未使用札は絶対に登場させない）
-- 前口上データは分析に活用すること（overall/card_analysisは通算前口上、last_tournament_commentは前回大会前口上のみ使用）。前口上の羅列は禁止。例として1件だけ引用するのはOK
-- nicknameは作品・札の傾向と人物像を総合したユニークで笑える称号。バラエティ豊かに（例：「孤高の変人センサー保持者」「自己プロデュース力ゼロの天才」「下ネタで世界を救う男」「誰よりも真面目に滑る人」など）。20文字以内
+- card_analysis_commentは札の羅列・列挙を絶対しない。1〜2枚だけ例として引用するのはOKだが、それ以外は分析の言葉で語ること。「使用済み札」と「作品」のテキストのみ文中に登場させる（「全札（分析用）」の未使用札は絶対に登場させない）
+- 前口上データは分析に活用すること（overall/card_analysisは通算前口上、last_tournament_commentは前回大会前口上のみ使用）。前口上の羅列は禁止
+- **作品内容の傾向を分析する**：下ネタ系・シュール系・勢いだけ・カッコつけ・ダジャレ系・変化球等のパターンを見抜いてイジること
+- nicknameは作品・札・投票傾向の全体像を総合したユニークで笑える称号。バラエティ豊かに（例：「孤高の変人センサー保持者」「下ネタで世界を救う男」「誰よりも真面目に滑る人」など）。20文字以内
 
 【各フィールドの生成指示】
-- overall_comment: 通算データをもとに、そのプレイヤーの人物像・性格・趣味嗜好・傾向を辛辣にギャル口調でイジる
-- last_comment: 前回大会データ（成績・作品・前口上）をもとに、その大会での動きや傾向を辛辣にギャル口調でイジる。必ず生成すること（データがあれば空にしない）
+- overall_comment: 通算データをもとに、そのプレイヤーの人物像・性格・趣味嗜好・作品傾向を辛辣にギャル口調でイジる
+- last_comment: 前回大会データ（成績・作品・前口上・投票した作品）をもとに、その大会での動きや傾向を辛辣にギャル口調でイジる。必ず生成すること
 - card_analysis_comment: 通算の使用済み札・作品・前口上をもとに、言葉選びのクセや発想の傾向からその人の内面・趣味嗜好を深読みしてギャル口調でイジる
+- vote_analysis_comment: 全大会の投票データから、このプレイヤーがどんな作品・センスに票を入れる傾向があるか、誰の作品との相性が良いか、逆にどんな作品には票を入れない傾向があるかを辛辣にギャル口調でイジる
 - nickname: 全体の傾向を総合した称号（20文字以内）
 
 【数値の相対評価について（重要）】
-- 数値を評価する際は必ず下記のランキングと各指標の説明を参照し、参加者全員の中での相対的な位置づけで評価すること
+- 数値を評価する際は必ず下記のランキングを参照し、参加者全員の中での相対的な位置づけで評価すること
 - 例：HR2本でも全員で最多なら「HR王」「このメンツの中では一番」と評価する
 - 数値の絶対値だけで良し悪しを判断しない。ランキングで何位かを見て評価する
+- **ワーストランキングは「多いほど不名誉」。ランキング1位が最も恥ずかしい**。ズル滑り数・ズル滑り率・独りぼっち票が多い人ほど悪い評価
 
 【各指標の意味】
-- MVP数: その回戦で最も多く票を獲得した回数。同票の場合は決選で勝った場合も含む
+- MVP数: その回戦で最も多く票を獲得した回数。同票の場合は決選（決選投票・連打ゲーム）で勝った場合も含む
 - 平均得票: 1回戦あたり平均何票獲得したか。高いほど安定した評価
 - HR数: 1作品で4票以上獲得した回数。ほぼ全員が認めた神作品の数
-- ズル滑り数: 投票が行われた回戦で1票も入らなかった回数。【多いほど不名誉・多いほど悪い成績】。ランキングは多いほど上位（不名誉な1位）。「ズル滑りが多い＝すべってばかりで誰にも評価されなかった」という意味
-- 前口上使用率: 作品投稿時に前口上を入力した回の割合。場を盛り上げる貢献度の指標
-- 独りぼっち票: 自分だけが票を入れたのに落選した回数。【多いほど不名誉・ワーストランキング】誰にも共感されなかった回が多いほど悪い評価
+- ズル滑り数: 投票が行われた回戦で1票も入らなかった回数。【多いほど不名誉・多いほど悪い成績。ランキング1位＝最悪】
+- ズル滑り率: 0票だった回の割合。【多いほど不名誉。ランキング1位＝最悪】
+- 前口上使用率: 作品投稿時に前口上を入力した回の割合
+- 独りぼっち票: 自分だけが票を入れたのに落選した回数。【多いほど不名誉。ランキング1位＝最悪】
+- 連打ゲーム勝率: 連打ゲームに出場して勝利した割合（未参加ならデータなし）
 
-【通算成績ランキング（相対評価の参考に使うこと）】
+【通算成績ランキング（相対評価の参考に必ず使うこと）】
 ${relativeRankings}
 
 【大会総評（tournament_comment）について】
 キャラクター：「デスク・大河内」というスポーツ新聞のベテラン記者。ビジネスライクで格調ある文体を基本とするが、要所でツッコミやイジりが入り、思わず笑える記事スタイル。リナちゃんとは別キャラ。
 - これは「大会全体の総評」。結果だけに焦点を置かず、大会全体のセンス・傾向・雰囲気を語る
 - 見出しのような書き出しから始める（例：「激闘の末、〇〇が頂点へ！」など）
-- この大会で実際に使われた作品（お題+手札の組み合わせ）から読み取れる参加者全体の趣味嗜好・センス・心理状態・傾向を分析・言及する
+- この大会で実際に使われた作品から読み取れる参加者全体の趣味嗜好・センス・心理状態・傾向を分析・言及する
 - 印象的な作品を具体的に取り上げてコメントする
 - 未使用の札・配られたが使われなかった手札には言及しない
 - 次回大会への期待や不安・予測もさりげなく含める
@@ -616,7 +703,7 @@ ${lastTournamentWorksByUser}
 
 - JSONのみ返す（説明不要）
 
-成績データ・作成した札：
+成績データ・作成した札・投票した作品：
 ${playerSection}
 
 以下のJSON形式で返してください：
@@ -628,6 +715,7 @@ ${playerSection}
       "overall_comment": "...",
       "last_comment": "...",
       "card_analysis_comment": "...",
+      "vote_analysis_comment": "...",
       "nickname": "..."
     }
   ]
@@ -645,7 +733,7 @@ user_idはそれぞれ: ${users.map((u) => `${u.userName}=${u.userId}`).join(', 
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 8192,
+        max_tokens: 16384,
         messages: [{ role: 'user', content: prompt }],
       }),
     })
@@ -658,7 +746,6 @@ user_idはそれぞれ: ${users.map((u) => `${u.userName}=${u.userId}`).join(', 
     const json = await res.json()
     const text: string = json.content?.[0]?.text ?? ''
 
-    // JSON部分を抽出
     const match = text.match(/\{[\s\S]*\}/)
     if (!match) {
       console.error('JSONパース失敗:', text)
@@ -667,7 +754,7 @@ user_idはそれぞれ: ${users.map((u) => `${u.userName}=${u.userId}`).join(', 
 
     const parsed = JSON.parse(match[0]) as {
       tournament_comment: string
-      users: { user_id: string; overall_comment: string; last_comment: string; card_analysis_comment: string; nickname: string }[]
+      users: { user_id: string; overall_comment: string; last_comment: string; card_analysis_comment: string; vote_analysis_comment: string; nickname: string }[]
     }
 
     return {
@@ -677,6 +764,7 @@ user_idはそれぞれ: ${users.map((u) => `${u.userName}=${u.userId}`).join(', 
         overallComment: u.overall_comment ?? '',
         lastComment: u.last_comment ?? '',
         cardAnalysisComment: u.card_analysis_comment ?? '',
+        voteAnalysisComment: u.vote_analysis_comment ?? '',
         nickname: u.nickname ?? '',
       })),
     }

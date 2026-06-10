@@ -98,11 +98,13 @@ interface RankingRowProps {
   colorClass?: string
   filter?: (s: UserStats) => boolean
   ascending?: boolean
-  isWorst?: boolean  // trueならワーストランキング（多いほど不名誉な1位）
+  isWorst?: boolean
+  showNoRecord?: boolean  // フィルタ外ユーザーをノーレコードで末尾表示
 }
 
-function RankingRow({ label, tooltipKey, stats, getValue, formatValue, colorClass = 'text-emerald-600', filter, ascending, isWorst }: RankingRowProps) {
+function RankingRow({ label, tooltipKey, stats, getValue, formatValue, colorClass = 'text-emerald-600', filter, ascending, isWorst, showNoRecord }: RankingRowProps) {
   const filtered = filter ? stats.filter(filter) : stats
+  const noRecordUsers = (showNoRecord && filter) ? stats.filter((s) => !filter(s)) : []
   const sorted = [...filtered].sort((a, b) => ascending ? getValue(a) - getValue(b) : getValue(b) - getValue(a))
   return (
     <div className={`bg-white rounded-xl overflow-hidden border ${isWorst ? 'border-red-100' : 'border-gray-100'}`}>
@@ -132,6 +134,16 @@ function RankingRow({ label, tooltipKey, stats, getValue, formatValue, colorClas
             </div>
           )
         })}
+        {noRecordUsers.map((s) => (
+          <div key={s.userId} className="flex items-center justify-between px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs w-6 text-center font-bold text-gray-200">—</span>
+              <UserIcon name={s.userName} size="xs" />
+              <span className="text-xs text-gray-400">{s.userName}</span>
+            </div>
+            <span className="text-xs text-gray-300">ノーレコード</span>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -142,6 +154,7 @@ interface AiComment {
   overall_comment: string | null
   last_tournament_comment: string | null
   card_analysis_comment: string | null
+  vote_analysis_comment: string | null
   nickname: string | null
 }
 
@@ -303,6 +316,9 @@ export default function PersonalStats() {
           />
           {hasMashData && (
             <>
+              <div className="pt-1 pb-0.5">
+                <p className="text-[10px] font-bold text-orange-400 uppercase tracking-wide px-1">⚔️ 連打の強さランキング</p>
+              </div>
               <RankingRow
                 label="連打ゲーム勝率"
                 stats={stats}
@@ -310,6 +326,7 @@ export default function PersonalStats() {
                 formatValue={(v) => formatRate(v)}
                 colorClass="text-orange-600"
                 filter={(s) => s.buttonMashGames > 0}
+                showNoRecord
               />
               <RankingRow
                 label="連打最高記録"
@@ -319,6 +336,7 @@ export default function PersonalStats() {
                 formatValue={(v) => `${v}回`}
                 colorClass="text-orange-500"
                 filter={(s) => s.totalTapSessions > 0}
+                showNoRecord
               />
               <RankingRow
                 label="連打平均"
@@ -328,6 +346,7 @@ export default function PersonalStats() {
                 formatValue={(v) => `${v}回`}
                 colorClass="text-orange-400"
                 filter={(s) => s.totalTapSessions > 0}
+                showNoRecord
               />
             </>
           )}
@@ -544,7 +563,7 @@ export default function PersonalStats() {
                     )}
 
                     {/* AI総評 */}
-                    {aiComment && (aiComment.overall_comment || aiComment.last_tournament_comment || aiComment.card_analysis_comment) && (
+                    {aiComment && (aiComment.overall_comment || aiComment.last_tournament_comment || aiComment.card_analysis_comment || aiComment.vote_analysis_comment) && (
                       <div className="bg-linear-to-br from-purple-50 to-indigo-50 rounded-xl p-3 space-y-2">
                         <p className="text-[10px] font-bold text-purple-400 uppercase tracking-wide">💅 リナちゃんの総評</p>
                         {aiComment.overall_comment && (
@@ -563,6 +582,12 @@ export default function PersonalStats() {
                           <div>
                             <p className="text-[10px] text-purple-400 mb-0.5">🃏 作成した札の傾向</p>
                             <p className="text-xs text-gray-700 leading-relaxed">{aiComment.card_analysis_comment}</p>
+                          </div>
+                        )}
+                        {aiComment.vote_analysis_comment && (
+                          <div>
+                            <p className="text-[10px] text-purple-400 mb-0.5">🗳️ 投票作品について</p>
+                            <p className="text-xs text-gray-700 leading-relaxed">{aiComment.vote_analysis_comment}</p>
                           </div>
                         )}
                       </div>
