@@ -198,8 +198,6 @@ export default function Archive({ tournamentId, participants, impersonationMode 
                     if (winnerSub) {
                       winnerSub.isWinner = true
                       winnerSub.decidedByButtonMash = true
-                      // 順位を正しく表示するため勝者のdisplayVoteCountを+1
-                      winnerSub.displayVoteCount = winnerSub.voteCount + 1
                     }
                   }
                 }
@@ -207,7 +205,13 @@ export default function Archive({ tournamentId, participants, impersonationMode 
             }
           }
 
-          sorted.sort((a, b) => b.displayVoteCount - a.displayVoteCount)
+          // 同票の場合、連打ゲーム勝者を先頭に（得票は変えない）
+          sorted.sort((a, b) => {
+            if (b.displayVoteCount !== a.displayVoteCount) return b.displayVoteCount - a.displayVoteCount
+            if (a.isWinner && !b.isWinner) return -1
+            if (!a.isWinner && b.isWinner) return 1
+            return 0
+          })
 
           // 連打結果を最終ラウンドから構築
           let buttonMashResults: ButtonMashResult[] = []
@@ -366,7 +370,9 @@ export default function Archive({ tournamentId, participants, impersonationMode 
                 {(() => {
                   const rankList = g.submissions.reduce<number[]>((acc, s, i) => {
                     if (i === 0) return [1]
-                    if (s.displayVoteCount === g.submissions[i - 1].displayVoteCount) return [...acc, acc[i - 1]]
+                    const prev = g.submissions[i - 1]
+                    // 連打ゲーム勝者は同票でも次の順位を割り当てる
+                    if (s.displayVoteCount === prev.displayVoteCount && !prev.decidedByButtonMash) return [...acc, acc[i - 1]]
                     return [...acc, i + 1]
                   }, [])
                   return g.submissions.map((s, i) => (
