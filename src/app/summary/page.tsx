@@ -43,6 +43,7 @@ interface TournamentSummary {
   impersonationMode: boolean
   secretVoting: boolean
   secretRound: number | null
+  aiComment: string | null
 }
 
 interface OverallStanding {
@@ -68,7 +69,7 @@ export default function SummaryPage() {
   async function fetchAll() {
     const { data: finishedTournaments } = await supabase
       .from('tournaments')
-      .select('id, created_at, token, random_voting, impersonation_mode, secret_voting, secret_round')
+      .select('id, created_at, token, random_voting, impersonation_mode, secret_voting, secret_round, ai_comment')
       .eq('mode', 'production')
       .eq('status', 'finished')
       .order('created_at', { ascending: true })
@@ -270,6 +271,7 @@ export default function SummaryPage() {
         impersonationMode: (t as { impersonation_mode?: boolean }).impersonation_mode ?? false,
         secretVoting: (t as { secret_voting?: boolean }).secret_voting ?? false,
         secretRound: (t as { secret_round?: number | null }).secret_round ?? null,
+        aiComment: (t as { ai_comment?: string | null }).ai_comment ?? null,
       }
     })
 
@@ -462,6 +464,14 @@ export default function SummaryPage() {
                           </div>
                         </div>
 
+                        {/* デスク・大河内のコメント */}
+                        {t.aiComment && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">📰 デスク・大河内のコメント</p>
+                            <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{t.aiComment}</p>
+                          </div>
+                        )}
+
                         {/* 大会結果詳細リンク */}
                         <a
                           href={`/${t.token}`}
@@ -541,7 +551,7 @@ export default function SummaryPage() {
       </div>}
 
       <footer className="text-center py-4">
-        <p className="text-xs text-gray-300">v1.38.0</p>
+        <p className="text-xs text-gray-300">v1.38.1</p>
       </footer>
     </div>
   )
