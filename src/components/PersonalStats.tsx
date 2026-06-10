@@ -314,42 +314,38 @@ export default function PersonalStats() {
             colorClass="text-teal-600"
             filter={(s) => s.preambleCount > 0}
           />
-          {hasMashData && (
-            <>
-              <div className="pt-1 pb-0.5">
-                <p className="text-[10px] font-bold text-orange-400 uppercase tracking-wide px-1">⚔️ 連打の強さランキング</p>
-              </div>
-              <RankingRow
-                label="連打ゲーム勝率"
-                stats={stats}
-                getValue={(s) => s.buttonMashWinRate}
-                formatValue={(v) => formatRate(v)}
-                colorClass="text-orange-600"
-                filter={(s) => s.buttonMashGames > 0}
-                showNoRecord
-              />
-              <RankingRow
-                label="連打最高記録"
-                tooltipKey="連打最高記録"
-                stats={stats}
-                getValue={(s) => s.bestTapCount}
-                formatValue={(v) => `${v}回`}
-                colorClass="text-orange-500"
-                filter={(s) => s.totalTapSessions > 0}
-                showNoRecord
-              />
-              <RankingRow
-                label="連打平均"
-                tooltipKey="連打平均"
-                stats={stats}
-                getValue={(s) => s.avgTapCount}
-                formatValue={(v) => `${v}回`}
-                colorClass="text-orange-400"
-                filter={(s) => s.totalTapSessions > 0}
-                showNoRecord
-              />
-            </>
-          )}
+          <div className="pt-1 pb-0.5">
+            <p className="text-[10px] font-bold text-orange-400 uppercase tracking-wide px-1">⚔️ 連打の強さランキング</p>
+          </div>
+          <RankingRow
+            label="連打ゲーム勝率"
+            stats={stats}
+            getValue={(s) => s.buttonMashWinRate}
+            formatValue={(v) => formatRate(v)}
+            colorClass="text-orange-600"
+            filter={(s) => s.buttonMashGames > 0}
+            showNoRecord
+          />
+          <RankingRow
+            label="連打最高記録"
+            tooltipKey="連打最高記録"
+            stats={stats}
+            getValue={(s) => s.bestTapCount}
+            formatValue={(v) => `${v}回`}
+            colorClass="text-orange-500"
+            filter={(s) => s.totalTapSessions > 0}
+            showNoRecord
+          />
+          <RankingRow
+            label="連打平均"
+            tooltipKey="連打平均"
+            stats={stats}
+            getValue={(s) => s.avgTapCount}
+            formatValue={(v) => `${v}回`}
+            colorClass="text-orange-400"
+            filter={(s) => s.totalTapSessions > 0}
+            showNoRecord
+          />
         </div>
       )}
 
