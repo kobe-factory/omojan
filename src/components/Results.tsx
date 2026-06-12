@@ -42,12 +42,14 @@ interface ResultItem {
   decidedByTiebreaker: boolean
   decidedByButtonMash: boolean
   buttonMashTapCount: number | null
+  buttonMashCompletionTimeMs: number | null
 }
 
 interface ButtonMashResult {
   user_id: string
   tap_count: number
   mash_round: number
+  completion_time_ms: number | null
 }
 
 interface Props {
@@ -72,7 +74,7 @@ export default function Results({ tournament, game, participants, onNext, nextLa
         supabase.from('cards').select('text').eq('id', game.topic_card_id).single(),
         supabase.from('submissions').select('id, user_id, hand_card_id, position, preamble, preamble_position, impersonated_user_id').eq('game_id', game.id),
         supabase.from('votes').select('submission_id, voter_user_id, is_tiebreaker').eq('game_id', game.id),
-        supabase.from('button_mash_results').select('user_id, tap_count, mash_round').eq('game_id', game.id).order('mash_round', { ascending: false }),
+        supabase.from('button_mash_results').select('user_id, tap_count, mash_round, completion_time_ms').eq('game_id', game.id).order('mash_round', { ascending: false }),
       ])
 
       const topicText = topicCard?.text ?? ''
@@ -133,6 +135,7 @@ export default function Results({ tournament, game, participants, onNext, nextLa
             decidedByTiebreaker: false,
             decidedByButtonMash: false,
             buttonMashTapCount: latestMashResults.find((r) => r.user_id === s.user_id)?.tap_count ?? null,
+            buttonMashCompletionTimeMs: latestMashResults.find((r) => r.user_id === s.user_id)?.completion_time_ms ?? null,
           }
         })
       )
@@ -141,15 +144,26 @@ export default function Results({ tournament, game, participants, onNext, nextLa
 
       if (!isRematch) {
         if (hasButtonMash) {
-          // 連打ゲームで決定：最多タップ数のユーザーが勝者
-          const maxTaps = Math.max(...latestMashResults.map((r) => r.tap_count), 0)
-          const winnerUserId = latestMashResults.find((r) => r.tap_count === maxTaps)?.user_id
-          sorted.forEach((item) => {
-            if (item.userId === winnerUserId) {
-              item.isWinner = true
-              item.decidedByButtonMash = true
-            }
-          })
+          // 連打ゲームで決定：スピードモードは最速タイム、通常モードは最多タップ数
+          const isSpeedMode = latestMashResults.some((r) => r.completion_time_ms != null)
+          let winnerUserId: string | null = null
+          if (isSpeedMode) {
+            const minTime = Math.min(...latestMashResults.map((r) => r.completion_time_ms ?? Infinity))
+            const winners = latestMashResults.filter((r) => r.completion_time_ms === minTime)
+            if (winners.length === 1) winnerUserId = winners[0].user_id
+          } else {
+            const maxTaps = Math.max(...latestMashResults.map((r) => r.tap_count))
+            const winners = latestMashResults.filter((r) => r.tap_count === maxTaps)
+            if (winners.length === 1) winnerUserId = winners[0].user_id
+          }
+          if (winnerUserId) {
+            sorted.forEach((item) => {
+              if (item.userId === winnerUserId) {
+                item.isWinner = true
+                item.decidedByButtonMash = true
+              }
+            })
+          }
         } else if (hasTiebreaker) {
           const maxTb = Math.max(...items.map((i) => i.tbVoteCount), 0)
           sorted.forEach((item) => {
@@ -170,8 +184,13 @@ export default function Results({ tournament, game, participants, onNext, nextLa
         }
       }
 
-      // 決選投票で+1した場合、表示順を再ソート
-      sorted.sort((a, b) => b.displayVoteCount - a.displayVoteCount)
+      // 表示順：displayVoteCount降順、同票の場合は連打勝者を先頭
+      sorted.sort((a, b) => {
+        if (b.displayVoteCount !== a.displayVoteCount) return b.displayVoteCount - a.displayVoteCount
+        if (a.isWinner && !b.isWinner) return -1
+        if (!a.isWinner && b.isWinner) return 1
+        return 0
+      })
 
       setResults(sorted)
       setLoading(false)
@@ -191,7 +210,9 @@ export default function Results({ tournament, game, participants, onNext, nextLa
 
   const rankList = results.reduce<number[]>((acc, r, i) => {
     if (i === 0) return [1]
-    if (r.displayVoteCount === results[i - 1].displayVoteCount) return [...acc, acc[i - 1]]
+    const prev = results[i - 1]
+    // 連打ゲームで決着がついた場合、同票でも次の順位を割り当てる
+    if (r.displayVoteCount === prev.displayVoteCount && !prev.decidedByButtonMash) return [...acc, acc[i - 1]]
     return [...acc, i + 1]
   }, [])
 
@@ -295,7 +316,11 @@ export default function Results({ tournament, game, participants, onNext, nextLa
               {r.buttonMashTapCount !== null && (
                 <div className="flex items-center justify-end gap-1.5 mt-1.5 pt-1.5 border-t border-gray-100">
                   <span className="text-[9px] font-bold text-red-400 bg-red-50 px-1.5 py-0.5 rounded-full">連打</span>
-                  <span className="text-[10px] text-red-500 font-bold">{r.buttonMashTapCount} 回</span>
+                  <span className="text-[10px] text-red-500 font-bold">
+                    {r.buttonMashCompletionTimeMs != null
+                      ? `${(r.buttonMashCompletionTimeMs / 1000).toFixed(2)}秒`
+                      : `${r.buttonMashTapCount}回`}
+                  </span>
                 </div>
               )}
             </div>

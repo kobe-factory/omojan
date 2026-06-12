@@ -51,9 +51,11 @@ export default function ButtonMash({
   const [completionTimeMs, setCompletionTimeMs] = useState<number | null>(null)
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const speedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const endTimeRef = useRef<number>(0)
   const startTimeRef = useRef<number>(0)
   const savedMashRoundRef = useRef(0)
+  const [mashDataLoaded, setMashDataLoaded] = useState(false)
 
   const getName = (id: string) => participants.find((p) => p.id === id)?.name ?? '???'
 
@@ -96,7 +98,7 @@ export default function ButtonMash({
   const isContestant = tiebreakerUserIds.includes(currentUserId)
   const opponentId = tiebreakerUserIds.find((id) => id !== currentUserId) ?? null
 
-  // マウント時に自分の結果が既に保存済みなら自動でadvanceを呼ぶ（リロード対応）
+  // 参加者：マウント時に mashType 取得 + リロード対応
   useEffect(() => {
     if (!isContestant) return
     fetch(`/api/tournaments/${token}/button-mash?game_id=${game.id}`)
@@ -107,6 +109,7 @@ export default function ButtonMash({
         const expectedRound = json.expected_round ?? 1
         setMashType(newMashType)
         setMashRound(expectedRound)
+        setMashDataLoaded(true)
         const myResult = allResults.find(
           (r) => r.user_id === currentUserId && r.mash_round === expectedRound,
         )
@@ -120,6 +123,19 @@ export default function ButtonMash({
       })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isContestant])
+
+  // 非参加者：tiebreakerUserIds 確定後すぐに mashType を取得
+  useEffect(() => {
+    if (isContestant || tiebreakerUserIds.length === 0) return
+    fetch(`/api/tournaments/${token}/button-mash?game_id=${game.id}`)
+      .then((r) => r.json())
+      .then((json) => {
+        setMashType(json.mash_type ?? 'timed_3s')
+        setMashRound(json.expected_round ?? 1)
+        setMashDataLoaded(true)
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isContestant, tiebreakerUserIds.length])
 
   // 参加者向けポーリング（相手の完了を検知）
   useEffect(() => {
@@ -188,9 +204,19 @@ export default function ButtonMash({
       if (!started) {
         setStarted(true)
         startTimeRef.current = Date.now()
+        // 10秒経過したら強制終了（放置対策）
+        speedTimeoutRef.current = setTimeout(() => {
+          setFinished(true)
+          setCompletionTimeMs(10000)
+          setTapCount((prev) => {
+            saveResult(prev, mashRound, 10000)
+            return prev
+          })
+        }, 10000)
         const newCount = 1
         setTapCount(newCount)
         if (newCount >= targetTaps) {
+          if (speedTimeoutRef.current) clearTimeout(speedTimeoutRef.current)
           const elapsed = Date.now() - startTimeRef.current
           setFinished(true)
           setCompletionTimeMs(elapsed)
@@ -201,6 +227,7 @@ export default function ButtonMash({
       const newCount = tapCount + 1
       setTapCount(newCount)
       if (newCount >= targetTaps) {
+        if (speedTimeoutRef.current) clearTimeout(speedTimeoutRef.current)
         const elapsed = Date.now() - startTimeRef.current
         setFinished(true)
         setCompletionTimeMs(elapsed)
@@ -239,12 +266,14 @@ export default function ButtonMash({
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
+      if (speedTimeoutRef.current) clearTimeout(speedTimeoutRef.current)
     }
   }, [])
 
   // 同点再戦：mashRoundが上がったらリセット
   useEffect(() => {
     if (mashRound <= 1) return
+    if (speedTimeoutRef.current) clearTimeout(speedTimeoutRef.current)
     setTapCount(0)
     setStarted(false)
     setFinished(false)
@@ -261,8 +290,8 @@ export default function ButtonMash({
     ? ((timedDuration - timeLeft) / timedDuration) * 100
     : !isSpeedMode && finished ? 100 : 0
 
-  // ローディング中
-  if (tiebreakerUserIds.length === 0) {
+  // ローディング中（tiebreakerUserIds or mashType が未確定の間は表示しない）
+  if (tiebreakerUserIds.length === 0 || !mashDataLoaded) {
     return (
       <div className="p-4 text-center text-gray-400 text-sm">読み込み中...</div>
     )
