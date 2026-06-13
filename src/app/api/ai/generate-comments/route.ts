@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { AI_MODEL_COMMENTS } from '@/lib/ai-config'
 
 interface CompactStats {
   gamesParticipated: number
@@ -771,7 +772,7 @@ user_idはそれぞれ: ${users.map((u) => `${u.userName}=${u.userId}`).join(', 
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: AI_MODEL_COMMENTS,
         max_tokens: 16384,
         messages: [{ role: 'user', content: prompt }],
       }),
