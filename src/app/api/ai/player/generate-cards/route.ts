@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { AI_MODEL_PLAYER } from '@/lib/ai-config'
 import { getAiCharacterDef } from '@/lib/ai-characters'
+import { getCharacterDataContext } from '@/lib/ai-character-data'
 
 interface GeneratePlayerCardsRequest {
   tournament_id: string
@@ -19,12 +20,15 @@ export async function POST(request: Request) {
   }
 
   const characterDef = getAiCharacterDef(character_name)
+  const dataContext = await getCharacterDataContext(character_name)
   const normalCount = cards_per_user - dirty_cards_per_user
 
+  const characterContext = [characterDef?.cardPrompt, dataContext].filter(Boolean).join('\n') || undefined
+
   try {
-    const normalCards = await generateCards(normalCount, false, characterDef?.cardPrompt)
+    const normalCards = await generateCards(normalCount, false, characterContext)
     const dirtyCards = dirty_cards_per_user > 0
-      ? await generateCards(dirty_cards_per_user, true, characterDef?.cardPrompt)
+      ? await generateCards(dirty_cards_per_user, true, characterContext)
       : []
 
     const cardRows = [

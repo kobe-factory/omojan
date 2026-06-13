@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { AI_MODEL_PLAYER } from '@/lib/ai-config'
 import { getAiCharacterDef } from '@/lib/ai-characters'
+import { getCharacterDataContext } from '@/lib/ai-character-data'
 
 type Phase = 'submit' | 'vote' | 'tiebreaker_vote' | 'button_mash'
 
@@ -62,14 +63,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'ゲームが見つかりません' }, { status: 404 })
   }
 
+  // JSONデータからキャラクターコンテキストを取得（個人AI・Fuw-Fuw用）
+  const dataContext = await getCharacterDataContext(characterName)
+
   if (phase === 'submit') {
-    return handleSubmit(aiUserId, tournament_id, currentGame, characterDef)
+    return handleSubmit(aiUserId, tournament_id, currentGame, characterDef, dataContext)
   }
   if (phase === 'vote') {
-    return handleVote(aiUserId, currentGame, characterDef, false)
+    return handleVote(aiUserId, currentGame, characterDef, false, dataContext)
   }
   if (phase === 'tiebreaker_vote') {
-    return handleVote(aiUserId, currentGame, characterDef, true)
+    return handleVote(aiUserId, currentGame, characterDef, true, dataContext)
   }
   if (phase === 'button_mash') {
     return handleButtonMash(aiUserId, currentGame)
@@ -83,6 +87,7 @@ async function handleSubmit(
   tournamentId: string,
   game: { id: string; status: string; topic_card_id: string; voting_mode: string | null },
   characterDef: ReturnType<typeof getAiCharacterDef>,
+  dataContext: string | null,
 ) {
   if (!characterDef) return NextResponse.json({ error: 'キャラ定義なし' }, { status: 400 })
 
@@ -128,7 +133,7 @@ async function handleSubmit(
     game.voting_mode === 'secret' ? 'シークレット（作者名非表示）' :
     game.voting_mode === 'impersonation' ? 'なりすまし（偽名で出品）' : '通常'
 
-  const prompt = `${characterDef.submissionSystemPrompt}
+  const prompt = `${characterDef.submissionSystemPrompt}${dataContext ? `\n${dataContext}` : ''}
 
 おもじゃんのルール：
 - お題カードのテキストの前か後ろに手札を配置して作品を作る
@@ -206,6 +211,7 @@ async function handleVote(
   game: { id: string; status: string; topic_card_id: string; voting_mode: string | null },
   characterDef: ReturnType<typeof getAiCharacterDef>,
   isTiebreaker: boolean,
+  dataContext: string | null,
 ) {
   if (!characterDef) return NextResponse.json({ error: 'キャラ定義なし' }, { status: 400 })
 
@@ -286,7 +292,7 @@ async function handleVote(
     return `${i + 1}. 「${fullText}」${preambleStr}`
   }).join('\n')
 
-  const prompt = `${characterDef.voteSystemPrompt}
+  const prompt = `${characterDef.voteSystemPrompt}${dataContext ? `\n${dataContext}` : ''}
 
 お題：「${topicText}」
 
