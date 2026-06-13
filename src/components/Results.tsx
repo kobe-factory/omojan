@@ -170,7 +170,6 @@ export default function Results({ tournament, game, participants, onNext, nextLa
             if (maxTb > 0 && item.tbVoteCount === maxTb) {
               item.isWinner = true
               item.decidedByTiebreaker = true
-              item.displayVoteCount = item.voteCount + 1
             }
           })
         } else {

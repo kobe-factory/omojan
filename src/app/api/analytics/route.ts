@@ -132,10 +132,19 @@ export async function GET() {
     if (gameMashResults.length >= 2) {
       const latestRound = Math.max(...gameMashResults.map((r) => r.mash_round))
       const latestMash = gameMashResults.filter((r) => r.mash_round === latestRound)
-      const maxTaps = Math.max(...latestMash.map((r) => r.tap_count))
-      const mashWinner = latestMash.find((r) => r.tap_count === maxTaps)
-      if (mashWinner) {
-        const winnerSub = gameSubs.find((s) => s.userId === mashWinner.user_id)
+      const isSpeedMode = latestMash.some((r) => r.completion_time_ms != null)
+      let mashWinnerUserId: string | null = null
+      if (isSpeedMode) {
+        const minTime = Math.min(...latestMash.map((r) => r.completion_time_ms ?? Infinity))
+        const winners = latestMash.filter((r) => r.completion_time_ms === minTime)
+        if (winners.length === 1) mashWinnerUserId = winners[0].user_id
+      } else {
+        const maxTaps = Math.max(...latestMash.map((r) => r.tap_count))
+        const winners = latestMash.filter((r) => r.tap_count === maxTaps)
+        if (winners.length === 1) mashWinnerUserId = winners[0].user_id
+      }
+      if (mashWinnerUserId) {
+        const winnerSub = gameSubs.find((s) => s.userId === mashWinnerUserId)
         if (winnerSub) winnersByGame[gameId] = [winnerSub.id]
       }
       continue
@@ -176,10 +185,15 @@ export async function GET() {
     const latestRound = Math.max(...results.map((r) => r.mash_round))
     const latest = results.filter((r) => r.mash_round === latestRound)
     mashParticipantsByGame[gameId] = latest.map((r) => r.user_id)
-    const maxTaps = Math.max(...latest.map((r) => r.tap_count))
-    const winner = latest.find((r) => r.tap_count === maxTaps)
-    if (winner && latest.filter((r) => r.tap_count === maxTaps).length === 1) {
-      mashWinnerByGame[gameId] = winner.user_id
+    const isSpeedMode = latest.some((r) => r.completion_time_ms != null)
+    if (isSpeedMode) {
+      const minTime = Math.min(...latest.map((r) => r.completion_time_ms ?? Infinity))
+      const winners = latest.filter((r) => r.completion_time_ms === minTime)
+      if (winners.length === 1) mashWinnerByGame[gameId] = winners[0].user_id
+    } else {
+      const maxTaps = Math.max(...latest.map((r) => r.tap_count))
+      const winners = latest.filter((r) => r.tap_count === maxTaps)
+      if (winners.length === 1) mashWinnerByGame[gameId] = winners[0].user_id
     }
   }
 

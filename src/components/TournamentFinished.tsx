@@ -71,7 +71,7 @@ export default function TournamentFinished({ tournamentId, participants }: Props
       const [{ data: allVotes }, { data: allSubs }, { data: allMashResults }] = await Promise.all([
         supabase.from('votes').select('game_id, submission_id, is_tiebreaker').in('game_id', gameIds),
         supabase.from('submissions').select('id, game_id, user_id, hand_card_id, position, preamble, preamble_position').in('game_id', gameIds),
-        supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round').in('game_id', gameIds),
+        supabase.from('button_mash_results').select('game_id, user_id, tap_count, mash_round, completion_time_ms').in('game_id', gameIds),
       ])
 
       // 大会決戦の勝者を取得
@@ -115,9 +115,18 @@ export default function TournamentFinished({ tournamentId, participants }: Props
         if (results.length < 2) continue
         const latestRound = Math.max(...results.map((r) => r.mash_round))
         const latest = results.filter((r) => r.mash_round === latestRound)
-        const maxTaps = Math.max(...latest.map((r) => r.tap_count))
-        const winners = latest.filter((r) => r.tap_count === maxTaps)
-        if (winners.length === 1) mashWinnerByGame[gameId] = winners[0].user_id
+        const isSpeedMode = latest.some((r) => (r as { completion_time_ms?: number | null }).completion_time_ms != null)
+        let winnerUserId: string | null = null
+        if (isSpeedMode) {
+          const minTime = Math.min(...latest.map((r) => (r as { completion_time_ms?: number | null }).completion_time_ms ?? Infinity))
+          const winners = latest.filter((r) => (r as { completion_time_ms?: number | null }).completion_time_ms === minTime)
+          if (winners.length === 1) winnerUserId = winners[0].user_id
+        } else {
+          const maxTaps = Math.max(...latest.map((r) => r.tap_count))
+          const winners = latest.filter((r) => r.tap_count === maxTaps)
+          if (winners.length === 1) winnerUserId = winners[0].user_id
+        }
+        if (winnerUserId) mashWinnerByGame[gameId] = winnerUserId
       }
 
       const topicIds = games.map((g) => g.topic_card_id)
@@ -223,12 +232,11 @@ export default function TournamentFinished({ tournamentId, participants }: Props
           } else if (winnerSub) {
             if (scoreMap[winnerSub.user_id]) {
               scoreMap[winnerSub.user_id].wins += 1
-              if (isWinByTiebreaker) scoreMap[winnerSub.user_id].totalVotes += 1
             }
           }
         }
 
-        const displayVotes = maxRegularVotes + (isWinByTiebreaker ? 1 : 0)
+        const displayVotes = maxRegularVotes
 
         const topicText = topicMap[game.topic_card_id] ?? ''
 

@@ -163,7 +163,6 @@ export default function Archive({ tournamentId, participants, impersonationMode 
                 if (maxTb > 0 && s.tbVoteCount === maxTb) {
                   s.isWinner = true
                   s.decidedByTiebreaker = true
-                  s.displayVoteCount = s.voteCount + 1
                 }
               })
             } else {
