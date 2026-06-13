@@ -27,6 +27,7 @@ export type Database = {
           ai_comment: string | null
           ai_cards_mode: boolean
           ai_player_character: string | null
+          tournament_type: string | null
           created_at: string
         }
         Insert: {
@@ -47,6 +48,7 @@ export type Database = {
           status?: TournamentStatus
           ai_cards_mode?: boolean
           ai_player_character?: string | null
+          tournament_type?: string | null
           created_at?: string
         }
         Update: {
@@ -68,6 +70,7 @@ export type Database = {
           ai_comment?: string | null
           ai_cards_mode?: boolean
           ai_player_character?: string | null
+          tournament_type?: string | null
           created_at?: string
         }
         Relationships: []

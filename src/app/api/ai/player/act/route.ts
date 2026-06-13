@@ -10,10 +10,11 @@ type Phase = 'submit' | 'vote' | 'tiebreaker_vote' | 'button_mash'
 interface ActRequest {
   tournament_id: string
   phase: Phase
+  character_name?: string // エキシビション時に指定
 }
 
 export async function POST(request: Request) {
-  const { tournament_id, phase }: ActRequest = await request.json()
+  const { tournament_id, phase, character_name: overrideCharacter }: ActRequest = await request.json()
 
   if (!tournament_id || !phase) {
     return NextResponse.json({ error: 'パラメータ不足' }, { status: 400 })
@@ -22,15 +23,14 @@ export async function POST(request: Request) {
   // 大会情報取得
   const { data: tournament } = await supabase
     .from('tournaments')
-    .select('id, ai_player_character, mode')
+    .select('id, ai_player_character, tournament_type, mode')
     .eq('id', tournament_id)
     .single()
 
-  if (!tournament?.ai_player_character) {
+  const characterName = overrideCharacter ?? tournament?.ai_player_character
+  if (!characterName) {
     return NextResponse.json({ error: 'AIプレイヤー未設定' }, { status: 400 })
   }
-
-  const characterName = tournament.ai_player_character
   const characterDef = getAiCharacterDef(characterName)
   if (!characterDef) {
     return NextResponse.json({ error: `キャラ定義なし: ${characterName}` }, { status: 400 })

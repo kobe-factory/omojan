@@ -10,6 +10,8 @@ interface User {
   name: string
 }
 
+const PRODUCTION_USER_NAMES = ['はじむ', 'スラパン', 'こんべ', 'かねおか', 'カズさん']
+
 interface RoundSummary {
   roundNumber: number
   topicText: string
@@ -152,6 +154,7 @@ export default function SummaryPage() {
         .filter((p) => p.tournament_id === t.id)
         .map((p) => p.users as unknown as User)
         .filter(Boolean)
+        .filter((u) => PRODUCTION_USER_NAMES.includes(u.name))
 
       const allTournamentGames = (allGames ?? []).filter((g) => g.tournament_id === t.id)
       // 流局（再戦あり）の無効ゲームを除外（analyticsと同ロジック）
@@ -551,7 +554,7 @@ export default function SummaryPage() {
       </div>}
 
       <footer className="text-center py-4">
-        <p className="text-xs text-gray-300">v1.40.1</p>
+        <p className="text-xs text-gray-300">v1.41.0</p>
       </footer>
     </div>
   )

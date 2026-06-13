@@ -38,12 +38,24 @@ async function notifyParticipants(
   await sendLinePush(lineUserIds, payload)
 }
 
+const EXHIBITION_AI_CHARS = ['こんべ(AI)', 'スラパン(AI)', 'はじむ(AI)', 'カズさん(AI)', 'かっぴー(AI)']
+
 function fireAiAction(origin: string, tournamentId: string, phase: string) {
   fetch(`${origin}/api/ai/player/act`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ tournament_id: tournamentId, phase }),
   }).catch(() => {})
+}
+
+function fireExhibitionAiActions(origin: string, tournamentId: string, phase: string) {
+  for (const charName of EXHIBITION_AI_CHARS) {
+    fetch(`${origin}/api/ai/player/act`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tournament_id: tournamentId, phase, character_name: charName }),
+    }).catch(() => {})
+  }
 }
 
 async function getTournamentNumber(tournamentId: string): Promise<number> {
@@ -76,7 +88,7 @@ export async function POST(
   const { data: tournament } = await supabase
     .from('tournaments')
     .select(
-      'id, status, mode, game_count, cards_per_user, hand_cards_per_player, required_players, dirty_cards_per_user, skip_card_creation, random_voting, tiebreaker_mode, ai_player_character',
+      'id, status, mode, game_count, cards_per_user, hand_cards_per_player, required_players, dirty_cards_per_user, skip_card_creation, random_voting, tiebreaker_mode, ai_player_character, tournament_type',
     )
     .eq('token', token)
     .single()
@@ -142,7 +154,10 @@ export async function POST(
         tournament.mode,
       )
 
-      if (tournament.ai_player_character) {
+      if (tournament.tournament_type === 'exhibition') {
+        const origin = new URL(request.url).origin
+        fireExhibitionAiActions(origin, tournament.id, 'submit')
+      } else if (tournament.ai_player_character) {
         const origin = new URL(request.url).origin
         fireAiAction(origin, tournament.id, 'submit')
       }
@@ -202,7 +217,10 @@ export async function POST(
         tournament.mode,
       )
 
-      if (tournament.ai_player_character) {
+      if (tournament.tournament_type === 'exhibition') {
+        const origin = new URL(request.url).origin
+        fireExhibitionAiActions(origin, tournament.id, 'submit')
+      } else if (tournament.ai_player_character) {
         const origin = new URL(request.url).origin
         fireAiAction(origin, tournament.id, 'submit')
       }
@@ -355,7 +373,10 @@ export async function POST(
         tournament.mode,
       )
 
-      if (tournament.ai_player_character) {
+      if (tournament.tournament_type === 'exhibition') {
+        const origin = new URL(request.url).origin
+        fireExhibitionAiActions(origin, tournament.id, 'vote')
+      } else if (tournament.ai_player_character) {
         const origin = new URL(request.url).origin
         fireAiAction(origin, tournament.id, 'vote')
       }
@@ -471,7 +492,10 @@ export async function POST(
             tournament.mode,
           )
 
-          if (tournament.ai_player_character) {
+          if (tournament.tournament_type === 'exhibition') {
+            const origin = new URL(request.url).origin
+            fireExhibitionAiActions(origin, tournament.id, 'button_mash')
+          } else if (tournament.ai_player_character) {
             const origin = new URL(request.url).origin
             fireAiAction(origin, tournament.id, 'button_mash')
           }
@@ -502,7 +526,10 @@ export async function POST(
           tournament.mode,
         )
 
-        if (tournament.ai_player_character) {
+        if (tournament.tournament_type === 'exhibition') {
+          const origin = new URL(request.url).origin
+          fireExhibitionAiActions(origin, tournament.id, 'tiebreaker_vote')
+        } else if (tournament.ai_player_character) {
           const origin = new URL(request.url).origin
           fireAiAction(origin, tournament.id, 'tiebreaker_vote')
         }
@@ -854,7 +881,10 @@ export async function POST(
       if (gameError)
         return NextResponse.json({ error: gameError }, { status: 500 })
 
-      if (tournament.ai_player_character) {
+      if (tournament.tournament_type === 'exhibition') {
+        const origin = new URL(request.url).origin
+        fireExhibitionAiActions(origin, tournament.id, 'submit')
+      } else if (tournament.ai_player_character) {
         const origin = new URL(request.url).origin
         fireAiAction(origin, tournament.id, 'submit')
       }

@@ -86,6 +86,7 @@ export default function AdminPage() {
   const [tiebreakerMode, setTiebreakerMode] = useState<'vote' | 'button_mash'>('vote')
   const [aiCardsMode, setAiCardsMode] = useState(false)
   const [aiPlayerCharacter, setAiPlayerCharacter] = useState<string | null>(null)
+  const [isExhibition, setIsExhibition] = useState(false)
 
   const fetchTournaments = useCallback(async () => {
     setListLoading(true)
@@ -244,7 +245,8 @@ export default function AdminPage() {
           voting_style: votingStyle,
           tiebreaker_mode: tiebreakerMode,
           ai_cards_mode: aiCardsMode,
-          ai_player_character: aiPlayerCharacter,
+          ai_player_character: isExhibition ? null : aiPlayerCharacter,
+          tournament_type: isExhibition ? 'exhibition' : 'normal',
         }),
       })
       const data = await res.json()
@@ -384,8 +386,26 @@ export default function AdminPage() {
           <div className="bg-gray-50 rounded-xl p-4 mb-6 space-y-4">
             <p className="text-xs font-medium text-gray-600">本番設定</p>
 
-            {/* AIプレイヤー参加 */}
-            <div>
+            {/* エキシビションモード */}
+            <button
+              type="button"
+              onClick={() => { setIsExhibition(!isExhibition); setAiPlayerCharacter(null) }}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all ${
+                isExhibition ? 'border-violet-500 bg-violet-50' : 'border-gray-200 bg-white'
+              }`}
+            >
+              <span className="text-lg">🤖</span>
+              <div className="flex-1">
+                <p className={`text-sm font-bold ${isExhibition ? 'text-violet-700' : 'text-gray-700'}`}>エキシビションモード</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">こんべ・スラパン・はじむ・カズさん・かっぴーのAIが全員参加して対戦</p>
+              </div>
+              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isExhibition ? 'border-violet-500 bg-violet-500' : 'border-gray-300'}`}>
+                {isExhibition && <div className="w-2 h-2 rounded-full bg-white" />}
+              </div>
+            </button>
+
+            {/* AIプレイヤー参加（エキシビションOFF時のみ表示） */}
+            {!isExhibition && <div>
               <p className="text-xs text-gray-500 mb-2">🤖 AIプレイヤー（6人目として参加）</p>
               <div className="grid grid-cols-3 gap-1.5">
                 <button
@@ -413,7 +433,7 @@ export default function AdminPage() {
               {aiPlayerCharacter && (
                 <p className="text-xs text-purple-600 mt-1.5">✓ {aiPlayerCharacter} が6人目として自動参加します（参加人数が6名になります）</p>
               )}
-            </div>
+            </div>}
 
             {/* AI札作成モード */}
             <button
@@ -855,7 +875,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.40.1</p>
+        <p className="text-center text-xs text-gray-300 mt-8">v1.41.0</p>
       </div>
     </div>
   )

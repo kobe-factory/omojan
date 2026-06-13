@@ -85,7 +85,9 @@ export async function POST(request: Request) {
     }
   }
 
-  const { data: users } = await supabase.from('users').select('id, name')
+  const PRODUCTION_USER_NAMES = ['はじむ', 'スラパン', 'こんべ', 'かねおか', 'カズさん']
+  const { data: allUsers } = await supabase.from('users').select('id, name')
+  const users = (allUsers ?? []).filter((u) => PRODUCTION_USER_NAMES.includes(u.name))
   if (!users || users.length === 0) {
     return NextResponse.json({ error: 'ユーザーなし' }, { status: 500 })
   }

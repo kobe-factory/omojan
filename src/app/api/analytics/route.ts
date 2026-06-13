@@ -49,9 +49,12 @@ export interface UserStats {
   avgPreambleLength: number // 前口上平均文字数（使用時のみ）
 }
 
+const PRODUCTION_USER_NAMES = ['はじむ', 'スラパン', 'こんべ', 'かねおか', 'カズさん']
+
 export async function GET() {
-  // 全ユーザー取得
-  const { data: users } = await supabase.from('users').select('id, name')
+  // 本番ユーザーのみ取得（AIキャラクターを除外）
+  const { data: allUsers } = await supabase.from('users').select('id, name')
+  const users = (allUsers ?? []).filter((u) => PRODUCTION_USER_NAMES.includes(u.name))
   if (!users || users.length === 0) {
     return NextResponse.json({ stats: [] })
   }
