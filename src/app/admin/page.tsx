@@ -83,6 +83,7 @@ export default function AdminPage() {
   const [hasPastTournaments, setHasPastTournaments] = useState(false)
   const [votingStyle, setVotingStyle] = useState<'normal' | 'secret_one' | 'secret_all' | 'impersonation' | 'random_per_round'>('normal')
   const [tiebreakerMode, setTiebreakerMode] = useState<'vote' | 'button_mash'>('vote')
+  const [aiCardsMode, setAiCardsMode] = useState(false)
 
   const fetchTournaments = useCallback(async () => {
     setListLoading(true)
@@ -240,6 +241,7 @@ export default function AdminPage() {
           card_source: selectedPreset.mode === 'production' ? cardSource : 'new',
           voting_style: votingStyle,
           tiebreaker_mode: tiebreakerMode,
+          ai_cards_mode: aiCardsMode,
         }),
       })
       const data = await res.json()
@@ -379,8 +381,30 @@ export default function AdminPage() {
           <div className="bg-gray-50 rounded-xl p-4 mb-6 space-y-4">
             <p className="text-xs font-medium text-gray-600">本番設定</p>
 
-            {/* 札のソース選択 */}
-            <div className="space-y-2">
+            {/* AI札作成モード */}
+            <button
+              type="button"
+              onClick={() => {
+                setAiCardsMode(!aiCardsMode)
+                if (!aiCardsMode) setCardSource('new')
+              }}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all ${
+                aiCardsMode ? 'border-purple-500 bg-purple-50' : 'border-gray-200 bg-white'
+              }`}
+            >
+              <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+                aiCardsMode ? 'border-purple-500' : 'border-gray-300'
+              }`}>
+                {aiCardsMode && <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />}
+              </div>
+              <div>
+                <p className={`text-sm font-medium ${aiCardsMode ? 'text-purple-700' : 'text-gray-700'}`}>🤖 AI札作成モード</p>
+                <p className="text-xs text-gray-400">AIが全員分の札を自動生成。札作成フェーズをスキップします</p>
+              </div>
+            </button>
+
+            {/* 札のソース選択（AI札作成モード OFF時のみ表示） */}
+            {!aiCardsMode && <div className="space-y-2">
               {(
                 [
                   { value: 'new', label: '札を作成する', disabled: false },
@@ -431,7 +455,7 @@ export default function AdminPage() {
                 )}
               </div>
             )}
-            </div>
+            </div>}
 
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -445,14 +469,14 @@ export default function AdminPage() {
                 />
               </div>
               <div>
-                <label className={`text-xs mb-1 block ${cardSource !== 'new' ? 'text-gray-300' : 'text-gray-500'}`}>
-                  札作成枚数
+                <label className={`text-xs mb-1 block ${cardSource !== 'new' && !aiCardsMode ? 'text-gray-300' : 'text-gray-500'}`}>
+                  {aiCardsMode ? '🤖 AI生成枚数' : '札作成枚数'}
                 </label>
                 <input
                   type="number"
                   min={1}
                   value={prodCardsPerUser}
-                  disabled={cardSource !== 'new'}
+                  disabled={cardSource !== 'new' && !aiCardsMode}
                   onChange={(e) => setProdCardsPerUser(e.target.value)}
                   className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:border-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed"
                 />
@@ -797,7 +821,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.38.17</p>
+        <p className="text-center text-xs text-gray-300 mt-8">v1.39.0</p>
       </div>
     </div>
   )

@@ -6,7 +6,7 @@ import { nanoid } from 'nanoid'
 const LIFF_URL = `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID}`
 
 export async function POST(request: Request) {
-  const { mode, required_players, game_count, cards_per_user, hand_cards_per_player, dirty_cards_per_user, card_source, voting_style, tiebreaker_mode } = await request.json()
+  const { mode, required_players, game_count, cards_per_user, hand_cards_per_player, dirty_cards_per_user, card_source, voting_style, tiebreaker_mode, ai_cards_mode } = await request.json()
 
   if (mode === 'production') {
     const { data: active } = await supabase
@@ -22,7 +22,8 @@ export async function POST(request: Request) {
     }
   }
 
-  const skipCardCreation = mode === 'production' && (card_source === 'previous' || card_source === 'all' || card_source === 'unused_submission' || card_source === 'unused_complete')
+  const isAiCardsMode = mode === 'production' && ai_cards_mode === true
+  const skipCardCreation = isAiCardsMode || (mode === 'production' && (card_source === 'previous' || card_source === 'all' || card_source === 'unused_submission' || card_source === 'unused_complete'))
   const token = nanoid(10)
 
   const resolvedGameCount = game_count ?? 5
@@ -50,6 +51,7 @@ export async function POST(request: Request) {
       impersonation_mode: impersonationMode,
       random_voting: randomVoting,
       tiebreaker_mode: tiebreaker_mode ?? 'vote',
+      ai_cards_mode: isAiCardsMode,
     })
     .select()
     .single()
@@ -58,8 +60,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  // 前回 or 全大会の札をコピー
-  if (skipCardCreation) {
+  // AI札作成モード：AIでカード生成
+  if (isAiCardsMode) {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
+    const genRes = await fetch(`${baseUrl}/api/ai/generate-cards`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tournament_id: data.id,
+        cards_per_user: cards_per_user ?? 12,
+        dirty_cards_per_user: dirty_cards_per_user ?? 2,
+      }),
+    })
+    if (!genRes.ok) {
+      const genError = await genRes.json()
+      await supabase.from('tournaments').delete().eq('id', data.id)
+      return NextResponse.json({ error: genError.error ?? 'AI札生成に失敗しました' }, { status: 500 })
+    }
+  } else if (skipCardCreation) {
+    // 前回 or 全大会の札をコピー
     const sourceError = await copyCards(data.id, card_source)
     if (sourceError) {
       // ロールバック：作成した大会を削除
