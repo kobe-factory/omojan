@@ -38,6 +38,14 @@ async function notifyParticipants(
   await sendLinePush(lineUserIds, payload)
 }
 
+function fireAiAction(origin: string, tournamentId: string, phase: string) {
+  fetch(`${origin}/api/ai/player/act`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tournament_id: tournamentId, phase }),
+  }).catch(() => {})
+}
+
 async function getTournamentNumber(tournamentId: string): Promise<number> {
   const { data } = await supabase
     .from('tournaments')
@@ -68,7 +76,7 @@ export async function POST(
   const { data: tournament } = await supabase
     .from('tournaments')
     .select(
-      'id, status, mode, game_count, cards_per_user, hand_cards_per_player, required_players, dirty_cards_per_user, skip_card_creation, random_voting, tiebreaker_mode',
+      'id, status, mode, game_count, cards_per_user, hand_cards_per_player, required_players, dirty_cards_per_user, skip_card_creation, random_voting, tiebreaker_mode, ai_player_character',
     )
     .eq('token', token)
     .single()
@@ -134,6 +142,11 @@ export async function POST(
         tournament.mode,
       )
 
+      if (tournament.ai_player_character) {
+        const origin = new URL(request.url).origin
+        fireAiAction(origin, tournament.id, 'submit')
+      }
+
       return NextResponse.json({ advanced: true, newStatus: 'playing' })
     }
 
@@ -188,6 +201,11 @@ export async function POST(
         },
         tournament.mode,
       )
+
+      if (tournament.ai_player_character) {
+        const origin = new URL(request.url).origin
+        fireAiAction(origin, tournament.id, 'submit')
+      }
 
       return NextResponse.json({ advanced: true, newStatus: 'playing' })
     }
@@ -258,6 +276,11 @@ export async function POST(
       },
       tournament.mode,
     )
+
+    if (tournament.ai_player_character) {
+      const origin = new URL(request.url).origin
+      fireAiAction(origin, tournament.id, 'submit')
+    }
 
     return NextResponse.json({ advanced: true, newStatus: 'playing' })
   }
@@ -331,6 +354,11 @@ export async function POST(
         },
         tournament.mode,
       )
+
+      if (tournament.ai_player_character) {
+        const origin = new URL(request.url).origin
+        fireAiAction(origin, tournament.id, 'vote')
+      }
 
       return NextResponse.json({
         advanced: true,
@@ -443,6 +471,11 @@ export async function POST(
             tournament.mode,
           )
 
+          if (tournament.ai_player_character) {
+            const origin = new URL(request.url).origin
+            fireAiAction(origin, tournament.id, 'button_mash')
+          }
+
           return NextResponse.json({
             advanced: true,
             newGameStatus: 'waiting_button_mash',
@@ -468,6 +501,11 @@ export async function POST(
           },
           tournament.mode,
         )
+
+        if (tournament.ai_player_character) {
+          const origin = new URL(request.url).origin
+          fireAiAction(origin, tournament.id, 'tiebreaker_vote')
+        }
 
         return NextResponse.json({
           advanced: true,
@@ -726,6 +764,11 @@ export async function POST(
         if (gameError)
           return NextResponse.json({ error: gameError }, { status: 500 })
 
+        if (tournament.ai_player_character) {
+          const origin = new URL(request.url).origin
+          fireAiAction(origin, tournament.id, 'submit')
+        }
+
         return NextResponse.json({
           advanced: true,
           newGameStatus: 'waiting_submission',
@@ -810,6 +853,11 @@ export async function POST(
       )
       if (gameError)
         return NextResponse.json({ error: gameError }, { status: 500 })
+
+      if (tournament.ai_player_character) {
+        const origin = new URL(request.url).origin
+        fireAiAction(origin, tournament.id, 'submit')
+      }
 
       return NextResponse.json({
         advanced: true,

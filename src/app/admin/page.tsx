@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { GAME_PRESETS, DEFAULT_PRESET, type GamePreset } from '@/config/game'
 import { supabase } from '@/lib/supabase'
+import { AI_CHARACTER_NAMES } from '@/lib/ai-characters'
 
 interface GameRow {
   round_number: number
@@ -84,6 +85,7 @@ export default function AdminPage() {
   const [votingStyle, setVotingStyle] = useState<'normal' | 'secret_one' | 'secret_all' | 'impersonation' | 'random_per_round'>('normal')
   const [tiebreakerMode, setTiebreakerMode] = useState<'vote' | 'button_mash'>('vote')
   const [aiCardsMode, setAiCardsMode] = useState(false)
+  const [aiPlayerCharacter, setAiPlayerCharacter] = useState<string | null>(null)
 
   const fetchTournaments = useCallback(async () => {
     setListLoading(true)
@@ -242,6 +244,7 @@ export default function AdminPage() {
           voting_style: votingStyle,
           tiebreaker_mode: tiebreakerMode,
           ai_cards_mode: aiCardsMode,
+          ai_player_character: aiPlayerCharacter,
         }),
       })
       const data = await res.json()
@@ -380,6 +383,37 @@ export default function AdminPage() {
         {selectedPreset.mode === 'production' && !activeProductionTournament && (
           <div className="bg-gray-50 rounded-xl p-4 mb-6 space-y-4">
             <p className="text-xs font-medium text-gray-600">本番設定</p>
+
+            {/* AIプレイヤー参加 */}
+            <div>
+              <p className="text-xs text-gray-500 mb-2">🤖 AIプレイヤー（6人目として参加）</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setAiPlayerCharacter(null)}
+                  className={`py-1.5 px-2 rounded-lg text-xs border-2 text-center transition-all ${
+                    aiPlayerCharacter === null ? 'border-gray-400 bg-gray-100 font-bold text-gray-700' : 'border-gray-200 bg-white text-gray-500'
+                  }`}
+                >
+                  なし
+                </button>
+                {AI_CHARACTER_NAMES.map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => setAiPlayerCharacter(name)}
+                    className={`py-1.5 px-2 rounded-lg text-xs border-2 text-center transition-all ${
+                      aiPlayerCharacter === name ? 'border-purple-500 bg-purple-50 font-bold text-purple-700' : 'border-gray-200 bg-white text-gray-600'
+                    }`}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+              {aiPlayerCharacter && (
+                <p className="text-xs text-purple-600 mt-1.5">✓ {aiPlayerCharacter} が6人目として自動参加します（参加人数が6名になります）</p>
+              )}
+            </div>
 
             {/* AI札作成モード */}
             <button
@@ -821,7 +855,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.39.0</p>
+        <p className="text-center text-xs text-gray-300 mt-8">v1.40.0</p>
       </div>
     </div>
   )

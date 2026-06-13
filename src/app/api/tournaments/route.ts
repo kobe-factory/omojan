@@ -6,7 +6,7 @@ import { nanoid } from 'nanoid'
 const LIFF_URL = `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID}`
 
 export async function POST(request: Request) {
-  const { mode, required_players, game_count, cards_per_user, hand_cards_per_player, dirty_cards_per_user, card_source, voting_style, tiebreaker_mode, ai_cards_mode } = await request.json()
+  const { mode, required_players, game_count, cards_per_user, hand_cards_per_player, dirty_cards_per_user, card_source, voting_style, tiebreaker_mode, ai_cards_mode, ai_player_character } = await request.json()
 
   if (mode === 'production') {
     const { data: active } = await supabase
@@ -24,7 +24,10 @@ export async function POST(request: Request) {
 
   const isAiCardsMode = mode === 'production' && ai_cards_mode === true
   const skipCardCreation = isAiCardsMode || (mode === 'production' && (card_source === 'previous' || card_source === 'all' || card_source === 'unused_submission' || card_source === 'unused_complete'))
+  const hasAiPlayer = mode === 'production' && !!ai_player_character
   const token = nanoid(10)
+  // AIプレイヤーが参加する場合はrequired_playersを+1（AI分を含むため）
+  const effectiveRequiredPlayers = hasAiPlayer ? (required_players ?? 5) + 1 : (required_players ?? 5)
 
   const resolvedGameCount = game_count ?? 5
   const isSecretOne = voting_style === 'secret_one'
@@ -40,7 +43,7 @@ export async function POST(request: Request) {
     .insert({
       token,
       mode: mode ?? 'production',
-      required_players,
+      required_players: effectiveRequiredPlayers,
       game_count: resolvedGameCount,
       cards_per_user: cards_per_user ?? 0,
       hand_cards_per_player,
@@ -52,12 +55,54 @@ export async function POST(request: Request) {
       random_voting: randomVoting,
       tiebreaker_mode: tiebreaker_mode ?? 'vote',
       ai_cards_mode: isAiCardsMode,
+      ai_player_character: hasAiPlayer ? ai_player_character : null,
     })
     .select()
     .single()
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  // AIプレイヤー：大会発行時に自動参加 + カード生成
+  if (hasAiPlayer) {
+    const { data: aiUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('name', ai_player_character)
+      .maybeSingle()
+
+    if (!aiUser) {
+      await supabase.from('tournaments').delete().eq('id', data.id)
+      return NextResponse.json({ error: `AIキャラクター「${ai_player_character}」がDBに存在しません。SQLを実行してユーザーを登録してください。` }, { status: 400 })
+    }
+
+    // 自動参加
+    await supabase.from('tournament_participants').insert({
+      tournament_id: data.id,
+      user_id: aiUser.id,
+    })
+
+    // AI札作成モードでない場合はAIプレイヤー分のカードを生成
+    if (!isAiCardsMode) {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
+      const aiCardRes = await fetch(`${baseUrl}/api/ai/player/generate-cards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tournament_id: data.id,
+          user_id: aiUser.id,
+          character_name: ai_player_character,
+          cards_per_user: cards_per_user ?? 12,
+          dirty_cards_per_user: dirty_cards_per_user ?? 2,
+        }),
+      })
+      if (!aiCardRes.ok) {
+        const cardErr = await aiCardRes.json()
+        await supabase.from('tournaments').delete().eq('id', data.id)
+        return NextResponse.json({ error: cardErr.error ?? 'AIプレイヤーのカード生成に失敗しました' }, { status: 500 })
+      }
+    }
   }
 
   // AI札作成モード：AIでカード生成
