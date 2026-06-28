@@ -72,6 +72,7 @@ export default function AdminPage() {
   const [commentGenResult, setCommentGenResult] = useState<string | null>(null)
   const [forceRegenTapCount, setForceRegenTapCount] = useState(0)
   const [showForceRegen, setShowForceRegen] = useState(false)
+  const [showOldTournaments, setShowOldTournaments] = useState(false)
 
   const productionPreset = GAME_PRESETS.find((p) => p.mode === 'production')!
   const [prodGameCount, setProdGameCount] = useState(String(productionPreset.game_count))
@@ -704,7 +705,7 @@ export default function AdminPage() {
             <p className="text-xs text-gray-400 text-center py-4">大会がありません</p>
           ) : (
             <div className={`space-y-2 transition-opacity ${listLoading ? 'opacity-50' : 'opacity-100'}`}>
-              {tournaments.map((t) => (
+              {(showOldTournaments ? tournaments : tournaments.slice(0, 1)).map((t) => (
                 <div key={t.id} className="border border-gray-100 rounded-xl p-3">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -799,6 +800,14 @@ export default function AdminPage() {
                   </div>
                 </div>
               ))}
+              {tournaments.length > 1 && (
+                <button
+                  onClick={() => setShowOldTournaments(!showOldTournaments)}
+                  className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 flex items-center justify-center gap-1 transition-colors"
+                >
+                  <span>{showOldTournaments ? '▲ 折りたたむ' : `▼ 過去の大会を見る（${tournaments.length - 1}件）`}</span>
+                </button>
+              )}
             </div>
           )}
         </div>
