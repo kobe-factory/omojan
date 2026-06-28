@@ -436,8 +436,8 @@ export default function AdminPage() {
               )}
             </div>}
 
-            {/* AI札作成モード */}
-            <button
+            {/* AI札作成モード（エキシビション時は非表示） */}
+            {!isExhibition && <button
               type="button"
               onClick={() => {
                 setAiCardsMode(!aiCardsMode)
@@ -454,10 +454,10 @@ export default function AdminPage() {
               <div className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${aiCardsMode ? 'bg-purple-500' : 'bg-gray-200'}`}>
                 <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${aiCardsMode ? 'translate-x-5' : 'translate-x-1'}`} />
               </div>
-            </button>
+            </button>}
 
-            {/* 札のソース選択（AI札作成モード OFF時のみ表示） */}
-            {!aiCardsMode && <div className="space-y-2">
+            {/* 札のソース選択（エキシビション時・AI札作成モード ON時は非表示） */}
+            {!isExhibition && !aiCardsMode && <div className="space-y-2">
               {(
                 [
                   { value: 'new', label: '札を作成する', disabled: false },
