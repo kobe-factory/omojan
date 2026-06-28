@@ -10,7 +10,7 @@ interface User {
   name: string
 }
 
-const PRODUCTION_USER_NAMES = ['はじむ', 'スラパン', 'こんべ', 'かねおか', 'カズさん']
+const PRODUCTION_USER_NAMES = ['はじむ', 'スラパン', 'こんべ', 'かっぴー', 'カズさん']
 
 interface RoundSummary {
   roundNumber: number
@@ -554,7 +554,7 @@ export default function SummaryPage() {
       </div>}
 
       <footer className="text-center py-4">
-        <p className="text-xs text-gray-300">v1.41.0</p>
+        <p className="text-xs text-gray-300">v1.42.1</p>
       </footer>
     </div>
   )

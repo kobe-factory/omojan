@@ -393,20 +393,20 @@ export default function TournamentPage() {
       </header>
 
       <div className="max-w-md mx-auto">
-        {/* エキシビション観戦バナー */}
-        {isExhibitionMode && (
+        {/* エキシビションバナー */}
+        {isExhibitionMode && tournament.status !== 'waiting_users' && (
           <div className="mx-4 mt-4 mb-2 bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 flex items-center gap-2">
             <span className="text-lg">🤖</span>
             <div>
-              <p className="text-xs font-bold text-violet-700">エキシビション観戦モード</p>
-              <p className="text-[11px] text-violet-500 mt-0.5">AIキャラクターたちが自動でプレイします。あなたは観戦できます。</p>
+              <p className="text-xs font-bold text-violet-700">エキシビションモード</p>
+              <p className="text-[11px] text-violet-500 mt-0.5">AIがあなたの代わりに作品を作ります。内容を確認してボタンを押してください。</p>
             </div>
           </div>
         )}
 
-        {/* ユーザー選択フェーズ */}
-        {tournament.status === 'waiting_users' && !isExhibitionMode && (
-          userHasJoinedTournament && !tournament.skip_card_creation && tournament.cards_per_user > 0
+        {/* ユーザー選択フェーズ（エキシビション含む） */}
+        {tournament.status === 'waiting_users' && (
+          userHasJoinedTournament && !tournament.skip_card_creation && tournament.cards_per_user > 0 && !isExhibitionMode
             ? (
               <CardCreation
                 tournament={tournament}
@@ -461,17 +461,8 @@ export default function TournamentPage() {
             )
         )}
 
-        {/* エキシビション waiting_users 準備中メッセージ */}
-        {isExhibitionMode && tournament.status === 'waiting_users' && (
-          <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
-            <p className="text-4xl mb-4">🤖</p>
-            <p className="text-gray-700 font-medium mb-2">AIキャラクターが準備中...</p>
-            <p className="text-sm text-gray-400">しばらくするとゲームが始まります</p>
-          </div>
-        )}
-
-        {/* 非参加者メッセージ（大会進行中に userId がない場合、エキシビション除く） */}
-        {(tournament.status === 'creating_cards' || tournament.status === 'playing' || tournament.status === 'final_tiebreaker') && !userId && !isExhibitionMode && (
+        {/* 非参加者メッセージ（大会進行中に userId がない場合） */}
+        {(tournament.status === 'creating_cards' || tournament.status === 'playing' || tournament.status === 'final_tiebreaker') && !userId && (
           <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
             <p className="text-4xl mb-4">🎴</p>
             <p className="text-gray-700 font-medium mb-2">この大会はすでに参加者が確定しています</p>
@@ -486,6 +477,7 @@ export default function TournamentPage() {
             token={token}
             currentUserId={userId}
             participants={participants}
+            isExhibitionMode={isExhibitionMode}
             onSubmitted={async () => {
               const res = await fetch(`/api/tournaments/${token}/advance`, {
                 method: 'POST',
@@ -500,7 +492,7 @@ export default function TournamentPage() {
         )}
 
         {/* ゲームプレイフェーズ */}
-        {tournament.status === 'playing' && currentGame && (userId || isExhibitionMode) && (
+        {tournament.status === 'playing' && currentGame && userId && (
           <>
             {/* タブ（2回戦以降 or 再戦時 or 流局確認中） */}
             {(currentGame.round_number > 1 || currentGame.is_rematch || currentGame.status === 'showing_rematch') && (
@@ -534,6 +526,7 @@ export default function TournamentPage() {
                   game={currentGame}
                   currentUserId={userId ?? ''}
                   participants={participants}
+                  isExhibitionMode={isExhibitionMode}
                   onSubmitted={async () => {
                     const res = await fetch(`/api/tournaments/${token}/advance`, {
                       method: 'POST',
@@ -579,6 +572,7 @@ export default function TournamentPage() {
                 game={currentGame}
                 currentUserId={userId ?? ''}
                 participants={participants}
+                isExhibitionMode={isExhibitionMode}
                 onVoted={async () => {
                   const res = await fetch(`/api/tournaments/${token}/advance`, {
                     method: 'POST',
@@ -679,7 +673,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.41.0</p>
+        <p className="text-xs text-gray-300">v1.42.1</p>
       </footer>
 
       {/* 前戦結果モーダル（まだ結果を確認していないユーザー向け） */}

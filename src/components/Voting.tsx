@@ -53,9 +53,10 @@ interface Props {
   currentUserId: string
   participants: User[]
   onVoted: () => Promise<void>
+  isExhibitionMode?: boolean
 }
 
-export default function Voting({ tournament, token, game, currentUserId, participants, onVoted }: Props) {
+export default function Voting({ tournament, token, game, currentUserId, participants, onVoted, isExhibitionMode }: Props) {
   const isTiebreaker = game.status === 'waiting_tiebreaker_vote'
   const isLastRound = game.round_number >= tournament.game_count
   const roundLabel = isLastRound ? '最終戦' : `第${game.round_number}回戦`
@@ -71,6 +72,7 @@ export default function Voting({ tournament, token, game, currentUserId, partici
   const [voted, setVoted] = useState(false)
   const [votedUserIds, setVotedUserIds] = useState<string[]>([])
   const [voteError, setVoteError] = useState(false)
+  const [exhibitionVoteSubmissionId, setExhibitionVoteSubmissionId] = useState<string | null>(null)
 
   useEffect(() => {
     supabase
@@ -163,6 +165,40 @@ export default function Voting({ tournament, token, game, currentUserId, partici
     })
   }, [game.id, game.topic_card_id, game.status, currentUserId, participants, isTiebreaker])
 
+  // エキシビション：AIの投票候補を取得・リアルタイム監視
+  useEffect(() => {
+    if (!isExhibitionMode) return
+
+    async function fetchExhibitionVote() {
+      const { data } = await supabase
+        .from('exhibition_votes')
+        .select('submission_id')
+        .eq('game_id', game.id)
+        .eq('user_id', currentUserId)
+        .eq('is_tiebreaker', isTiebreaker)
+        .maybeSingle()
+
+      if (data?.submission_id) {
+        setExhibitionVoteSubmissionId(data.submission_id)
+        setSelectedSubmissionId(data.submission_id)
+      }
+    }
+
+    fetchExhibitionVote()
+
+    const channel = supabase
+      .channel(`exhibition-vote-${game.id}-${currentUserId}-${isTiebreaker}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'exhibition_votes',
+        filter: `game_id=eq.${game.id}`,
+      }, fetchExhibitionVote)
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [isExhibitionMode, game.id, currentUserId, isTiebreaker])
+
   // 決選投票：表示する作品は同票の2つのみ
   const visibleSubmissions = isTiebreaker
     ? submissions.filter((s) => tiedSubmissionIds.has(s.id))
@@ -206,7 +242,8 @@ export default function Voting({ tournament, token, game, currentUserId, partici
     : completedUserIds
 
   async function handleVote() {
-    if (!selectedSubmissionId) return
+    const voteSubmissionId = isExhibitionMode ? exhibitionVoteSubmissionId : selectedSubmissionId
+    if (!voteSubmissionId) return
     setVoting(true)
     setVoteError(false)
     try {
@@ -216,7 +253,7 @@ export default function Voting({ tournament, token, game, currentUserId, partici
         body: JSON.stringify({
           voter_user_id: currentUserId,
           game_id: game.id,
-          submission_id: selectedSubmissionId,
+          submission_id: voteSubmissionId,
           is_tiebreaker: isTiebreaker,
         }),
       })
@@ -229,6 +266,33 @@ export default function Voting({ tournament, token, game, currentUserId, partici
     } finally {
       setVoting(false)
     }
+  }
+
+  // エキシビション：AIの投票候補がまだ届いていない場合（作品一覧が揃っているのにAI提案がない）
+  if (isExhibitionMode && !exhibitionVoteSubmissionId && !voted && visibleSubmissions.length > 0) {
+    return (
+      <div className="p-4 space-y-4">
+        <div className={`rounded-2xl p-4 text-center ${isTiebreaker ? 'bg-red-500' : 'bg-emerald-500'}`}>
+          <h2 className="text-white text-lg font-bold">{isTiebreaker ? '⚔️ 決選投票' : '投票'}</h2>
+        </div>
+        <div className="bg-white rounded-2xl shadow-sm p-6 text-center">
+          <div className="animate-pulse mb-4">
+            <p className="text-3xl mb-2">🤖</p>
+          </div>
+          <p className="text-gray-700 font-medium mb-1">AIが投票先を考え中...</p>
+          <p className="text-sm text-gray-400">しばらくお待ちください</p>
+        </div>
+        <CompletionStatus
+          completedUserIds={statusCompletedIds}
+          participants={statusParticipants}
+          completedLabel="投票完了"
+          pendingLabel="投票中"
+          nextPhaseText="全員が投票すると、結果発表へ進みます"
+          allDoneText="全員が投票しました！結果発表へ進みます"
+          secret={tournament.secret_voting || (isTiebreaker && tournament.impersonation_mode)}
+        />
+      </div>
+    )
   }
 
   return (
@@ -323,19 +387,36 @@ export default function Voting({ tournament, token, game, currentUserId, partici
       </div>
 
       {!currentUserIsExcluded && (
-        <button
-          onClick={handleVote}
-          disabled={voting || !selectedSubmissionId}
-          className={`w-full py-4 rounded-xl font-bold transition-all ${
-            voted
-              ? 'bg-green-500 text-white'
-              : isTiebreaker
-              ? 'bg-red-500 text-white hover:bg-red-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed'
-              : 'bg-emerald-500 text-white hover:bg-emerald-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed'
-          }`}
-        >
-          {voting ? '投票中...' : voted ? '✓ 投票済み（変更できます）' : isTiebreaker ? '決選投票する' : '投票する'}
-        </button>
+        <>
+          {isExhibitionMode && exhibitionVoteSubmissionId && !voted && (
+            <div className="bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 flex items-center gap-2">
+              <span className="text-base">🤖</span>
+              <div>
+                <p className="text-xs font-bold text-violet-700">AIが投票先を選びました</p>
+                <p className="text-[11px] text-violet-500">確認してボタンを押してください</p>
+              </div>
+            </div>
+          )}
+          <button
+            onClick={handleVote}
+            disabled={voting || (isExhibitionMode ? !exhibitionVoteSubmissionId : !selectedSubmissionId)}
+            className={`w-full py-4 rounded-xl font-bold transition-all ${
+              voted
+                ? 'bg-green-500 text-white'
+                : isTiebreaker
+                ? 'bg-red-500 text-white hover:bg-red-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed'
+                : isExhibitionMode
+                ? 'bg-violet-500 text-white hover:bg-violet-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed'
+                : 'bg-emerald-500 text-white hover:bg-emerald-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed'
+            }`}
+          >
+            {voting ? '投票中...' : voted
+              ? '✓ 投票済み'
+              : isExhibitionMode
+              ? (isTiebreaker ? 'AIの決選投票を確認して投票する' : 'AIの投票を確認して投票する')
+              : isTiebreaker ? '決選投票する' : '投票する'}
+          </button>
+        </>
       )}
 
       {tiebreakerExcludesAuthors && (

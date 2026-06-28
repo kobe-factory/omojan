@@ -349,6 +349,90 @@ export type Database = {
         }
         Relationships: []
       }
+      exhibition_card_suggestions: {
+        Row: {
+          id: string
+          tournament_id: string
+          user_id: string
+          texts: { regular: string[]; dirty: string[] }
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          tournament_id: string
+          user_id: string
+          texts: { regular: string[]; dirty: string[] }
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          tournament_id?: string
+          user_id?: string
+          texts?: { regular: string[]; dirty: string[] }
+          created_at?: string
+        }
+        Relationships: []
+      }
+      exhibition_submissions: {
+        Row: {
+          id: string
+          game_id: string
+          user_id: string
+          hand_card_id: string | null
+          position: string
+          preamble: string | null
+          preamble_position: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          game_id: string
+          user_id: string
+          hand_card_id?: string | null
+          position?: string
+          preamble?: string | null
+          preamble_position?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          game_id?: string
+          user_id?: string
+          hand_card_id?: string | null
+          position?: string
+          preamble?: string | null
+          preamble_position?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      exhibition_votes: {
+        Row: {
+          id: string
+          game_id: string
+          user_id: string
+          submission_id: string | null
+          is_tiebreaker: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          game_id: string
+          user_id: string
+          submission_id?: string | null
+          is_tiebreaker?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          game_id?: string
+          user_id?: string
+          submission_id?: string | null
+          is_tiebreaker?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

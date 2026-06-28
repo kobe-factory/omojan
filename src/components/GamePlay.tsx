@@ -38,6 +38,13 @@ interface HandCard {
   created_at: string
 }
 
+interface ExhibitionSuggestion {
+  hand_card_id: string | null
+  position: string
+  preamble: string | null
+  preamble_position: string
+}
+
 interface Props {
   tournament: Tournament
   token: string
@@ -45,9 +52,10 @@ interface Props {
   currentUserId: string
   participants: User[]
   onSubmitted: () => Promise<void>
+  isExhibitionMode?: boolean
 }
 
-export default function GamePlay({ tournament, token, game, currentUserId, participants, onSubmitted }: Props) {
+export default function GamePlay({ tournament, token, game, currentUserId, participants, onSubmitted, isExhibitionMode }: Props) {
   const draftKey = `omojan:draft:submission:${game.id}:${currentUserId}`
   const handOrderKey = `omojan:handorder:${tournament.id}:${currentUserId}`
 
@@ -63,6 +71,7 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
   const [submittedUserIds, setSubmittedUserIds] = useState<string[]>([])
   // 現在このゲームでDBに保存されている投稿カードID
   const [submittedCardId, setSubmittedCardId] = useState<string | null>(null)
+  const [exhibitionSuggestion, setExhibitionSuggestion] = useState<ExhibitionSuggestion | null>(null)
 
   // 選択状態が変わるたびに下書き保存（送信済みの場合は保存しない）
   useEffect(() => {
@@ -141,6 +150,36 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
     init()
   }, [game.id, game.topic_card_id, tournament.id, currentUserId, draftKey])
 
+  // エキシビション：AIの投稿候補を取得・リアルタイム監視
+  useEffect(() => {
+    if (!isExhibitionMode) return
+
+    async function fetchSuggestion() {
+      const { data } = await supabase
+        .from('exhibition_submissions')
+        .select('hand_card_id, position, preamble, preamble_position')
+        .eq('game_id', game.id)
+        .eq('user_id', currentUserId)
+        .maybeSingle()
+
+      if (data) setExhibitionSuggestion(data as ExhibitionSuggestion)
+    }
+
+    fetchSuggestion()
+
+    const channel = supabase
+      .channel(`exhibition-submit-${game.id}-${currentUserId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'exhibition_submissions',
+        filter: `game_id=eq.${game.id}`,
+      }, fetchSuggestion)
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [isExhibitionMode, game.id, currentUserId])
+
   // 他ユーザーの投稿をリアルタイムで反映（submittedUserIds のみ更新）
   useEffect(() => {
     const channel = supabase
@@ -163,6 +202,27 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
   const completedUserIds = submittedUserIds
 
   async function handleSubmit() {
+    if (isExhibitionMode && exhibitionSuggestion) {
+      setSubmitting(true)
+      await fetch(`/api/tournaments/${token}/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: currentUserId,
+          game_id: game.id,
+          hand_card_id: exhibitionSuggestion.hand_card_id,
+          position: exhibitionSuggestion.position,
+          preamble: exhibitionSuggestion.preamble,
+          preamble_position: exhibitionSuggestion.preamble_position ?? 'above',
+        }),
+      })
+      setSubmitted(true)
+      setSubmitting(false)
+      setSubmittedUserIds(prev => [...prev, currentUserId])
+      await onSubmitted()
+      return
+    }
+
     if (!selectedCard) return
     if (tournament.impersonation_mode && !impersonatedUserId) return
     setSubmitting(true)
@@ -195,6 +255,125 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
 
   const isLastRound = game.round_number >= tournament.game_count
   const roundLabel = isLastRound ? '最終戦' : `第${game.round_number}回戦`
+
+  // エキシビション：AIの投稿候補がまだ届いていない場合
+  if (isExhibitionMode && !exhibitionSuggestion && !submitted) {
+    return (
+      <div className="p-4 space-y-4">
+        <p className="text-center text-xs font-medium text-violet-600 bg-violet-50 rounded-full py-1">{roundLabel}</p>
+        <div className="bg-white rounded-2xl shadow-sm p-6 text-center">
+          <div className="animate-pulse mb-4">
+            <p className="text-3xl mb-2">🤖</p>
+          </div>
+          <p className="text-gray-700 font-medium mb-1">AIが作品を考え中...</p>
+          <p className="text-sm text-gray-400">しばらくお待ちください</p>
+        </div>
+        <CompletionStatus
+          completedUserIds={completedUserIds}
+          participants={participants}
+          completedLabel="投稿完了"
+          pendingLabel="投稿待ち"
+          nextPhaseText="全員が投稿すると、投票へ進みます"
+          allDoneText="全員が投稿しました！投票へ進みます"
+        />
+      </div>
+    )
+  }
+
+  // エキシビション：AIの投稿候補を表示（確認UI）
+  if (isExhibitionMode && (exhibitionSuggestion || submitted)) {
+    const exSuggestion = exhibitionSuggestion
+    const exHandCard = exSuggestion ? handCards.find((c) => c.id === exSuggestion.hand_card_id) : null
+    const exPosition = (exSuggestion?.position as 'before' | 'after') ?? 'after'
+    const exPreamble = exSuggestion?.preamble ?? null
+
+    return (
+      <div className="p-4 space-y-4">
+        {game.voting_mode && VOTING_MODE_INFO[game.voting_mode as keyof typeof VOTING_MODE_INFO] ? (() => {
+          const info = VOTING_MODE_INFO[game.voting_mode as keyof typeof VOTING_MODE_INFO]
+          return (
+            <div className={`text-center rounded-2xl py-2 ${info.bg}`}>
+              <p className="text-xs font-bold leading-none text-violet-600">{roundLabel}</p>
+              <div className="flex items-center justify-center gap-1 mt-1">
+                <span className="text-sm leading-none">{info.emoji}</span>
+                <span className={`text-[11px] font-bold leading-none ${info.text}`}>{info.label}</span>
+              </div>
+            </div>
+          )
+        })() : (
+          <p className="text-center text-xs font-medium text-violet-600 bg-violet-50 rounded-full py-1">{roundLabel}</p>
+        )}
+
+        <div className="bg-violet-50 border border-violet-200 rounded-2xl px-4 py-3 flex items-center gap-2">
+          <span className="text-lg">🤖</span>
+          <div>
+            <p className="text-xs font-bold text-violet-700">AIが作品を提案しています</p>
+            <p className="text-[11px] text-violet-500">内容を確認してボタンを押してください</p>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm p-5">
+          <p className="text-xs font-medium text-yellow-600 mb-2">今回のお題</p>
+          <p className="text-2xl font-bold text-gray-800 text-center py-2">{topicText || '...'}</p>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm p-5">
+          <p className="text-xs font-medium text-gray-500 mb-3">AIが選んだ手札</p>
+          <div className="bg-emerald-50 rounded-xl px-4 py-3 text-center border-2 border-emerald-200">
+            <p className="text-lg font-bold text-emerald-700">{exHandCard?.text ?? '（取得中...）'}</p>
+            <p className="text-xs text-emerald-500 mt-1">
+              {exPosition === 'before' ? '→ お題の前に配置' : '→ お題の後に配置'}
+            </p>
+          </div>
+        </div>
+
+        {exPreamble && (
+          <div className="bg-white rounded-2xl shadow-sm p-5">
+            <p className="text-xs font-medium text-gray-500 mb-2">AIが考えた前口上</p>
+            <p className="text-sm text-gray-700 italic">「{exPreamble}」</p>
+          </div>
+        )}
+
+        <div className="bg-emerald-50 rounded-xl px-4 py-5 text-center">
+          <p className="text-xs text-emerald-500 mb-3">作品プレビュー</p>
+          {exPreamble && exSuggestion?.preamble_position === 'above' && (
+            <p className="text-sm text-gray-500 italic mb-2">「{exPreamble}」</p>
+          )}
+          <p className="text-xl font-bold text-gray-800 leading-relaxed">
+            {exHandCard && (exPosition === 'before' ? (
+              <><span className="text-emerald-600">{exHandCard.text}</span>{topicText}</>
+            ) : (
+              <>{topicText}<span className="text-emerald-600">{exHandCard.text}</span></>
+            ))}
+          </p>
+          {exPreamble && exSuggestion?.preamble_position === 'below' && (
+            <p className="text-sm text-gray-500 italic mt-2">「{exPreamble}」</p>
+          )}
+        </div>
+
+        <button
+          onClick={handleSubmit}
+          disabled={submitting || !exhibitionSuggestion}
+          className={`w-full py-4 rounded-xl font-bold transition-all ${
+            submitted
+              ? 'bg-green-500 text-white'
+              : 'bg-violet-500 text-white hover:bg-violet-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed'
+          }`}
+        >
+          {submitting ? '投稿中...' : submitted ? '✓ 投稿済み' : 'AIの作品を確認して投稿する'}
+        </button>
+
+        <CompletionStatus
+          completedUserIds={completedUserIds}
+          participants={participants}
+          completedLabel="投稿完了"
+          pendingLabel="投稿待ち"
+          nextPhaseText="全員が投稿すると、投票へ進みます"
+          allDoneText="全員が投稿しました！投票へ進みます"
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="p-4 space-y-4">

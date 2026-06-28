@@ -38,8 +38,6 @@ async function notifyParticipants(
   await sendLinePush(lineUserIds, payload)
 }
 
-const EXHIBITION_AI_CHARS = ['こんべ(AI)', 'スラパン(AI)', 'はじむ(AI)', 'カズさん(AI)', 'かっぴー(AI)']
-
 function fireAiAction(origin: string, tournamentId: string, phase: string) {
   fetch(`${origin}/api/ai/player/act`, {
     method: 'POST',
@@ -48,12 +46,18 @@ function fireAiAction(origin: string, tournamentId: string, phase: string) {
   }).catch(() => {})
 }
 
-function fireExhibitionAiActions(origin: string, tournamentId: string, phase: string) {
-  for (const charName of EXHIBITION_AI_CHARS) {
-    fetch(`${origin}/api/ai/player/act`, {
+function fireExhibitionSuggestions(
+  origin: string,
+  tournamentId: string,
+  participantIds: string[],
+  phase: string,
+  gameId?: string,
+) {
+  for (const userId of participantIds) {
+    fetch(`${origin}/api/ai/exhibition/suggest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tournament_id: tournamentId, phase, character_name: charName }),
+      body: JSON.stringify({ tournament_id: tournamentId, user_id: userId, game_id: gameId, phase }),
     }).catch(() => {})
   }
 }
@@ -156,7 +160,8 @@ export async function POST(
 
       if (tournament.tournament_type === 'exhibition') {
         const origin = new URL(request.url).origin
-        fireExhibitionAiActions(origin, tournament.id, 'submit')
+        const { data: latestGame } = await supabase.from('games').select('id').eq('tournament_id', tournament.id).gt('round_number', 0).order('created_at', { ascending: false }).limit(1).maybeSingle()
+        if (latestGame) fireExhibitionSuggestions(origin, tournament.id, participantIds, 'submit', latestGame.id)
       } else if (tournament.ai_player_character) {
         const origin = new URL(request.url).origin
         fireAiAction(origin, tournament.id, 'submit')
@@ -219,7 +224,8 @@ export async function POST(
 
       if (tournament.tournament_type === 'exhibition') {
         const origin = new URL(request.url).origin
-        fireExhibitionAiActions(origin, tournament.id, 'submit')
+        const { data: latestGame } = await supabase.from('games').select('id').eq('tournament_id', tournament.id).gt('round_number', 0).order('created_at', { ascending: false }).limit(1).maybeSingle()
+        if (latestGame) fireExhibitionSuggestions(origin, tournament.id, participantIds, 'submit', latestGame.id)
       } else if (tournament.ai_player_character) {
         const origin = new URL(request.url).origin
         fireAiAction(origin, tournament.id, 'submit')
@@ -232,6 +238,11 @@ export async function POST(
       .from('tournaments')
       .update({ status: 'creating_cards' })
       .eq('id', tournament.id)
+
+    if (tournament.tournament_type === 'exhibition') {
+      const origin = new URL(request.url).origin
+      fireExhibitionSuggestions(origin, tournament.id, participantIds, 'cards')
+    }
 
     return NextResponse.json({ advanced: true, newStatus: 'creating_cards' })
   }
@@ -295,7 +306,11 @@ export async function POST(
       tournament.mode,
     )
 
-    if (tournament.ai_player_character) {
+    if (tournament.tournament_type === 'exhibition') {
+      const origin = new URL(request.url).origin
+      const { data: latestGame } = await supabase.from('games').select('id').eq('tournament_id', tournament.id).gt('round_number', 0).order('created_at', { ascending: false }).limit(1).maybeSingle()
+      if (latestGame) fireExhibitionSuggestions(origin, tournament.id, participantIds, 'submit', latestGame.id)
+    } else if (tournament.ai_player_character) {
       const origin = new URL(request.url).origin
       fireAiAction(origin, tournament.id, 'submit')
     }
@@ -375,7 +390,7 @@ export async function POST(
 
       if (tournament.tournament_type === 'exhibition') {
         const origin = new URL(request.url).origin
-        fireExhibitionAiActions(origin, tournament.id, 'vote')
+        fireExhibitionSuggestions(origin, tournament.id, participantIds, 'vote', currentGame.id)
       } else if (tournament.ai_player_character) {
         const origin = new URL(request.url).origin
         fireAiAction(origin, tournament.id, 'vote')
@@ -492,10 +507,7 @@ export async function POST(
             tournament.mode,
           )
 
-          if (tournament.tournament_type === 'exhibition') {
-            const origin = new URL(request.url).origin
-            fireExhibitionAiActions(origin, tournament.id, 'button_mash')
-          } else if (tournament.ai_player_character) {
+          if (tournament.ai_player_character) {
             const origin = new URL(request.url).origin
             fireAiAction(origin, tournament.id, 'button_mash')
           }
@@ -528,7 +540,7 @@ export async function POST(
 
         if (tournament.tournament_type === 'exhibition') {
           const origin = new URL(request.url).origin
-          fireExhibitionAiActions(origin, tournament.id, 'tiebreaker_vote')
+          fireExhibitionSuggestions(origin, tournament.id, participantIds, 'tiebreaker_vote', currentGame.id)
         } else if (tournament.ai_player_character) {
           const origin = new URL(request.url).origin
           fireAiAction(origin, tournament.id, 'tiebreaker_vote')
@@ -791,7 +803,11 @@ export async function POST(
         if (gameError)
           return NextResponse.json({ error: gameError }, { status: 500 })
 
-        if (tournament.ai_player_character) {
+        if (tournament.tournament_type === 'exhibition') {
+          const origin = new URL(request.url).origin
+          const { data: latestGame } = await supabase.from('games').select('id').eq('tournament_id', tournament.id).gt('round_number', 0).order('created_at', { ascending: false }).limit(1).maybeSingle()
+          if (latestGame) fireExhibitionSuggestions(origin, tournament.id, participantIds, 'submit', latestGame.id)
+        } else if (tournament.ai_player_character) {
           const origin = new URL(request.url).origin
           fireAiAction(origin, tournament.id, 'submit')
         }
@@ -883,7 +899,8 @@ export async function POST(
 
       if (tournament.tournament_type === 'exhibition') {
         const origin = new URL(request.url).origin
-        fireExhibitionAiActions(origin, tournament.id, 'submit')
+        const { data: latestGame } = await supabase.from('games').select('id').eq('tournament_id', tournament.id).gt('round_number', 0).order('created_at', { ascending: false }).limit(1).maybeSingle()
+        if (latestGame) fireExhibitionSuggestions(origin, tournament.id, participantIds, 'submit', latestGame.id)
       } else if (tournament.ai_player_character) {
         const origin = new URL(request.url).origin
         fireAiAction(origin, tournament.id, 'submit')
