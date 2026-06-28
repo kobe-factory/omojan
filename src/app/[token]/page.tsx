@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { USERS } from '@/config/game'
 import UserSelection from '@/components/UserSelection'
 import CardCreation from '@/components/CardCreation'
 import GamePlay from '@/components/GamePlay'
@@ -173,7 +174,7 @@ export default function TournamentPage() {
     async function init() {
       await Promise.all([
         supabase.from('users').select('*').then(({ data }) => {
-          setAllUsers(data ?? [])
+          setAllUsers((data ?? []).filter((u) => (USERS as readonly string[]).includes(u.name)))
         }),
         fetchState(),
       ])
