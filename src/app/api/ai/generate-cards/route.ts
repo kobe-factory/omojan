@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   }
 
   // 5名の本番プレイヤーのみを対象（game.tsのUSERSリストと一致するユーザー）
-  const PRODUCTION_USERS = ['はじむ', 'スラパン', 'こんべ', 'かねおか', 'カズさん']
+  const PRODUCTION_USERS = ['はじむ', 'スラパン', 'こんべ', 'かっぴー', 'カズさん']
   const targetUsers = users.filter((u) => PRODUCTION_USERS.includes(u.name))
 
   if (targetUsers.length === 0) {

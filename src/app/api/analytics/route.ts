@@ -49,7 +49,7 @@ export interface UserStats {
   avgPreambleLength: number // 前口上平均文字数（使用時のみ）
 }
 
-const PRODUCTION_USER_NAMES = ['はじむ', 'スラパン', 'こんべ', 'かねおか', 'カズさん']
+const PRODUCTION_USER_NAMES = ['はじむ', 'スラパン', 'こんべ', 'かっぴー', 'カズさん']
 
 export async function GET() {
   // 本番ユーザーのみ取得（AIキャラクターを除外）

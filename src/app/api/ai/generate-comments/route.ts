@@ -85,7 +85,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const PRODUCTION_USER_NAMES = ['はじむ', 'スラパン', 'こんべ', 'かねおか', 'カズさん']
+  const PRODUCTION_USER_NAMES = ['はじむ', 'スラパン', 'こんべ', 'かっぴー', 'カズさん']
   const { data: allUsers } = await supabase.from('users').select('id, name')
   const users = (allUsers ?? []).filter((u) => PRODUCTION_USER_NAMES.includes(u.name))
   if (!users || users.length === 0) {

@@ -4,7 +4,7 @@
 // ===================================================
 
 // 参加ユーザー名（DBの初期データと一致させること）
-export const USERS = ['はじむ', 'スラパン', 'こんべ', 'かねおか', 'カズさん'] as const
+export const USERS = ['はじむ', 'スラパン', 'こんべ', 'かっぴー', 'カズさん'] as const
 
 export type TournamentMode = 'solo' | 'test' | 'production'
 
