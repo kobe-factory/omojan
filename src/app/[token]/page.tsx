@@ -395,7 +395,7 @@ export default function TournamentPage() {
 
       <div className="max-w-md mx-auto">
         {/* エキシビションバナー */}
-        {isExhibitionMode && tournament.status !== 'waiting_users' && (
+        {isExhibitionMode && (
           <div className="mx-4 mt-4 mb-2 bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 flex items-center gap-2">
             <span className="text-lg">🤖</span>
             <div>
