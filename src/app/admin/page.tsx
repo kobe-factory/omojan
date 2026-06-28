@@ -399,8 +399,8 @@ export default function AdminPage() {
                 <p className={`text-sm font-bold ${isExhibition ? 'text-violet-700' : 'text-gray-700'}`}>エキシビションモード</p>
                 <p className="text-[11px] text-gray-500 mt-0.5">こんべ・スラパン・はじむ・カズさん・かっぴーのAIが全員参加して対戦</p>
               </div>
-              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isExhibition ? 'border-violet-500 bg-violet-500' : 'border-gray-300'}`}>
-                {isExhibition && <div className="w-2 h-2 rounded-full bg-white" />}
+              <div className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${isExhibition ? 'bg-violet-500' : 'bg-gray-200'}`}>
+                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${isExhibition ? 'translate-x-5' : 'translate-x-1'}`} />
               </div>
             </button>
 
@@ -446,14 +446,12 @@ export default function AdminPage() {
                 aiCardsMode ? 'border-purple-500 bg-purple-50' : 'border-gray-200 bg-white'
               }`}
             >
-              <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
-                aiCardsMode ? 'border-purple-500' : 'border-gray-300'
-              }`}>
-                {aiCardsMode && <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />}
-              </div>
-              <div>
+              <div className="flex-1">
                 <p className={`text-sm font-medium ${aiCardsMode ? 'text-purple-700' : 'text-gray-700'}`}>🤖 AI札作成モード</p>
                 <p className="text-xs text-gray-400">AIが全員分の札を自動生成。札作成フェーズをスキップします</p>
+              </div>
+              <div className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${aiCardsMode ? 'bg-purple-500' : 'bg-gray-200'}`}>
+                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${aiCardsMode ? 'translate-x-5' : 'translate-x-1'}`} />
               </div>
             </button>
 
