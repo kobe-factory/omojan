@@ -290,6 +290,7 @@ export default function Voting({ tournament, token, game, currentUserId, partici
           nextPhaseText="全員が投票すると、結果発表へ進みます"
           allDoneText="全員が投票しました！結果発表へ進みます"
           secret={tournament.secret_voting || (isTiebreaker && tournament.impersonation_mode)}
+          nameSuffix="(AI)"
         />
       </div>
     )
@@ -431,6 +432,7 @@ export default function Voting({ tournament, token, game, currentUserId, partici
         nextPhaseText={isTiebreaker ? '全員が決選投票すると、結果発表へ進みます' : '全員が投票すると、結果発表へ進みます'}
         allDoneText={isTiebreaker ? '決選投票が完了しました！結果発表へ進みます' : '全員が投票しました！結果発表へ進みます'}
         secret={tournament.secret_voting || (isTiebreaker && tournament.impersonation_mode)}
+        nameSuffix={isExhibitionMode ? '(AI)' : undefined}
       />
 
       {voteError && (

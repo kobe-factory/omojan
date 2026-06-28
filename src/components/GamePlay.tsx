@@ -275,6 +275,7 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
           pendingLabel="投稿待ち"
           nextPhaseText="全員が投稿すると、投票へ進みます"
           allDoneText="全員が投稿しました！投票へ進みます"
+          nameSuffix="(AI)"
         />
       </div>
     )
@@ -370,6 +371,7 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
           pendingLabel="投稿待ち"
           nextPhaseText="全員が投稿すると、投票へ進みます"
           allDoneText="全員が投稿しました！投票へ進みます"
+          nameSuffix="(AI)"
         />
       </div>
     )
@@ -586,6 +588,7 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
         pendingLabel="投稿中"
         nextPhaseText="全員が投稿すると、投票へ進みます"
         allDoneText="全員が投稿しました！投票へ進みます"
+        nameSuffix={isExhibitionMode ? '(AI)' : undefined}
       />
     </div>
   )

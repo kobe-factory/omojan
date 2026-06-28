@@ -202,6 +202,7 @@ export default function CardCreation({ tournament, token, currentUserId, partici
           absentUsers={absentUsers}
           nextPhaseText="全員が確認するとゲームが始まります"
           allDoneText="全員が完了しました！ゲームが始まります"
+          nameSuffix="(AI)"
         />
       </div>
     )
@@ -292,6 +293,7 @@ export default function CardCreation({ tournament, token, currentUserId, partici
         absentUsers={absentUsers}
         nextPhaseText="全員が完了すると、ゲームが始まります"
         allDoneText="全員が完了しました！ゲームが始まります"
+        nameSuffix={isExhibitionMode ? '(AI)' : undefined}
       />
     </div>
   )

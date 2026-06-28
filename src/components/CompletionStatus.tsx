@@ -14,6 +14,7 @@ interface Props {
   allDoneText?: string
   secret?: boolean
   absentUsers?: User[]
+  nameSuffix?: string
 }
 
 export default function CompletionStatus({
@@ -25,7 +26,9 @@ export default function CompletionStatus({
   allDoneText = '全員が完了しました！次のフェーズへ進みます',
   secret = false,
   absentUsers,
+  nameSuffix,
 }: Props) {
+  const displayName = (name: string) => nameSuffix ? `${name}${nameSuffix}` : name
   const completed = participants.filter((p) => completedUserIds.includes(p.id))
   const pending = participants.filter((p) => !completedUserIds.includes(p.id))
   const absent = absentUsers ?? []
@@ -70,7 +73,7 @@ export default function CompletionStatus({
             {completed.map((p) => (
               <span key={p.id} className="flex items-center gap-1.5 bg-white text-emerald-600 text-sm px-3 py-1 rounded-full font-medium border border-emerald-200">
                 <UserIcon name={p.name} size="xs" />
-                {p.name}
+                {displayName(p.name)}
               </span>
             ))}
           </div>
@@ -84,7 +87,7 @@ export default function CompletionStatus({
             {pending.map((p) => (
               <span key={p.id} className="flex items-center gap-1.5 bg-white text-gray-300 text-sm px-3 py-1 rounded-full border border-gray-100">
                 <UserIcon name={p.name} size="xs" />
-                {p.name}
+                {displayName(p.name)}
               </span>
             ))}
           </div>
@@ -98,7 +101,7 @@ export default function CompletionStatus({
             {absent.map((p) => (
               <span key={p.id} className="flex items-center gap-1.5 bg-white text-gray-200 text-sm px-3 py-1 rounded-full border border-gray-100">
                 <UserIcon name={p.name} size="xs" />
-                {p.name}
+                {displayName(p.name)}
               </span>
             ))}
           </div>
