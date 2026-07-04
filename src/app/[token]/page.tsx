@@ -96,11 +96,18 @@ export default function TournamentPage() {
     if (t.mode === 'production') {
       const { data: prodTourneys } = await supabase
         .from('tournaments')
-        .select('id')
+        .select('id, tournament_type')
         .eq('mode', 'production')
         .order('created_at', { ascending: true })
-      const idx = (prodTourneys ?? []).findIndex((pt) => pt.id === t.id)
-      setTournamentNumber(idx >= 0 ? idx + 1 : null)
+      if (t.tournament_type === 'exhibition') {
+        const exhibitionOnly = (prodTourneys ?? []).filter((pt) => pt.tournament_type === 'exhibition')
+        const idx = exhibitionOnly.findIndex((pt) => pt.id === t.id)
+        setTournamentNumber(idx >= 0 ? idx + 1 : null)
+      } else {
+        const normalOnly = (prodTourneys ?? []).filter((pt) => pt.tournament_type !== 'exhibition')
+        const idx = normalOnly.findIndex((pt) => pt.id === t.id)
+        setTournamentNumber(idx >= 0 ? idx + 1 : null)
+      }
     }
 
     const { data: partRows } = await supabase
@@ -373,7 +380,7 @@ export default function TournamentPage() {
             <img src="/omojan_logo.png" alt="おもじゃん for 男根祭" className="h-10 w-auto" />
             {isExhibitionMode ? (
               <span className="absolute left-0 bottom-0 text-xs font-bold text-violet-600 bg-violet-50 border border-violet-300 px-2 py-0.5 rounded-full">
-                🤖 エキシビション
+                🤖 エキシビション{tournamentNumber ? `第${tournamentNumber}回大会` : ''}
               </span>
             ) : tournamentNumber && (
               <span className="absolute left-0 bottom-0 text-xs font-bold text-yellow-700 bg-yellow-50 border border-yellow-300 px-2 py-0.5 rounded-full">
