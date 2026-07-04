@@ -46,6 +46,7 @@ interface TournamentSummary {
   secretVoting: boolean
   secretRound: number | null
   aiComment: string | null
+  isExhibition: boolean
 }
 
 interface OverallStanding {
@@ -71,7 +72,7 @@ export default function SummaryPage() {
   async function fetchAll() {
     const { data: finishedTournaments } = await supabase
       .from('tournaments')
-      .select('id, created_at, token, random_voting, impersonation_mode, secret_voting, secret_round, ai_comment')
+      .select('id, created_at, token, random_voting, impersonation_mode, secret_voting, secret_round, ai_comment, tournament_type')
       .eq('mode', 'production')
       .eq('status', 'finished')
       .order('created_at', { ascending: true })
@@ -149,7 +150,14 @@ export default function SummaryPage() {
 
     const overallMap: Record<string, { name: string; totalVotes: number; totalWins: number; totalRoundWins: number }> = {}
 
-    const tournamentSummaries: TournamentSummary[] = finishedTournaments.map((t, idx) => {
+    // 通常大会・エキシビションで連番を分ける
+    let normalTournamentCounter = 0
+    let exhibitionTournamentCounter = 0
+
+    const tournamentSummaries: TournamentSummary[] = finishedTournaments.map((t) => {
+      const isExhibition = (t as { tournament_type?: string | null }).tournament_type === 'exhibition'
+      const tournamentNumber = isExhibition ? ++exhibitionTournamentCounter : ++normalTournamentCounter
+
       const participants = (allParticipants ?? [])
         .filter((p) => p.tournament_id === t.id)
         .map((p) => p.users as unknown as User)
@@ -168,7 +176,8 @@ export default function SummaryPage() {
       const scoreMap: Record<string, { totalVotes: number; wins: number }> = {}
       for (const p of participants) {
         scoreMap[p.id] = { totalVotes: 0, wins: 0 }
-        if (!overallMap[p.id]) overallMap[p.id] = { name: p.name, totalVotes: 0, totalWins: 0, totalRoundWins: 0 }
+        // エキシビションは個人成績・ランキングに含めない
+        if (!isExhibition && !overallMap[p.id]) overallMap[p.id] = { name: p.name, totalVotes: 0, totalWins: 0, totalRoundWins: 0 }
       }
 
       const rounds: RoundSummary[] = []
@@ -264,7 +273,7 @@ export default function SummaryPage() {
 
       return {
         tournamentId: t.id,
-        tournamentNumber: idx + 1,
+        tournamentNumber,
         createdAt: t.created_at,
         token: t.token,
         participants,
@@ -275,6 +284,7 @@ export default function SummaryPage() {
         secretVoting: (t as { secret_voting?: boolean }).secret_voting ?? false,
         secretRound: (t as { secret_round?: number | null }).secret_round ?? null,
         aiComment: (t as { ai_comment?: string | null }).ai_comment ?? null,
+        isExhibition,
       }
     })
 
@@ -335,14 +345,19 @@ export default function SummaryPage() {
       {activeTab === 'stats' && <PersonalStats />}
 
       {activeTab === 'summary' && <div className="max-w-md mx-auto p-4 space-y-4 pb-10">
-        {tournaments.length === 0 ? (
+        {(() => {
+          const normalTournaments = tournaments.filter((t) => !t.isExhibition)
+          const exhibitionTournaments = tournaments.filter((t) => t.isExhibition)
+          return (
+        <>
+        {normalTournaments.length === 0 && exhibitionTournaments.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-4xl mb-3">🎴</p>
             <p className="text-gray-500">終了した本番大会がありません</p>
           </div>
         ) : (
           <>
-            {/* 全大会MVP */}
+            {/* 全大会MVP（エキシビション除外） */}
             {mvp && mvp.totalVotes > 0 && (
               <div className="bg-yellow-50 border-2 border-yellow-400 rounded-2xl p-5 text-center">
                 <p className="text-xs font-bold text-yellow-500 mb-2">👑 総合MVP</p>
@@ -394,10 +409,10 @@ export default function SummaryPage() {
               )}
             </div>
 
-            {/* 大会別サマリ */}
-            <div className="space-y-3">
+            {/* 大会別サマリ（通常大会のみ） */}
+            {normalTournaments.length > 0 && <div className="space-y-3">
               <h3 className="text-sm font-semibold text-gray-600">大会別サマリ</h3>
-              {tournaments.map((t) => {
+              {normalTournaments.map((t) => {
                 const isOpen = expandedId === t.tournamentId
                 const winner = t.scores[0]
                 return (
@@ -548,9 +563,106 @@ export default function SummaryPage() {
                   </div>
                 )
               })}
-            </div>
+            </div>}
+
+            {/* エキシビション別サマリ */}
+            {exhibitionTournaments.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-gray-600">🤖 エキシビション</h3>
+                  <span className="text-[10px] text-violet-500 bg-violet-50 px-2 py-0.5 rounded-full font-medium">個人成績に含まれません</span>
+                </div>
+                {exhibitionTournaments.map((t) => {
+                  const isOpen = expandedId === t.tournamentId
+                  const winner = t.scores[0]
+                  return (
+                    <div key={t.tournamentId} className="bg-white rounded-2xl shadow-sm overflow-hidden border border-violet-100">
+                      <button
+                        onClick={() => setExpandedId(isOpen ? null : t.tournamentId)}
+                        className="w-full p-4 text-left flex items-center justify-between"
+                      >
+                        <div>
+                          <span className="text-sm font-bold text-violet-600">エキシビション第{t.tournamentNumber}回</span>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {new Date(t.createdAt).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}
+                          </p>
+                          {winner && winner.wins > 0 && (
+                            <p className="text-xs text-violet-500 mt-1">🤖 {winner.userName}（{winner.wins}勝 / {winner.totalVotes}票）</p>
+                          )}
+                        </div>
+                        <svg className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="6 9 12 15 18 9" />
+                        </svg>
+                      </button>
+                      {isOpen && (
+                        <div className="border-t border-violet-100 p-4 space-y-4">
+                          <div>
+                            <p className="text-xs font-bold text-gray-500 mb-2">順位</p>
+                            <div className="space-y-1.5">
+                              {t.scores.map((s, i) => (
+                                <div key={s.userId} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${i === 0 ? 'bg-violet-50' : 'bg-gray-50'}`}>
+                                  <span className={`text-xs font-bold w-6 text-center ${i === 0 ? 'text-violet-500' : 'text-gray-400'}`}>{i + 1}位</span>
+                                  <div className="flex items-center gap-1.5 flex-1">
+                                    <UserIcon name={s.userName} size="xs" />
+                                    <span className="text-xs font-medium text-gray-700">{s.userName}</span>
+                                  </div>
+                                  <span className="text-xs text-gray-400">{s.wins}勝</span>
+                                  <span className="text-xs font-bold text-violet-500">{s.totalVotes}票</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <a
+                            href={`/${t.token}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full py-2 text-center text-sm font-medium text-violet-600 bg-violet-50 border border-violet-200 rounded-xl hover:bg-violet-100 transition-colors block"
+                          >
+                            エキシビション結果詳細を見る →
+                          </a>
+                          <div>
+                            <p className="text-xs font-bold text-gray-500 mb-2">回戦別MVP</p>
+                            <div className="space-y-2">
+                              {t.rounds.map((r) => (
+                                <div key={r.roundNumber} className="border border-violet-100 rounded-xl p-3">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-xs font-bold text-violet-500">第{r.roundNumber}回戦</span>
+                                    <span className="text-xs text-gray-400">{r.votes}票</span>
+                                  </div>
+                                  <p className="text-xs text-gray-400 mb-2">お題：{r.topicText}</p>
+                                  {!r.isTied && (
+                                    <>
+                                      <div className="bg-violet-50 rounded-xl px-3 py-2">
+                                        {r.winnerPreamble && r.winnerPreamblePosition === 'above' && (
+                                          <p className="text-xs text-gray-500 italic mb-1">「{r.winnerPreamble}」</p>
+                                        )}
+                                        <p className="text-sm font-bold text-gray-800">{r.winnerText}</p>
+                                        {r.winnerPreamble && r.winnerPreamblePosition === 'below' && (
+                                          <p className="text-xs text-gray-500 italic mt-1">「{r.winnerPreamble}」</p>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-1.5 mt-3">
+                                        <UserIcon name={r.winnerName} size="xs" />
+                                        <p className="text-xs text-gray-600">{r.winnerName}</p>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </>
         )}
+        </>
+        )
+        })()}
       </div>}
 
       <footer className="text-center py-4">

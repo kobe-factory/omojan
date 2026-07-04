@@ -59,13 +59,13 @@ export async function GET() {
     return NextResponse.json({ stats: [] })
   }
 
-  // 本番大会（終了済み）のみ対象（summaryと同じ集計範囲）
+  // 本番大会（終了済み・エキシビション除外）のみ対象
   const { data: prodTournaments } = await supabase
     .from('tournaments')
-    .select('id')
+    .select('id, tournament_type')
     .eq('mode', 'production')
     .eq('status', 'finished')
-  const prodTournamentIds = (prodTournaments ?? []).map((t) => t.id)
+  const prodTournamentIds = (prodTournaments ?? []).filter((t) => t.tournament_type !== 'exhibition').map((t) => t.id)
   if (prodTournamentIds.length === 0) {
     return NextResponse.json({ stats: users.map((u) => ({ userId: u.id, userName: u.name, cardUsageRate: 0, cardsCreated: 0, cardsUsed: 0, singles: 0, doubles: 0, triples: 0, homeRuns: 0, totalHits: 0, mvpCount: 0, avgVotesPerGame: 0, totalVotesReceived: 0, gamesParticipated: 0, buttonMashWins: 0, buttonMashGames: 0, buttonMashWinRate: 0, bestTapCount: 0, avgTapCount: 0, totalTapSessions: 0, bestCompletionTimeMs: 0, avgCompletionTimeMs: 0, speedMashSessions: 0, mvpWinRate: 0, shutoutCount: 0, shutoutRate: 0, homeRunRate: 0, preambleCount: 0, preambleUsageRate: 0, maxVotesInGame: 0 })) })
   }

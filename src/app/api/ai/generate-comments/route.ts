@@ -60,12 +60,15 @@ export async function POST(request: Request) {
   const { searchParams } = new URL(request.url)
   const force = searchParams.get('force') === 'true'
 
-  const { data: finishedTournaments } = await supabase
+  const { data: finishedTournamentsRaw } = await supabase
     .from('tournaments')
-    .select('id, created_at')
+    .select('id, created_at, tournament_type')
     .eq('mode', 'production')
     .eq('status', 'finished')
     .order('created_at', { ascending: true })
+
+  // エキシビションは個人成績・AI総評から除外
+  const finishedTournaments = (finishedTournamentsRaw ?? []).filter((t) => t.tournament_type !== 'exhibition')
 
   const tournamentCount = finishedTournaments?.length ?? 0
   if (tournamentCount === 0) {
