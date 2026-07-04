@@ -225,6 +225,13 @@ export default function TournamentPage() {
     return () => { supabase.removeChannel(channel) }
   }, [tournament, fetchState])
 
+  // waiting_users フェーズ中のみポーリング（Realtimeの取りこぼし保険）
+  useEffect(() => {
+    if (tournament?.status !== 'waiting_users') return
+    const timer = setInterval(() => fetchState(), 10000)
+    return () => clearInterval(timer)
+  }, [tournament?.status, fetchState])
+
   // 大会切り替え時にlocalStorageの古いゲームデータを削除
   useEffect(() => {
     if (!tournament?.id) return
