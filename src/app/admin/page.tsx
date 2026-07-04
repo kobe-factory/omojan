@@ -26,6 +26,7 @@ interface TournamentRow {
   secret_round: number | null
   impersonation_mode: boolean
   random_voting: boolean
+  tournament_type: string | null
   productionNumber?: number
   currentGame?: { round_number: number; status: string }
   allGames?: GameRow[]
@@ -93,13 +94,13 @@ export default function AdminPage() {
     setListLoading(true)
     const { data } = await supabase
       .from('tournaments')
-      .select('id, token, mode, status, created_at, game_count, cards_per_user, hand_cards_per_player, dirty_cards_per_user, secret_voting, secret_round, impersonation_mode, random_voting')
+      .select('id, token, mode, status, created_at, game_count, cards_per_user, hand_cards_per_player, dirty_cards_per_user, secret_voting, secret_round, impersonation_mode, random_voting, tournament_type')
       .order('created_at', { ascending: false })
 
-    // 本番大会に作成日時昇順で連番を付与
+    // 本番大会に作成日時昇順で連番を付与（エキシビションは除外）
     const rows = data ?? []
     const productionSorted = rows
-      .filter((t) => t.mode === 'production')
+      .filter((t) => t.mode === 'production' && t.tournament_type !== 'exhibition')
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
     const productionNumberMap: Record<string, number> = {}
     productionSorted.forEach((t, i) => {
@@ -710,7 +711,9 @@ export default function AdminPage() {
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       {/* モードと大会番号 */}
-                      {t.mode === 'production' && t.productionNumber ? (
+                      {t.tournament_type === 'exhibition' ? (
+                        <span className="text-xs font-bold text-violet-600">🤖 エキシビション</span>
+                      ) : t.mode === 'production' && t.productionNumber ? (
                         <span className="text-xs font-bold text-gray-700">
                           本番 第{t.productionNumber}回大会
                         </span>

@@ -65,11 +65,12 @@ function fireExhibitionSuggestions(
 async function getTournamentNumber(tournamentId: string): Promise<number> {
   const { data } = await supabase
     .from('tournaments')
-    .select('id, created_at')
+    .select('id, created_at, tournament_type')
     .eq('mode', 'production')
     .order('created_at', { ascending: true })
 
-  const idx = (data ?? []).findIndex((t) => t.id === tournamentId)
+  const nonExhibition = (data ?? []).filter((t) => t.tournament_type !== 'exhibition')
+  const idx = nonExhibition.findIndex((t) => t.id === tournamentId)
   return idx >= 0 ? idx + 1 : 1
 }
 
