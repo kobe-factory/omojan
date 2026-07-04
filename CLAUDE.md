@@ -95,6 +95,13 @@ READMEも適宜更新してください。
 - `src/app/summary/page.tsx` のフッター `v1.x.x`
 - `CLAUDE.md` の「現在のバージョン」
 
+**⚠️ 絶対に守ること：コミットのたびに上記5ファイル全てを同時に更新すること。1つでも漏れた場合は即座に修正コミットを行う。`sed`コマンドで一括置換しても漏れが発生するため、必ず `grep` で全ファイルの確認を行ってからコミットすること。**
+
+確認コマンド：
+```bash
+grep -n "v1\." src/app/\[token\]/page.tsx src/app/layout.tsx src/app/admin/page.tsx src/app/summary/page.tsx CLAUDE.md | grep -v "x\.x\|管理\|フッター\|metadata\|現在"
+```
+
 **現在のバージョン：v1.43.2**
 
 ## ローカル開発
