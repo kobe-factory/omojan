@@ -62,16 +62,28 @@ function fireExhibitionSuggestions(
   }
 }
 
-async function getTournamentNumber(tournamentId: string): Promise<number> {
+async function getTournamentNumber(tournamentId: string, tournamentType?: string | null): Promise<number> {
   const { data } = await supabase
     .from('tournaments')
     .select('id, created_at, tournament_type')
     .eq('mode', 'production')
     .order('created_at', { ascending: true })
 
+  if (tournamentType === 'exhibition') {
+    const exhibitionOnly = (data ?? []).filter((t) => t.tournament_type === 'exhibition')
+    const idx = exhibitionOnly.findIndex((t) => t.id === tournamentId)
+    return idx >= 0 ? idx + 1 : 1
+  }
   const nonExhibition = (data ?? []).filter((t) => t.tournament_type !== 'exhibition')
   const idx = nonExhibition.findIndex((t) => t.id === tournamentId)
   return idx >= 0 ? idx + 1 : 1
+}
+
+function buildHeaderSub(isExhibition: boolean, num: number, round?: number | string): string {
+  if (isExhibition) {
+    return round != null ? `エキシビション 第${num}回 / ${round}回戦` : `エキシビション 第${num}回`
+  }
+  return round != null ? `第${num}回大会 / ${round}回戦` : `第${num}回大会`
 }
 
 export async function POST(
@@ -112,6 +124,7 @@ export async function POST(
 
   const participantCount = participants?.length ?? 0
   const participantIds = participants?.map((p) => p.user_id) ?? []
+  const isExhibition = tournament.tournament_type === 'exhibition'
 
   // waiting_users → creating_cards (or playing if skip_card_creation)
   if (tournament.status === 'waiting_users') {
@@ -119,7 +132,7 @@ export async function POST(
       return NextResponse.json({ waiting: true, message: 'ユーザー参加待ち' })
     }
 
-    const num = await getTournamentNumber(tournament.id)
+    const num = await getTournamentNumber(tournament.id, tournament.tournament_type)
 
     if (tournament.skip_card_creation) {
       const { error: dealError } = await dealCards(
@@ -152,7 +165,7 @@ export async function POST(
         {
           headerTitle: '🎨 作品投稿の時間！',
           headerColor: PHASE_COLORS.playing,
-          headerSub: `第${num}回大会 / 1回戦`,
+          headerSub: buildHeaderSub(isExhibition, num, 1),
           body: '全員の参加が揃いました！\nおもじゃんを開いて作品を投稿しましょう 🎨',
           url: LIFF_URL,
         },
@@ -216,7 +229,7 @@ export async function POST(
         {
           headerTitle: '🎨 作品投稿の時間！',
           headerColor: PHASE_COLORS.playing,
-          headerSub: `第${num}回大会 / 1回戦`,
+          headerSub: buildHeaderSub(isExhibition, num, 1),
           body: '全員の参加と札作成が完了しました！\nおもじゃんを開いて作品を投稿しましょう 🎨',
           url: LIFF_URL,
         },
@@ -293,14 +306,14 @@ export async function POST(
       .update({ status: 'playing' })
       .eq('id', tournament.id)
 
-    const num = await getTournamentNumber(tournament.id)
+    const num = await getTournamentNumber(tournament.id, tournament.tournament_type)
     await notifyParticipants(
       participantIds,
       triggeringUserId,
       {
         headerTitle: '🎨 作品投稿の時間！',
         headerColor: PHASE_COLORS.playing,
-        headerSub: `第${num}回大会 / 1回戦`,
+        headerSub: buildHeaderSub(isExhibition, num, 1),
         body: '全員の札作成が完了しました！\nおもじゃんを開いて作品を投稿しましょう 🎨',
         url: LIFF_URL,
       },
@@ -375,14 +388,14 @@ export async function POST(
         .eq('id', currentGame.id)
       if (toVoteError) return NextResponse.json({ error: toVoteError.message }, { status: 500 })
 
-      const num = await getTournamentNumber(tournament.id)
+      const num = await getTournamentNumber(tournament.id, tournament.tournament_type)
       await notifyParticipants(
         participantIds,
         triggeringUserId,
         {
           headerTitle: '🗳️ 投票が始まりました！',
           headerColor: PHASE_COLORS.voting,
-          headerSub: `第${num}回大会 / ${currentGame.round_number}回戦`,
+          headerSub: buildHeaderSub(isExhibition, num, currentGame.round_number),
           body: '全員の作品投稿が完了しました！\nおもじゃんを開いて投票しましょう 🗳️',
           url: LIFF_URL,
         },
@@ -456,7 +469,7 @@ export async function POST(
         .filter(([, c]) => c === maxVotes)
         .map(([id]) => id)
 
-      const num = await getTournamentNumber(tournament.id)
+      const num = await getTournamentNumber(tournament.id, tournament.tournament_type)
 
       if (tiedAtTopIds.length >= 3) {
         // 3作品以上同票 → 再戦
@@ -472,7 +485,7 @@ export async function POST(
           {
             headerTitle: '🔄 流局となりました',
             headerColor: PHASE_COLORS.rematch,
-            headerSub: `第${num}回大会 / ${currentGame.round_number}回戦`,
+            headerSub: buildHeaderSub(isExhibition, num, currentGame.round_number),
             body: '全員同票のためこの回はお流れです。\nおもじゃんを開いて確認してください 🔄',
             url: LIFF_URL,
           },
@@ -501,7 +514,7 @@ export async function POST(
             {
               headerTitle: '⚔️ 連打決戦です！',
               headerColor: PHASE_COLORS.tiebreaker,
-              headerSub: `第${num}回大会 / ${currentGame.round_number}回戦`,
+              headerSub: buildHeaderSub(isExhibition, num, currentGame.round_number),
               body: '同票のため連打ゲームで決戦です！\nおもじゃんを開いてボタンを連打しましょう ⚔️',
               url: LIFF_URL,
             },
@@ -532,7 +545,7 @@ export async function POST(
           {
             headerTitle: '⚔️ 決選投票です！',
             headerColor: PHASE_COLORS.tiebreaker,
-            headerSub: `第${num}回大会 / ${currentGame.round_number}回戦`,
+            headerSub: buildHeaderSub(isExhibition, num, currentGame.round_number),
             body: '同票のため決選投票が行われます！\nおもじゃんを開いて投票しましょう ⚔️',
             url: LIFF_URL,
           },
@@ -566,7 +579,7 @@ export async function POST(
         {
           headerTitle: '🏆 結果発表！',
           headerColor: PHASE_COLORS.result,
-          headerSub: `第${num}回大会 / ${currentGame.round_number}回戦`,
+          headerSub: buildHeaderSub(isExhibition, num, currentGame.round_number),
           body: '全員の投票が完了しました！\nおもじゃんを開いて結果を確認しましょう 🏆',
           url: LIFF_URL,
         },
@@ -630,14 +643,14 @@ export async function POST(
         .eq('id', currentGame.id)
       if (tbToResultError) return NextResponse.json({ error: tbToResultError.message }, { status: 500 })
 
-      const num = await getTournamentNumber(tournament.id)
+      const num = await getTournamentNumber(tournament.id, tournament.tournament_type)
       await notifyParticipants(
         participantIds,
         triggeringUserId,
         {
           headerTitle: '🏆 結果発表！',
           headerColor: PHASE_COLORS.result,
-          headerSub: `第${num}回大会 / ${currentGame.round_number}回戦`,
+          headerSub: buildHeaderSub(isExhibition, num, currentGame.round_number),
           body: '決選投票が完了しました！\nおもじゃんを開いて結果を確認しましょう 🏆',
           url: LIFF_URL,
         },
@@ -743,14 +756,14 @@ export async function POST(
         .eq('id', currentGame.id)
       if (toResultError) return NextResponse.json({ error: toResultError.message }, { status: 500 })
 
-      const num = await getTournamentNumber(tournament.id)
+      const num = await getTournamentNumber(tournament.id, tournament.tournament_type)
       await notifyParticipants(
         participantIds,
         triggeringUserId,
         {
           headerTitle: '🏆 結果発表！',
           headerColor: PHASE_COLORS.result,
-          headerSub: `第${num}回大会 / ${currentGame.round_number}回戦`,
+          headerSub: buildHeaderSub(isExhibition, num, currentGame.round_number),
           body: '連打決戦が完了しました！\nおもじゃんを開いて結果を確認しましょう 🏆',
           url: LIFF_URL,
         },
@@ -860,14 +873,14 @@ export async function POST(
 
             await supabase.from('tournaments').update({ status: 'final_tiebreaker' }).eq('id', tournament.id)
 
-            const finalNum = await getTournamentNumber(tournament.id)
+            const finalNum = await getTournamentNumber(tournament.id, tournament.tournament_type)
             await notifyParticipants(
               participantIds,
               triggeringUserId,
               {
                 headerTitle: '⚔️ 大会決戦！',
                 headerColor: PHASE_COLORS.tiebreaker,
-                headerSub: `第${finalNum}回大会`,
+                headerSub: buildHeaderSub(isExhibition, finalNum),
                 body: `同点のため大会決戦を行います！\n${tiedUserIds.length}名で5秒間の連打決戦です ⚔️\nおもじゃんを開いてください`,
                 url: LIFF_URL,
               },
@@ -994,14 +1007,14 @@ export async function POST(
     const originFinal = new URL(request.url).origin
     fetch(`${originFinal}/api/ai/generate-comments`, { method: 'POST' }).catch(() => {})
 
-    const num = await getTournamentNumber(tournament.id)
+    const num = await getTournamentNumber(tournament.id, tournament.tournament_type)
     await notifyParticipants(
       participantIds,
       triggeringUserId,
       {
         headerTitle: '🏆 大会優勝決定！',
         headerColor: PHASE_COLORS.result,
-        headerSub: `第${num}回大会`,
+        headerSub: buildHeaderSub(isExhibition, num),
         body: '大会決戦が完了しました！\nおもじゃんを開いて優勝者を確認しましょう 🏆',
         url: LIFF_URL,
       },
