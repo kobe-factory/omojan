@@ -17,8 +17,61 @@ import type { TournamentStatus, GameStatus } from '@/types/database'
 
 function RejoinScreen({ participants, onRejoin }: { participants: { id: string; name: string }[]; onRejoin: (id: string) => void }) {
   const [selecting, setSelecting] = useState(false)
+  const [pendingUser, setPendingUser] = useState<{ id: string; name: string } | null>(null)
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+
+  function handleConfirm() {
+    if (password !== 'dankon') {
+      setError('パスワードが違います')
+      return
+    }
+    if (pendingUser) {
+      onRejoin(pendingUser.id)
+      setPendingUser(null)
+      setPassword('')
+      setError('')
+    }
+  }
+
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
+      {/* パスワード確認ダイアログ */}
+      {pendingUser && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-xs shadow-xl">
+            <p className="text-gray-800 font-bold text-center mb-2">参加確認</p>
+            <p className="text-gray-600 text-sm text-center mb-4">
+              <span className="font-bold text-violet-600">{pendingUser.name}</span> で参加します。<br />パスワードを入力してください。
+            </p>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setError('') }}
+              placeholder="パスワード"
+              className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm mb-2 focus:outline-none focus:border-violet-400"
+              onKeyDown={(e) => e.key === 'Enter' && handleConfirm()}
+              autoFocus
+            />
+            {error && <p className="text-red-500 text-xs mb-2">{error}</p>}
+            <div className="flex gap-3 mt-2">
+              <button
+                onClick={() => { setPendingUser(null); setPassword(''); setError('') }}
+                className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-600 font-medium text-sm"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleConfirm}
+                className="flex-1 py-3 rounded-xl bg-violet-500 text-white font-bold text-sm"
+              >
+                参加する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <p className="text-4xl mb-4">🎴</p>
       <p className="text-gray-700 font-medium mb-2">この大会はすでに参加者が確定しています</p>
       {!selecting ? (
@@ -38,7 +91,7 @@ function RejoinScreen({ participants, onRejoin }: { participants: { id: string; 
             {participants.map((p) => (
               <button
                 key={p.id}
-                onClick={() => onRejoin(p.id)}
+                onClick={() => setPendingUser(p)}
                 className="w-full py-3 rounded-xl bg-white border border-violet-300 text-violet-700 font-bold text-sm shadow-sm active:scale-95"
               >
                 {p.name}
@@ -725,7 +778,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.44.0</p>
+        <p className="text-xs text-gray-300">v1.44.1</p>
       </footer>
 
       {/* 前戦結果モーダル（まだ結果を確認していないユーザー向け） */}

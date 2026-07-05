@@ -26,6 +26,7 @@ interface Props {
 export default function UserSelection({ tournament, allUsers, participants, currentUserId, onJoin, onLeave }: Props) {
   const [optimisticUserId, setOptimisticUserId] = useState<string | null>(currentUserId)
   const [isLoading, setIsLoading] = useState(false)
+  const [pendingUser, setPendingUser] = useState<User | null>(null)
 
   // 親からcurrentUserIdが変わったら同期
   useEffect(() => {
@@ -36,33 +37,61 @@ export default function UserSelection({ tournament, allUsers, participants, curr
   const remaining = tournament.required_players - participants.length
   const notJoined = allUsers.filter((u) => !participantIds.has(u.id))
 
-  async function handleSelect(user: User) {
+  async function confirmSelect(user: User) {
+    setPendingUser(null)
     if (isLoading) return
-
     if (optimisticUserId === user.id) {
-      // 選択解除
       setOptimisticUserId(null)
       setIsLoading(true)
-      try {
-        await onLeave(user.id)
-      } finally {
-        setIsLoading(false)
-      }
+      try { await onLeave(user.id) } finally { setIsLoading(false) }
     } else if (!participantIds.has(user.id) || optimisticUserId === user.id) {
-      // 新規選択
       setOptimisticUserId(user.id)
       setIsLoading(true)
       try {
         if (currentUserId) await onLeave(currentUserId)
         await onJoin(user.id)
-      } finally {
-        setIsLoading(false)
-      }
+      } finally { setIsLoading(false) }
     }
+  }
+
+  function handleSelect(user: User) {
+    if (isLoading) return
+    if (optimisticUserId === user.id) {
+      confirmSelect(user)
+      return
+    }
+    if (participantIds.has(user.id)) return
+    setPendingUser(user)
   }
 
   return (
     <div className="p-4">
+      {/* 確認ダイアログ */}
+      {pendingUser && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-xs shadow-xl">
+            <p className="text-gray-800 font-bold text-center mb-2">参加確認</p>
+            <p className="text-gray-600 text-sm text-center mb-6">
+              <span className="font-bold text-emerald-600">{pendingUser.name}</span> で参加します。よろしいですか？
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPendingUser(null)}
+                className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-600 font-medium text-sm"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={() => confirmSelect(pendingUser)}
+                className="flex-1 py-3 rounded-xl bg-emerald-500 text-white font-bold text-sm"
+              >
+                参加する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl shadow-sm p-6 mb-4">
         <h2 className="text-lg font-bold text-gray-800 mb-1">参加者選択</h2>
         <p className="text-sm text-gray-500 mb-6">あなたの名前を選んでください</p>
