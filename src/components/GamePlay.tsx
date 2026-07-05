@@ -329,19 +329,27 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
           <div className="grid grid-cols-2 gap-2">
             {handCards.map((card) => {
               const isSelected = exSuggestion?.hand_card_id === card.id
+              const isTrulyUsed = card.is_used && card.id !== submittedCardId
               return (
                 <div
                   key={card.id}
-                  className={`rounded-xl px-3 py-3 flex flex-col items-center justify-center gap-1 border-2 transition-all text-center ${
-                    isSelected
+                  className={`rounded-xl px-3 py-3 flex flex-col items-center justify-center gap-1 border-2 transition-all text-center relative ${
+                    isTrulyUsed
+                      ? 'bg-gray-100 border-gray-100 opacity-50'
+                      : isSelected
                       ? 'bg-emerald-50 border-emerald-400'
                       : 'bg-gray-50 border-gray-200 opacity-50'
                   }`}
                 >
-                  <p className={`font-bold leading-snug ${isSelected ? 'text-emerald-700 text-sm' : 'text-gray-500 text-xs'}`}>
+                  <p className={`font-bold leading-snug ${
+                    isTrulyUsed ? 'text-gray-300 text-xs' : isSelected ? 'text-emerald-700 text-sm' : 'text-gray-500 text-xs'
+                  }`}>
                     {card.text}
                   </p>
-                  {isSelected && (
+                  {isTrulyUsed && (
+                    <span className="text-[10px] text-gray-300">使用済</span>
+                  )}
+                  {isSelected && !isTrulyUsed && (
                     <span className="text-[10px] text-emerald-500">
                       {exPosition === 'before' ? '前に配置 ✓' : '後に配置 ✓'}
                     </span>
