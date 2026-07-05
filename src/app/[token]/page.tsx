@@ -15,6 +15,43 @@ import Archive from '@/components/Archive'
 import TournamentFinished from '@/components/TournamentFinished'
 import type { TournamentStatus, GameStatus } from '@/types/database'
 
+function RejoinScreen({ participants, onRejoin }: { participants: { id: string; name: string }[]; onRejoin: (id: string) => void }) {
+  const [selecting, setSelecting] = useState(false)
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
+      <p className="text-4xl mb-4">🎴</p>
+      <p className="text-gray-700 font-medium mb-2">この大会はすでに参加者が確定しています</p>
+      {!selecting ? (
+        <>
+          <p className="text-sm text-gray-400 mb-6">機種変更などで認識できなくなった場合は、参加者として再認証できます</p>
+          <button
+            onClick={() => setSelecting(true)}
+            className="px-5 py-2 rounded-xl bg-violet-500 text-white text-sm font-bold"
+          >
+            参加済みの方はこちら
+          </button>
+        </>
+      ) : (
+        <div className="w-full max-w-xs mt-4">
+          <p className="text-sm text-gray-500 mb-3">あなたはどのプレイヤーですか？</p>
+          <div className="space-y-2">
+            {participants.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => onRejoin(p.id)}
+                className="w-full py-3 rounded-xl bg-white border border-violet-300 text-violet-700 font-bold text-sm shadow-sm active:scale-95"
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => setSelecting(false)} className="mt-4 text-xs text-gray-400 underline">キャンセル</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const VOTING_MODE_INFO = {
   normal:        { emoji: '🎯', label: '通常モード',       desc: '作者名が表示されます',           bg: 'bg-sky-50',    border: 'border-sky-300',    text: 'text-sky-700' },
   secret:        { emoji: '🕵️', label: 'シークレットモード', desc: '作者名は非表示です',             bg: 'bg-gray-50',   border: 'border-gray-300',   text: 'text-gray-700' },
@@ -482,11 +519,7 @@ export default function TournamentPage() {
 
         {/* 非参加者メッセージ（大会進行中に userId がない場合） */}
         {(tournament.status === 'creating_cards' || tournament.status === 'playing' || tournament.status === 'final_tiebreaker') && !userId && (
-          <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
-            <p className="text-4xl mb-4">🎴</p>
-            <p className="text-gray-700 font-medium mb-2">この大会はすでに参加者が確定しています</p>
-            <p className="text-sm text-gray-400">観戦はできますが、ゲームへの参加はできません</p>
-          </div>
+          <RejoinScreen participants={participants} onRejoin={saveUser} />
         )}
 
         {/* 札作成フェーズ */}
@@ -692,7 +725,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.43.2</p>
+        <p className="text-xs text-gray-300">v1.44.0</p>
       </footer>
 
       {/* 前戦結果モーダル（まだ結果を確認していないユーザー向け） */}

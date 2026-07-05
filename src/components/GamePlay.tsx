@@ -319,12 +319,31 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm p-5">
-          <p className="text-xs font-medium text-gray-500 mb-3">AIが選んだ手札</p>
-          <div className="bg-emerald-50 rounded-xl px-4 py-3 text-center border-2 border-emerald-200">
-            <p className="text-lg font-bold text-emerald-700">{exHandCard?.text ?? '（取得中...）'}</p>
-            <p className="text-xs text-emerald-500 mt-1">
-              {exPosition === 'before' ? '→ お題の前に配置' : '→ お題の後に配置'}
-            </p>
+          <p className="text-xs font-medium text-gray-500 mb-3">手札一覧（AIが選んだ札）</p>
+          <div className="space-y-2">
+            {handCards.map((card) => {
+              const isSelected = exSuggestion?.hand_card_id === card.id
+              return (
+                <div
+                  key={card.id}
+                  className={`rounded-xl px-4 py-3 flex items-center gap-2 border-2 transition-all ${
+                    isSelected
+                      ? 'bg-emerald-50 border-emerald-400'
+                      : 'bg-gray-50 border-gray-200 opacity-50'
+                  }`}
+                >
+                  {isSelected && <span className="text-emerald-500 text-sm">✓</span>}
+                  <p className={`font-bold ${isSelected ? 'text-emerald-700 text-base' : 'text-gray-500 text-sm'}`}>
+                    {card.text}
+                  </p>
+                  {isSelected && (
+                    <span className="ml-auto text-xs text-emerald-500 whitespace-nowrap">
+                      {exPosition === 'before' ? 'お題の前' : 'お題の後'}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
 
