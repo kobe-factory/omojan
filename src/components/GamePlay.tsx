@@ -320,25 +320,24 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
 
         <div className="bg-white rounded-2xl shadow-sm p-5">
           <p className="text-xs font-medium text-gray-500 mb-3">手札一覧（AIが選んだ札）</p>
-          <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
             {handCards.map((card) => {
               const isSelected = exSuggestion?.hand_card_id === card.id
               return (
                 <div
                   key={card.id}
-                  className={`rounded-xl px-4 py-3 flex items-center gap-2 border-2 transition-all ${
+                  className={`rounded-xl px-3 py-3 flex flex-col items-center justify-center gap-1 border-2 transition-all text-center ${
                     isSelected
                       ? 'bg-emerald-50 border-emerald-400'
                       : 'bg-gray-50 border-gray-200 opacity-50'
                   }`}
                 >
-                  {isSelected && <span className="text-emerald-500 text-sm">✓</span>}
-                  <p className={`font-bold ${isSelected ? 'text-emerald-700 text-base' : 'text-gray-500 text-sm'}`}>
+                  <p className={`font-bold leading-snug ${isSelected ? 'text-emerald-700 text-sm' : 'text-gray-500 text-xs'}`}>
                     {card.text}
                   </p>
                   {isSelected && (
-                    <span className="ml-auto text-xs text-emerald-500 whitespace-nowrap">
-                      {exPosition === 'before' ? 'お題の前' : 'お題の後'}
+                    <span className="text-[10px] text-emerald-500">
+                      {exPosition === 'before' ? '前に配置 ✓' : '後に配置 ✓'}
                     </span>
                   )}
                 </div>
