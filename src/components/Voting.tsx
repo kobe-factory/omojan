@@ -345,7 +345,8 @@ export default function Voting({ tournament, token, game, currentUserId, partici
           const isSelected = selectedSubmissionId === sub.id
           const isOwnSubmission = !isSolo && sub.user_id === currentUserId && !isTiebreaker
           const isTiebreakerExcluded = isExcludedFromTiebreaker(sub)
-          const isDisabled = isOwnSubmission || isTiebreakerExcluded || currentUserIsExcluded
+          const isDisabled = isExhibitionMode || isOwnSubmission || isTiebreakerExcluded || currentUserIsExcluded
+          const isAiPick = isExhibitionMode && exhibitionVoteSubmissionId === sub.id
 
           return (
             <button
@@ -353,8 +354,10 @@ export default function Voting({ tournament, token, game, currentUserId, partici
               disabled={isDisabled}
               onClick={() => { if (!isDisabled) setSelectedSubmissionId(sub.id) }}
               className={`w-full text-left rounded-2xl p-4 transition-all border-2 ${
-                isDisabled
-                  ? 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed'
+                isAiPick
+                  ? 'border-violet-400 bg-violet-50'
+                  : isDisabled
+                  ? 'border-gray-100 bg-gray-50 opacity-40 cursor-not-allowed'
                   : isSelected
                   ? isTiebreaker ? 'border-red-500 bg-red-50' : 'border-emerald-500 bg-emerald-50'
                   : 'border-gray-200 bg-white hover:border-emerald-200'
@@ -373,7 +376,11 @@ export default function Voting({ tournament, token, game, currentUserId, partici
                   <p className="text-xs text-gray-400">{tournament.impersonation_mode ? (sub.impersonatedUserName ?? sub.userName) : sub.userName}</p>
                 </div>
               )}
-              {isOwnSubmission ? (
+              {isAiPick ? (
+                <div className="mt-2">
+                  <span className="text-xs font-medium text-violet-600">🤖 AIが選んだ作品</span>
+                </div>
+              ) : isOwnSubmission ? (
                 <div className="mt-2">
                   <span className="text-gray-400 text-xs">自分の作品には投票できません</span>
                 </div>

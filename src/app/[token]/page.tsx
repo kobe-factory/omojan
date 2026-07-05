@@ -778,7 +778,7 @@ export default function TournamentPage() {
 
       {/* フッター */}
       <footer className="text-center py-4 mt-4">
-        <p className="text-xs text-gray-300">v1.44.3</p>
+        <p className="text-xs text-gray-300">v1.44.4</p>
       </footer>
 
       {/* 前戦結果モーダル（まだ結果を確認していないユーザー向け） */}
