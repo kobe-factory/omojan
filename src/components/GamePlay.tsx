@@ -177,7 +177,13 @@ export default function GamePlay({ tournament, token, game, currentUserId, parti
       }, fetchSuggestion)
       .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
+    // Realtimeが届かない場合のフォールバックポーリング（5秒ごと）
+    const timer = setInterval(fetchSuggestion, 5000)
+
+    return () => {
+      supabase.removeChannel(channel)
+      clearInterval(timer)
+    }
   }, [isExhibitionMode, game.id, currentUserId])
 
   // 他ユーザーの投稿をリアルタイムで反映（submittedUserIds のみ更新）

@@ -110,7 +110,13 @@ export default function CardCreation({ tournament, token, currentUserId, partici
       }, fetchSuggestion)
       .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
+    // Realtimeが届かない場合のフォールバックポーリング（5秒ごと）
+    const timer = setInterval(fetchSuggestion, 5000)
+
+    return () => {
+      supabase.removeChannel(channel)
+      clearInterval(timer)
+    }
   }, [isExhibitionMode, tournament.id, currentUserId])
 
   // 他ユーザーのカード作成をリアルタイムで反映（cardCounts のみ更新）

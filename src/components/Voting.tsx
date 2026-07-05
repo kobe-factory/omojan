@@ -196,7 +196,13 @@ export default function Voting({ tournament, token, game, currentUserId, partici
       }, fetchExhibitionVote)
       .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
+    // Realtimeが届かない場合のフォールバックポーリング（5秒ごと）
+    const timer = setInterval(fetchExhibitionVote, 5000)
+
+    return () => {
+      supabase.removeChannel(channel)
+      clearInterval(timer)
+    }
   }, [isExhibitionMode, game.id, currentUserId, isTiebreaker])
 
   // 決選投票：表示する作品は同票の2つのみ
