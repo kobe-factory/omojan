@@ -102,7 +102,7 @@ READMEも適宜更新してください。
 grep -n "v1\." src/app/\[token\]/page.tsx src/app/layout.tsx src/app/admin/page.tsx src/app/summary/page.tsx CLAUDE.md | grep -v "x\.x\|管理\|フッター\|metadata\|現在"
 ```
 
-**現在のバージョン：v1.45.0**
+**現在のバージョン：v1.46.0**
 
 ## ローカル開発
 

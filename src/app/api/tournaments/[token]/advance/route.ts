@@ -278,6 +278,11 @@ export async function POST(
       (id) => (countByUser[id] ?? 0) >= tournament.cards_per_user,
     )
     if (!allDone) {
+      if (tournament.tournament_type === 'exhibition') {
+        const waitingIds = participantIds.filter((id) => (countByUser[id] ?? 0) < tournament.cards_per_user)
+        const origin = new URL(request.url).origin
+        fireExhibitionSuggestions(origin, tournament.id, waitingIds, 'cards')
+      }
       return NextResponse.json({
         waiting: true,
         message: '札作成待ち',
@@ -362,6 +367,10 @@ export async function POST(
 
       if (!allSubmitted) {
         const waiting = participantIds.filter((id) => !submittedIds.has(id))
+        if (tournament.tournament_type === 'exhibition') {
+          const origin = new URL(request.url).origin
+          fireExhibitionSuggestions(origin, tournament.id, waiting, 'submit', currentGame.id)
+        }
         return NextResponse.json({ waiting: true, waitingUserIds: waiting })
       }
 
@@ -453,6 +462,10 @@ export async function POST(
 
       if (!allVoted) {
         const waiting = participantIds.filter((id) => !votedIds.has(id))
+        if (tournament.tournament_type === 'exhibition') {
+          const origin = new URL(request.url).origin
+          fireExhibitionSuggestions(origin, tournament.id, waiting, 'vote', currentGame.id)
+        }
         return NextResponse.json({ waiting: true, waitingUserIds: waiting })
       }
 
@@ -634,6 +647,10 @@ export async function POST(
 
       if (!allTbVoted) {
         const waiting = eligibleVoterIds.filter((id) => !tbVotedIds.has(id))
+        if (tournament.tournament_type === 'exhibition') {
+          const origin = new URL(request.url).origin
+          fireExhibitionSuggestions(origin, tournament.id, waiting, 'tiebreaker_vote', currentGame.id)
+        }
         return NextResponse.json({ waiting: true, waitingUserIds: waiting })
       }
 

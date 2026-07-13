@@ -154,11 +154,11 @@ async function handleSubmit(
 ${handList}
 
 以下のJSON形式のみで回答してください（説明不要）：
-{"card_index": <手札の番号(1始まり)>, "position": "<before|after>", "preamble": "<前口上テキストまたはnull>"}`
+{"card_index": <手札の番号(1始まり)>, "position": "<before|after>", "preamble": "<前口上テキストまたはnull>", "preamble_position": "<above|below>"}`
 
   const res = await callAnthropic(prompt)
 
-  let parsed: { card_index: number; position: 'before' | 'after'; preamble: string | null }
+  let parsed: { card_index: number; position: 'before' | 'after'; preamble: string | null; preamble_position?: 'above' | 'below' }
   try {
     const jsonMatch = (res ?? '').match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error('JSON not found')
@@ -168,6 +168,7 @@ ${handList}
       card_index: Math.floor(Math.random() * handCards.length) + 1,
       position: Math.random() < 0.5 ? 'before' : 'after',
       preamble: null,
+      preamble_position: 'above',
     }
   }
 
@@ -175,6 +176,7 @@ ${handList}
   const handCardId = handCards[idx].card_id
   const position = parsed.position === 'before' ? 'before' : 'after'
   const preamble = typeof parsed.preamble === 'string' && parsed.preamble.length > 0 ? parsed.preamble : null
+  const preamblePosition = parsed.preamble_position === 'below' ? 'below' : 'above'
 
   const { error } = await supabaseAdmin.from('exhibition_submissions').insert({
     game_id: gameId,
@@ -182,7 +184,7 @@ ${handList}
     hand_card_id: handCardId,
     position,
     preamble,
-    preamble_position: 'above',
+    preamble_position: preamblePosition,
   })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

@@ -74,6 +74,8 @@ export default function AdminPage() {
   const [forceRegenTapCount, setForceRegenTapCount] = useState(0)
   const [showForceRegen, setShowForceRegen] = useState(false)
   const [showOldTournaments, setShowOldTournaments] = useState(false)
+  const [retryingToken, setRetryingToken] = useState<string | null>(null)
+  const [retryResult, setRetryResult] = useState<{ token: string; message: string } | null>(null)
 
   const productionPreset = GAME_PRESETS.find((p) => p.mode === 'production')!
   const [prodGameCount, setProdGameCount] = useState(String(productionPreset.game_count))
@@ -284,6 +286,30 @@ export default function AdminPage() {
       setTimeout(() => setNotified(false), 3000)
     } finally {
       setNotifying(false)
+    }
+  }
+
+  async function handleRetryExhibitionAi(token: string) {
+    setRetryingToken(token)
+    setRetryResult(null)
+    try {
+      const res = await fetch(`/api/tournaments/${token}/advance`, { method: 'POST' })
+      const data = await res.json()
+      if (data.waiting && Array.isArray(data.waitingUserIds) && data.waitingUserIds.length > 0) {
+        const { data: users } = await supabase
+          .from('users')
+          .select('id, name')
+          .in('id', data.waitingUserIds)
+        const names = (users ?? []).map((u) => u.name).join('・')
+        setRetryResult({ token, message: `🔄 AI提案を再試行しました（待ち: ${names || data.waitingUserIds.length + '名'}）` })
+      } else if (data.advanced) {
+        setRetryResult({ token, message: '✅ 全員完了！次のフェーズに進みました' })
+        await fetchTournaments()
+      } else {
+        setRetryResult({ token, message: '✅ AI提案を再試行しました' })
+      }
+    } finally {
+      setRetryingToken(null)
     }
   }
 
@@ -794,6 +820,15 @@ export default function AdminPage() {
                     <p className="text-xs font-mono text-gray-400 truncate flex-1">
                       /{t.token}
                     </p>
+                    {t.tournament_type === 'exhibition' && t.status !== 'finished' && (
+                      <button
+                        onClick={() => handleRetryExhibitionAi(t.token)}
+                        disabled={retryingToken === t.token}
+                        className="text-xs px-3 py-1 bg-violet-500 text-white rounded-lg hover:bg-violet-600 transition-colors shrink-0 disabled:opacity-50"
+                      >
+                        {retryingToken === t.token ? '再試行中...' : '🔄 AI再試行'}
+                      </button>
+                    )}
                     <button
                       onClick={() => copyTournamentUrl(t.token)}
                       className="text-xs px-3 py-1 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors shrink-0"
@@ -801,6 +836,9 @@ export default function AdminPage() {
                       {copiedToken === t.token ? 'コピー済' : 'URLコピー'}
                     </button>
                   </div>
+                  {retryResult && retryResult.token === t.token && (
+                    <p className="text-xs text-violet-500 mt-1.5">{retryResult.message}</p>
+                  )}
                 </div>
               ))}
               {tournaments.length > 1 && (
@@ -885,7 +923,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.45.0</p>
+        <p className="text-center text-xs text-gray-300 mt-8">v1.46.0</p>
       </div>
     </div>
   )
