@@ -27,6 +27,7 @@ interface TournamentRow {
   impersonation_mode: boolean
   random_voting: boolean
   tournament_type: string | null
+  ai_player_character: string | null
   productionNumber?: number
   currentGame?: { round_number: number; status: string }
   allGames?: GameRow[]
@@ -96,7 +97,7 @@ export default function AdminPage() {
     setListLoading(true)
     const { data } = await supabase
       .from('tournaments')
-      .select('id, token, mode, status, created_at, game_count, cards_per_user, hand_cards_per_player, dirty_cards_per_user, secret_voting, secret_round, impersonation_mode, random_voting, tournament_type')
+      .select('id, token, mode, status, created_at, game_count, cards_per_user, hand_cards_per_player, dirty_cards_per_user, secret_voting, secret_round, impersonation_mode, random_voting, tournament_type, ai_player_character')
       .order('created_at', { ascending: false })
 
     // 本番大会に作成日時昇順で連番を付与（エキシビションは除外）
@@ -289,7 +290,7 @@ export default function AdminPage() {
     }
   }
 
-  async function handleRetryExhibitionAi(token: string) {
+  async function handleRetryAi(token: string) {
     setRetryingToken(token)
     setRetryResult(null)
     try {
@@ -820,9 +821,9 @@ export default function AdminPage() {
                     <p className="text-xs font-mono text-gray-400 truncate flex-1">
                       /{t.token}
                     </p>
-                    {t.tournament_type === 'exhibition' && t.status !== 'finished' && (
+                    {(t.tournament_type === 'exhibition' || !!t.ai_player_character) && t.status !== 'finished' && (
                       <button
-                        onClick={() => handleRetryExhibitionAi(t.token)}
+                        onClick={() => handleRetryAi(t.token)}
                         disabled={retryingToken === t.token}
                         className="text-xs px-3 py-1 bg-violet-500 text-white rounded-lg hover:bg-violet-600 transition-colors shrink-0 disabled:opacity-50"
                       >
@@ -923,7 +924,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-300 mt-8">v1.46.0</p>
+        <p className="text-center text-xs text-gray-300 mt-8">v1.46.1</p>
       </div>
     </div>
   )

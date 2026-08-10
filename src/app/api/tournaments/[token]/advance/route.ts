@@ -370,6 +370,9 @@ export async function POST(
         if (tournament.tournament_type === 'exhibition') {
           const origin = new URL(request.url).origin
           fireExhibitionSuggestions(origin, tournament.id, waiting, 'submit', currentGame.id)
+        } else if (tournament.ai_player_character) {
+          const origin = new URL(request.url).origin
+          fireAiAction(origin, tournament.id, 'submit')
         }
         return NextResponse.json({ waiting: true, waitingUserIds: waiting })
       }
@@ -465,6 +468,9 @@ export async function POST(
         if (tournament.tournament_type === 'exhibition') {
           const origin = new URL(request.url).origin
           fireExhibitionSuggestions(origin, tournament.id, waiting, 'vote', currentGame.id)
+        } else if (tournament.ai_player_character) {
+          const origin = new URL(request.url).origin
+          fireAiAction(origin, tournament.id, 'vote')
         }
         return NextResponse.json({ waiting: true, waitingUserIds: waiting })
       }
@@ -650,6 +656,9 @@ export async function POST(
         if (tournament.tournament_type === 'exhibition') {
           const origin = new URL(request.url).origin
           fireExhibitionSuggestions(origin, tournament.id, waiting, 'tiebreaker_vote', currentGame.id)
+        } else if (tournament.ai_player_character) {
+          const origin = new URL(request.url).origin
+          fireAiAction(origin, tournament.id, 'tiebreaker_vote')
         }
         return NextResponse.json({ waiting: true, waitingUserIds: waiting })
       }
@@ -728,6 +737,10 @@ export async function POST(
 
       if (!allCompleted) {
         const waiting = tiebreakerUserIds.filter((id) => !completedUserIds.has(id))
+        if (tournament.ai_player_character) {
+          const origin = new URL(request.url).origin
+          fireAiAction(origin, tournament.id, 'button_mash')
+        }
         return NextResponse.json({ waiting: true, waitingUserIds: waiting })
       }
 
